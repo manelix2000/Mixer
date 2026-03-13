@@ -14,6 +14,11 @@ public final class DeckViewModel: ObservableObject {
         case release
     }
 
+    private enum ScratchMotionMode {
+        case scrub
+        case scratch
+    }
+
     @Published public private(set) var bpmText: String
     @Published public var waveformText: String
     @Published public var platterText: String
@@ -56,6 +61,8 @@ public final class DeckViewModel: ObservableObject {
     private var lastCommittedScratchTime: TimeInterval = 0
     private var lastTurntableUpdateTimestamp: TimeInterval = 0
     private var lastScrubAngleTimestamp: TimeInterval = 0
+    private var smoothedScratchAngularVelocity: Double = 0
+    private var scratchMotionMode: ScratchMotionMode = .scrub
     private var turntablePhysics = TurntablePhysics()
 
     public init(
@@ -434,6 +441,8 @@ public final class DeckViewModel: ObservableObject {
         scratchCurrentTime = audioEngine.currentTime
         lastScratchCommitTimestamp = 0
         lastCommittedScratchTime = scratchCurrentTime
+        smoothedScratchAngularVelocity = 0
+        scratchMotionMode = .scrub
         stopPlaybackTimer()
         playbackStatusText = "Scratching"
 
@@ -452,11 +461,6 @@ public final class DeckViewModel: ObservableObject {
         }
 
         scratchInteractionState = .dragging
-        let rawTimeDelta = (angleDelta / (2.0 * .pi)) * Self.scrubSecondsPerRevolution
-        let clampedDelta = min(max(rawTimeDelta, -Self.maxScrubStep), Self.maxScrubStep)
-        let duration = audioEngine.totalDuration
-        scratchCurrentTime = min(max(scratchCurrentTime + clampedDelta, 0), duration)
-
         let now = CACurrentMediaTime()
         let scrubDeltaTime: TimeInterval
         if lastScrubAngleTimestamp > 0 {
@@ -465,10 +469,33 @@ public final class DeckViewModel: ObservableObject {
             scrubDeltaTime = 1.0 / 60.0
         }
         lastScrubAngleTimestamp = now
-        turntablePhysics.applyAngularDrag(deltaAngle: angleDelta, deltaTime: scrubDeltaTime)
+
+        let safeDeltaTime = max(scrubDeltaTime, 0.001)
+        let instantaneousAngularVelocity = angleDelta / safeDeltaTime
+        smoothedScratchAngularVelocity +=
+            (instantaneousAngularVelocity - smoothedScratchAngularVelocity) * Self.scratchVelocitySmoothing
+
+        let isScratch = abs(smoothedScratchAngularVelocity) >= Self.scratchAngularVelocityThreshold
+        scratchMotionMode = isScratch ? .scratch : .scrub
+
+        let isJitter =
+            abs(angleDelta) < Self.scratchJitterAngleThreshold &&
+            abs(smoothedScratchAngularVelocity) < Self.scratchJitterVelocityThreshold
+        if isJitter {
+            return
+        }
+
+        let secondsPerRadian = isScratch ? Self.scratchSecondsPerRadian : Self.scrubSecondsPerRadian
+        let rawTimeDelta = angleDelta * secondsPerRadian
+        let maxStep = isScratch ? Self.maxScratchModeStep : Self.maxScrubModeStep
+        let clampedDelta = min(max(rawTimeDelta, -maxStep), maxStep)
+        let duration = audioEngine.totalDuration
+        scratchCurrentTime = min(max(scratchCurrentTime + clampedDelta, 0), duration)
+
+        turntablePhysics.applyAngularDrag(deltaAngle: angleDelta, deltaTime: safeDeltaTime)
         publishTurntableState()
         updatePlaybackDisplay(current: scratchCurrentTime, total: duration)
-        commitScratchAudio(force: false)
+        commitScratchAudio(force: false, mode: scratchMotionMode)
     }
 
     public func endTurntableScrub() {
@@ -486,6 +513,8 @@ public final class DeckViewModel: ObservableObject {
 
         isPlatterScrubbing = false
         lastScrubAngleTimestamp = 0
+        smoothedScratchAngularVelocity = 0
+        scratchMotionMode = .scrub
         scratchInteractionState = .idle
 
         if wasPlayingBeforePlatterScrub {
@@ -572,7 +601,8 @@ public final class DeckViewModel: ObservableObject {
         }
         if total > 0 {
             let normalizedProgress = min(max(current / total, 0), 1)
-            if abs(playbackProgress - normalizedProgress) > 0.0005 {
+            let progressEpsilon = isPlatterScrubbing ? Self.scratchProgressEpsilon : Self.normalProgressEpsilon
+            if abs(playbackProgress - normalizedProgress) > progressEpsilon {
                 playbackProgress = normalizedProgress
             }
         } else {
@@ -580,7 +610,7 @@ public final class DeckViewModel: ObservableObject {
         }
     }
 
-    private func commitScratchAudio(force: Bool) {
+    private func commitScratchAudio(force: Bool, mode: ScratchMotionMode = .scrub) {
         guard hasSelectedTrack else {
             return
         }
@@ -588,8 +618,18 @@ public final class DeckViewModel: ObservableObject {
         let now = CACurrentMediaTime()
         let elapsed = now - lastScratchCommitTimestamp
         let moved = abs(scratchCurrentTime - lastCommittedScratchTime)
+        let minInterval: TimeInterval
+        let minDelta: TimeInterval
+        switch mode {
+        case .scrub:
+            minInterval = Self.minScrubCommitInterval
+            minDelta = Self.minScrubCommitDelta
+        case .scratch:
+            minInterval = Self.minScratchCommitInterval
+            minDelta = Self.minScratchCommitDelta
+        }
         if !force {
-            guard elapsed >= Self.minScratchCommitInterval || moved >= Self.minScratchCommitDelta else {
+            guard elapsed >= minInterval || moved >= minDelta else {
                 return
             }
         }
@@ -950,9 +990,20 @@ public final class DeckViewModel: ObservableObject {
     public static let maxWaveformZoom: Double = 8.0
     public static let allowedPitchSensitivityPercents: [Int] = [2, 4, 8, 16]
     public static let scrubSecondsPerRevolution: Double = 1.8
-    public static let maxScrubStep: TimeInterval = 0.25
-    public static let minScratchCommitInterval: TimeInterval = 1.0 / 120.0
-    public static let minScratchCommitDelta: TimeInterval = 0.004
+    public static let scrubSecondsPerRadian: Double = scrubSecondsPerRevolution / (2.0 * .pi)
+    public static let scratchSecondsPerRadian: Double = 0.20
+    public static let maxScrubModeStep: TimeInterval = 0.10
+    public static let maxScratchModeStep: TimeInterval = 0.20
+    public static let scratchAngularVelocityThreshold: Double = 3.0
+    public static let scratchVelocitySmoothing: Double = 0.35
+    public static let scratchJitterAngleThreshold: Double = 0.002
+    public static let scratchJitterVelocityThreshold: Double = 0.6
+    public static let minScrubCommitInterval: TimeInterval = 1.0 / 240.0
+    public static let minScratchCommitInterval: TimeInterval = 1.0 / 180.0
+    public static let minScrubCommitDelta: TimeInterval = 0.001
+    public static let minScratchCommitDelta: TimeInterval = 0.003
+    public static let normalProgressEpsilon: Double = 0.0005
+    public static let scratchProgressEpsilon: Double = 0.00002
     public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
 
     private var latestExternalBPM: Double?
