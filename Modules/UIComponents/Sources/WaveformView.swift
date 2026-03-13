@@ -51,10 +51,6 @@ public struct WaveformView: View {
                     )
                 }
 
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

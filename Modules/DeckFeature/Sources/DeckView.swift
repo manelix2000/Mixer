@@ -176,12 +176,20 @@ public struct DeckView: View {
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.canZoomOutWaveform)
 
-                WaveformView(
-                    samples: viewModel.waveformData,
-                    progress: viewModel.playbackProgress,
-                    isLoading: viewModel.isWaveformLoading,
-                    zoom: viewModel.waveformZoom
-                )
+                ZStack(alignment: Alignment(horizontal: .leading, vertical: .center)) {
+                    WaveformView(
+                        samples: viewModel.waveformData,
+                        progress: viewModel.playbackProgress,
+                        isLoading: viewModel.isWaveformLoading,
+                        zoom: viewModel.waveformZoom
+                    )
+                    if viewModel.isWaveformLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                            .padding(.leading, 8)
+                    }
+                }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
                 .gesture(
