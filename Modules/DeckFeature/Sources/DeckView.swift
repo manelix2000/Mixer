@@ -532,8 +532,8 @@ public struct DeckView: View {
         return delta
     }
 
-    private static let waveformPointsPerRevolution: Double = 180.0
-    private static let minWaveformPointsPerRevolution: Double = 60.0
+    private static let waveformPointsPerRevolution: Double = 60.0
+    private static let minWaveformPointsPerRevolution: Double = 20.0
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
