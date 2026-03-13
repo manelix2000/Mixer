@@ -119,7 +119,7 @@ public struct DeckView: View {
                     
 
                     bpmPitchCard
-                        .frame(maxWidth: 70)
+                        .frame(maxWidth: 130)
                 }
             }
         }
@@ -296,35 +296,62 @@ public struct DeckView: View {
 
     private var bpmPitchCard: some View {
         GeometryReader { geometry in
-            VStack {
-                HStack(alignment: .center, spacing: 8) {
-                    VStack {
-                        Button {
-                            viewModel.incrementBPM()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .frame(minWidth: 24)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!viewModel.canIncrementBPM)
-                        .accessibilityLabel("Increase BPM")
-                        
-                        Button {
-                            viewModel.decrementBPM()
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .frame(minWidth: 24)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!viewModel.canDecrementBPM)
-                        .accessibilityLabel("Decrease BPM")
-                    }
+            let safeOriginalBPM = max(viewModel.originalBPM, DeckViewModel.minBPM)
+            let sensitivityPercent = viewModel.pitchSensitivityPercent
+            let sensitivityFraction = viewModel.pitchSensitivityFraction
+
+            HStack {
+                VStack(alignment: .center, spacing: 0) {
+                    VerticalPitchFader(
+                        value: Binding(
+                            get: {
+                                ((viewModel.targetBPM / safeOriginalBPM) - 1.0)
+                            },
+                            set: { newPitch in
+                                viewModel.setPitchOffset(newPitch)
+                            }
+                        ),
+                        range: -sensitivityFraction...sensitivityFraction
+                    )
+                    .frame(maxHeight: .infinity)
+                    .disabled(viewModel.isPitchLockedToExternalBPM)
+                    .opacity(viewModel.isPitchLockedToExternalBPM ? 0.45 : 1)
+                    .accessibilityLabel("Pitch fader")
+                    
+                    Text(String(format: "%+.1f%%", ((viewModel.targetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
                 }
                 
-                Text(String(format: "%+.1f%%", ((viewModel.targetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 10)
+                
+                VStack(spacing: 6) {
+                    Button {
+                        viewModel.decreasePitchSensitivity()
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .frame(minWidth: 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.canDecreasePitchSensitivity)
+                    .accessibilityLabel("Decrease pitch sensitivity")
+                    .frame(maxWidth: 40)
+
+                    Button {
+                        viewModel.increasePitchSensitivity()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .frame(minWidth: 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.canIncreasePitchSensitivity)
+                    .accessibilityLabel("Increase pitch sensitivity")
+                    .frame(maxWidth: 40)
+                    
+                    Text("±\(viewModel.pitchSensitivityPercent)%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -513,6 +540,82 @@ public struct DeckView: View {
     private static let minWaveformPointsPerRevolution: Double = 60.0
 }
 
-#Preview {
+private struct VerticalPitchFader: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        GeometryReader { geometry in
+            let height = max(geometry.size.height, 1)
+            let progress = normalizedProgress(for: value)
+            let thumbSize: CGFloat = 26
+            let usableHeight = max(height - thumbSize, 1)
+            let thumbY = (1.0 - progress) * usableHeight
+
+            ZStack(alignment: .center) {
+                Capsule()
+                    .fill(Color(uiColor: .systemGray5))
+                    .frame(width: 10)
+                    .frame(maxHeight: .infinity)
+
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.25))
+                    .frame(width: 10, height: max(abs(progress - 0.5) * usableHeight, 2))
+                    .offset(y: (0.5 - progress) * usableHeight * 0.5)
+
+                Rectangle()
+                    .fill(Color.primary.opacity(0.35))
+                    .frame(width: 20, height: 1)
+
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(uiColor: .systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
+                    .frame(width: 34, height: thumbSize)
+                    .offset(y: thumbY - (usableHeight * 0.5))
+                    .shadow(color: .black.opacity(0.16), radius: 2, x: 0, y: 1)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        let y = min(max(gesture.location.y, 0), height)
+                        let mappedProgress = 1.0 - (y / height)
+                        value = mappedValue(forNormalizedProgress: mappedProgress)
+                    }
+            )
+            .simultaneousGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        // Quick reset to center (0% pitch).
+                        value = 0
+                    }
+            )
+            .onTapGesture { location in
+                let y = min(max(location.y, 0), height)
+                let mappedProgress = 1.0 - (y / height)
+                value = mappedValue(forNormalizedProgress: mappedProgress)
+            }
+        }
+    }
+
+    private func normalizedProgress(for rawValue: Double) -> Double {
+        let clamped = min(max(rawValue, range.lowerBound), range.upperBound)
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0.5 }
+        return (clamped - range.lowerBound) / span
+    }
+
+    private func mappedValue(forNormalizedProgress progress: Double) -> Double {
+        let clamped = min(max(progress, 0), 1)
+        let span = range.upperBound - range.lowerBound
+        return range.lowerBound + (clamped * span)
+    }
+}
+
+#Preview("Landscape View", traits: .landscapeLeft) {
     DeckView()
 }

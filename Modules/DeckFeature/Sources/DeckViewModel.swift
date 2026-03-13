@@ -32,6 +32,7 @@ public final class DeckViewModel: ObservableObject {
     @Published public private(set) var bpmDetectionStatusText: String?
     @Published public private(set) var originalBPM: Double
     @Published public private(set) var targetBPM: Double
+    @Published public private(set) var pitchSensitivityPercent: Int
     @Published public private(set) var externalBPMText: String
     @Published public private(set) var externalBPMStatusText: String
     @Published public private(set) var isExternalBPMLoading: Bool
@@ -69,6 +70,7 @@ public final class DeckViewModel: ObservableObject {
         let clampedOriginalBPM = min(max(originalBPM, Self.minBPM), Self.maxBPM)
         self.originalBPM = clampedOriginalBPM
         self.targetBPM = clampedOriginalBPM
+        self.pitchSensitivityPercent = 16
         self.bpmText = bpmText
         self.waveformText = waveformText
         self.platterText = platterText
@@ -270,6 +272,54 @@ public final class DeckViewModel: ObservableObject {
         targetBPM = min(max(value, Self.minBPM), Self.maxBPM)
         applyTargetBPM()
         refreshBPMText()
+    }
+
+    public func setPitchOffset(_ offset: Double) {
+        guard !isPitchLockedToExternalBPM else {
+            return
+        }
+        let maxOffset = pitchSensitivityFraction
+        let clampedOffset = min(max(offset, -maxOffset), maxOffset)
+        let safeOriginal = max(originalBPM, 1.0)
+        targetBPM = safeOriginal * (1.0 + clampedOffset)
+        applyTargetBPM()
+        refreshBPMText()
+    }
+
+    public var pitchSensitivityFraction: Double {
+        Double(pitchSensitivityPercent) / 100.0
+    }
+
+    public var canIncreasePitchSensitivity: Bool {
+        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent) else {
+            return false
+        }
+        return index < (Self.allowedPitchSensitivityPercents.count - 1)
+    }
+
+    public var canDecreasePitchSensitivity: Bool {
+        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent) else {
+            return false
+        }
+        return index > 0
+    }
+
+    public func increasePitchSensitivity() {
+        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent),
+              index < (Self.allowedPitchSensitivityPercents.count - 1) else {
+            return
+        }
+        pitchSensitivityPercent = Self.allowedPitchSensitivityPercents[index + 1]
+        clampPitchOffsetToSensitivityIfNeeded()
+    }
+
+    public func decreasePitchSensitivity() {
+        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent),
+              index > 0 else {
+            return
+        }
+        pitchSensitivityPercent = Self.allowedPitchSensitivityPercents[index - 1]
+        clampPitchOffsetToSensitivityIfNeeded()
     }
 
     public var canIncrementBPM: Bool {
@@ -765,6 +815,7 @@ public final class DeckViewModel: ObservableObject {
     nonisolated public static let maxBPMAnalysisFrames: AVAudioFrameCount = 44_100 * 45
     public static let minWaveformZoom: Double = 0.5
     public static let maxWaveformZoom: Double = 4.0
+    public static let allowedPitchSensitivityPercents: [Int] = [2, 4, 8, 16]
     public static let scrubSecondsPerRevolution: Double = 1.8
     public static let maxScrubStep: TimeInterval = 0.25
     public static let minScratchCommitInterval: TimeInterval = 1.0 / 120.0
@@ -772,6 +823,19 @@ public final class DeckViewModel: ObservableObject {
     public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
 
     private var latestExternalBPM: Double?
+
+    private func clampPitchOffsetToSensitivityIfNeeded() {
+        guard !isPitchLockedToExternalBPM else {
+            return
+        }
+        let safeOriginal = max(originalBPM, 1.0)
+        let offset = (targetBPM / safeOriginal) - 1.0
+        let maxOffset = pitchSensitivityFraction
+        let clampedOffset = min(max(offset, -maxOffset), maxOffset)
+        targetBPM = safeOriginal * (1.0 + clampedOffset)
+        applyTargetBPM()
+        refreshBPMText()
+    }
 }
 
 private final class MicrophoneBPMPipeline {
