@@ -93,11 +93,25 @@ public struct WaveformView: View {
         addSmoothedLowerContour(to: &body, points: points, midY: midY)
         body.closeSubpath()
 
-        context.fill(body, with: .color(Color(uiColor: .systemGray2).opacity(0.7)))
+        let innerPoints = points.map { CGPoint(x: $0.x, y: $0.y * 0.58) }
+        var innerBody = Path()
+        innerBody.move(to: CGPoint(x: innerPoints[0].x, y: midY - innerPoints[0].y))
+        addSmoothedUpperContour(to: &innerBody, points: innerPoints, midY: midY)
+        addSmoothedLowerContour(to: &innerBody, points: innerPoints, midY: midY)
+        innerBody.closeSubpath()
+
+        // Outer layer (base body).
+        context.fill(body, with: .color(Color(uiColor: .systemGray2).opacity(0.62)))
 
         var playedContext = context
         playedContext.clip(to: Path(CGRect(x: 0, y: 0, width: centerX, height: size.height)))
-        playedContext.fill(body, with: .color(Color.orange.opacity(0.9)))
+        playedContext.fill(body, with: .color(Color.orange.opacity(0.85)))
+
+        // Inner core layer (gives the two-layer DJ style body).
+        context.fill(innerBody, with: .color(Color.white.opacity(0.14)))
+        var playedInnerContext = context
+        playedInnerContext.clip(to: Path(CGRect(x: 0, y: 0, width: centerX, height: size.height)))
+        playedInnerContext.fill(innerBody, with: .color(Color.orange.opacity(0.35)))
 
         var upperEdge = Path()
         upperEdge.move(to: CGPoint(x: points[0].x, y: midY - points[0].y))
