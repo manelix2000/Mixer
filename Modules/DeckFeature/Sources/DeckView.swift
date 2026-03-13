@@ -48,44 +48,6 @@ public struct DeckView: View {
             Text("Controls")
                 .font(.headline)
 
-            HStack(spacing: 8) {
-                Button("Load Track") {
-                    isImportingTrack = true
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Sample") {
-                    loadSampleTrack()
-                }
-                .buttonStyle(.bordered)
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.play()
-                } label: {
-                    Image(systemName: "play.fill")
-                        .frame(minWidth: 24)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.hasSelectedTrack)
-                .accessibilityLabel("Play")
-
-                Button {
-                    viewModel.pause()
-                } label: {
-                    Image(systemName: "pause.fill")
-                        .frame(minWidth: 24)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.hasSelectedTrack)
-                .accessibilityLabel("Pause")
-                
-                Text(viewModel.playbackStatusText)
-                    .font(.footnote)
-                    .foregroundStyle(.black)
-            }
-
             externalBPMControls
             volumeControls
             panControls
@@ -117,9 +79,9 @@ public struct DeckView: View {
                         .contentShape(Circle())
                         .gesture(platterDragGesture(platterSize: size))
 
-                        if viewModel.isPitchLockedToExternalBPM {
-                            VStack {
-                                HStack {
+                        VStack {
+                            HStack {
+                                if viewModel.isPitchLockedToExternalBPM {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Locked Pitch")
                                             .font(.caption2.weight(.semibold))
@@ -136,12 +98,22 @@ public struct DeckView: View {
                                     .padding(.vertical, 4)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Capsule())
-                                    Spacer()
                                 }
+
                                 Spacer()
+
+                                if !viewModel.playbackStatusText.isEmpty {
+                                    Text(viewModel.playbackStatusText)
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Capsule())
+                                }
                             }
-                            .padding(10)
+                            Spacer()
                         }
+                        .padding(10)
                     }
                     .frame(maxWidth: .infinity)
                     
@@ -170,11 +142,52 @@ public struct DeckView: View {
             }
 
             HStack(spacing: 8) {
-                Button("-") {
-                    viewModel.zoomOutWaveform()
+                Button {
+                    isImportingTrack = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .frame(minWidth: 24)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel("Load track")
+
+                Button {
+                    loadSampleTrack()
+                } label: {
+                    Image(systemName: "music.note")
+                        .frame(minWidth: 24)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!viewModel.canZoomOutWaveform)
+                .accessibilityLabel("Load sample track")
+
+                Button {
+                    if viewModel.isPlaybackActive {
+                        viewModel.pause()
+                    } else {
+                        viewModel.play()
+                    }
+                } label: {
+                    Image(systemName: viewModel.isPlaybackActive ? "pause.fill" : "play.fill")
+                        .frame(minWidth: 24)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!viewModel.hasSelectedTrack)
+                .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Play")
+
+                Button {
+                    viewModel.stop()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .frame(minWidth: 24)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!viewModel.hasSelectedTrack)
+                .accessibilityLabel("Stop")
+
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
 
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .center)) {
                     WaveformView(
@@ -207,11 +220,23 @@ public struct DeckView: View {
                 )
                 .simultaneousGesture(waveformScratchGesture())
 
-                Button("+") {
+                Button {
                     viewModel.zoomInWaveform()
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .frame(minWidth: 24)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.canZoomInWaveform)
+
+                Button {
+                    viewModel.zoomOutWaveform()
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .frame(minWidth: 24)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!viewModel.canZoomOutWaveform)
             }
 
             if viewModel.isBPMLoading {
@@ -244,20 +269,23 @@ public struct DeckView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Volume")
                 .font(.subheadline.weight(.semibold))
-            HStack(spacing: 8) {
-                Button("-") {
-                    viewModel.volumeDown()
-                }
-                .buttonStyle(.bordered)
+            HStack(spacing: 10) {
+                Image(systemName: "speaker.fill")
+                    .foregroundStyle(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { viewModel.volume },
+                        set: { viewModel.setVolume($0) }
+                    ),
+                    in: 0...1
+                )
+                .accessibilityLabel("Volume")
 
                 Text(String(format: "%.2f", viewModel.volume))
                     .font(.footnote.monospacedDigit())
-                    .frame(maxWidth: .infinity)
-
-                Button("+") {
-                    viewModel.volumeUp()
-                }
-                .buttonStyle(.bordered)
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 42, alignment: .trailing)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -271,17 +299,25 @@ public struct DeckView: View {
             VStack {
                 HStack(alignment: .center, spacing: 8) {
                     VStack {
-                        Button("+") {
+                        Button {
                             viewModel.incrementBPM()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .frame(minWidth: 24)
                         }
                         .buttonStyle(.bordered)
                         .disabled(!viewModel.canIncrementBPM)
+                        .accessibilityLabel("Increase BPM")
                         
-                        Button("-") {
+                        Button {
                             viewModel.decrementBPM()
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .frame(minWidth: 24)
                         }
                         .buttonStyle(.bordered)
                         .disabled(!viewModel.canDecrementBPM)
+                        .accessibilityLabel("Decrease BPM")
                     }
                 }
                 
@@ -299,8 +335,14 @@ public struct DeckView: View {
 
     private var panControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Pan")
-                .font(.subheadline.weight(.semibold))
+            HStack(spacing: 8) {
+                Text("Pan")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(viewModel.panRoutingText) (\(String(format: "%.2f", viewModel.pan)))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
 
             Slider(
                 value: Binding(
@@ -309,10 +351,6 @@ public struct DeckView: View {
                 ),
                 in: -1...1
             )
-
-            Text("\(viewModel.panRoutingText) (\(String(format: "%.2f", viewModel.pan)))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)

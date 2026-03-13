@@ -182,6 +182,24 @@ public final class DeckViewModel: ObservableObject {
         refreshPlaybackTimeText()
     }
 
+    public func stop() {
+        guard selectedTrackURL != nil else {
+            playbackStatusText = "Select a track first"
+            return
+        }
+
+        audioEngine.pause()
+        do {
+            try audioEngine.seek(to: 0)
+            playbackState = audioEngine.playbackState
+            playbackStatusText = "Stopped"
+            stopPlaybackTimer()
+            refreshPlaybackTimeText()
+        } catch {
+            playbackStatusText = "Unable to stop playback"
+        }
+    }
+
     public var hasSelectedTrack: Bool {
         selectedTrackURL != nil
     }
@@ -213,6 +231,12 @@ public final class DeckViewModel: ObservableObject {
     public func volumeDown() {
         let newValue = max(Float(volume) - 0.05, 0.0)
         audioEngine.setVolume(newValue)
+        volume = Double(audioEngine.volume)
+    }
+
+    public func setVolume(_ value: Double) {
+        let clamped = min(max(value, 0.0), 1.0)
+        audioEngine.setVolume(Float(clamped))
         volume = Double(audioEngine.volume)
     }
 
