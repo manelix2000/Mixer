@@ -226,6 +226,15 @@ public final class AudioEngineManager: AudioEngineControlling {
                 return
             }
 
+            if let file = loadedFile {
+                let duration = totalDurationLocked()
+                let current = resolvedCurrentTimeLocked()
+                if duration > 0, current >= (duration - 0.01) {
+                    _ = try scheduleFromTimeLocked(file: file, time: 0, shouldPlay: true)
+                    return
+                }
+            }
+
             playerNode.play()
             internalPlaybackState = .playing
         }
@@ -581,7 +590,7 @@ public final class AudioEngineManager: AudioEngineControlling {
                 try session.setCategory(
                     .playAndRecord,
                     mode: .default,
-                    options: [.mixWithOthers]
+                    options: [.mixWithOthers, .defaultToSpeaker]
                 )
                 hasConfiguredSharedSession = true
             }
