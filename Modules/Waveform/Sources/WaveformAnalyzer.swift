@@ -3,6 +3,11 @@ import Foundation
 
 public protocol WaveformAnalyzing: Sendable {
     func generateWaveform(url: URL, sampleCount: Int) throws -> [Float]
+    func generateWaveform(
+        url: URL,
+        sampleCount: Int,
+        onProgress: @Sendable (WaveformProgress) -> Void
+    ) throws -> [Float]
 }
 
 public enum WaveformAnalyzerError: Error {
@@ -10,10 +15,35 @@ public enum WaveformAnalyzerError: Error {
     case unsupportedAudioBuffer
 }
 
+public struct WaveformProgress: Sendable {
+    public let samples: [Float]
+    public let completedBuckets: Int
+    public let totalBuckets: Int
+
+    public var fraction: Double {
+        guard totalBuckets > 0 else { return 0 }
+        return min(max(Double(completedBuckets) / Double(totalBuckets), 0), 1)
+    }
+
+    public init(samples: [Float], completedBuckets: Int, totalBuckets: Int) {
+        self.samples = samples
+        self.completedBuckets = completedBuckets
+        self.totalBuckets = totalBuckets
+    }
+}
+
 public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
     public init() {}
 
     public func generateWaveform(url: URL, sampleCount: Int = 512) throws -> [Float] {
+        try generateWaveform(url: url, sampleCount: sampleCount, onProgress: { _ in })
+    }
+
+    public func generateWaveform(
+        url: URL,
+        sampleCount: Int = 512,
+        onProgress: @Sendable (WaveformProgress) -> Void
+    ) throws -> [Float] {
         guard sampleCount > 0 else {
             throw WaveformAnalyzerError.invalidSampleCount
         }
@@ -37,6 +67,7 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
 
         var buckets: [Float] = []
         buckets.reserveCapacity(sampleCount)
+        var runningMax: Float = 0
 
         var currentBucketMax: Float = 0
         var framesInBucket = 0
@@ -67,8 +98,23 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
 
                 if framesInBucket >= framesPerBucket {
                     buckets.append(currentBucketMax)
+                    runningMax = max(runningMax, currentBucketMax)
                     currentBucketMax = 0
                     framesInBucket = 0
+
+                    if buckets.count % 64 == 0 || buckets.count == sampleCount {
+                        onProgress(
+                            WaveformProgress(
+                                samples: makeProgressSnapshot(
+                                    buckets: buckets,
+                                    sampleCount: sampleCount,
+                                    runningMax: runningMax
+                                ),
+                                completedBuckets: buckets.count,
+                                totalBuckets: sampleCount
+                            )
+                        )
+                    }
 
                     if buckets.count >= sampleCount {
                         shouldStop = true
@@ -80,6 +126,7 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
 
         if framesInBucket > 0 && buckets.count < sampleCount {
             buckets.append(currentBucketMax)
+            runningMax = max(runningMax, currentBucketMax)
         }
 
         if buckets.count > sampleCount {
@@ -92,6 +139,27 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
             buckets = buckets.map { $0 / maxAmplitude }
         }
 
+        onProgress(
+            WaveformProgress(
+                samples: buckets,
+                completedBuckets: sampleCount,
+                totalBuckets: sampleCount
+            )
+        )
+
         return buckets
+    }
+
+    private func makeProgressSnapshot(
+        buckets: [Float],
+        sampleCount: Int,
+        runningMax: Float
+    ) -> [Float] {
+        let normalization = max(runningMax, 0.000001)
+        var snapshot = buckets.map { $0 / normalization }
+        if snapshot.count < sampleCount {
+            snapshot.append(contentsOf: repeatElement(0, count: sampleCount - snapshot.count))
+        }
+        return snapshot
     }
 }

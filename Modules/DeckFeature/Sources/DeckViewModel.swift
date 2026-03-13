@@ -47,6 +47,7 @@ public final class DeckViewModel: ObservableObject {
     private var playbackTimer: Timer?
     private var turntableTimer: Timer?
     private var waveformLoadTask: Task<Void, Never>?
+    private var waveformLoadID = UUID()
     private var bpmLoadTask: Task<Void, Never>?
     private var isPlatterScrubbing = false
     private var wasPlayingBeforePlatterScrub = false
@@ -651,17 +652,32 @@ public final class DeckViewModel: ObservableObject {
     private func loadWaveform(url: URL) {
         waveformLoadTask?.cancel()
         waveformLoadTask = nil
+        let loadID = UUID()
+        waveformLoadID = loadID
         isWaveformLoading = true
         waveformText = "Loading waveform..."
-        waveformData = []
-        let sampleCount = 1024
+        let sampleCount = 4096
 
         waveformLoadTask = Task { [waveformAnalyzer] in
             let result = await Task.detached(priority: .userInitiated) {
-                try waveformAnalyzer.generateWaveform(url: url, sampleCount: sampleCount)
+                try waveformAnalyzer.generateWaveform(
+                    url: url,
+                    sampleCount: sampleCount
+                ) { progress in
+                    Task { @MainActor [progress] in
+                        guard self.waveformLoadID == loadID else {
+                            return
+                        }
+                        self.waveformData = progress.samples
+                        self.waveformText = "Loading waveform \(Int(progress.fraction * 100))%"
+                    }
+                }
             }.result
 
             guard !Task.isCancelled else {
+                return
+            }
+            guard self.waveformLoadID == loadID else {
                 return
             }
 
@@ -671,7 +687,6 @@ public final class DeckViewModel: ObservableObject {
                 waveformText = "Loaded!"
                 isWaveformLoading = false
             case .failure:
-                waveformData = []
                 waveformText = "Waveform unavailable"
                 isWaveformLoading = false
             }
@@ -932,7 +947,7 @@ public final class DeckViewModel: ObservableObject {
     public static let maxPlaybackRate: Double = 2.0
     nonisolated public static let maxBPMAnalysisFrames: AVAudioFrameCount = 44_100 * 45
     public static let minWaveformZoom: Double = 0.5
-    public static let maxWaveformZoom: Double = 4.0
+    public static let maxWaveformZoom: Double = 8.0
     public static let allowedPitchSensitivityPercents: [Int] = [2, 4, 8, 16]
     public static let scrubSecondsPerRevolution: Double = 1.8
     public static let maxScrubStep: TimeInterval = 0.25

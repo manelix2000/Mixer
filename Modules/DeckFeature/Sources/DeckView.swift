@@ -41,9 +41,6 @@ public struct DeckView: View {
 
     private var controlsColumn: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Controls")
-                .font(.headline)
-
             externalBPMControls
             volumeControls
             panControls

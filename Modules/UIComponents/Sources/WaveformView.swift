@@ -6,8 +6,8 @@ public struct WaveformView: View {
     public let isLoading: Bool
     public let zoom: Double
 
-    private let baseSampleSpacing: CGFloat = 2.0
-    private let maxBarHeightRatio: CGFloat = 0.42
+    private let baseSampleSpacing: CGFloat = 1.8
+    private let maxWaveHeightRatio: CGFloat = 0.36
 
     public init(
         samples: [Float],
@@ -18,7 +18,7 @@ public struct WaveformView: View {
         self.samples = samples
         self.progress = min(max(progress, 0), 1)
         self.isLoading = isLoading
-        self.zoom = min(max(zoom, 0.5), 4.0)
+        self.zoom = min(max(zoom, 0.5), 8.0)
     }
 
     public var body: some View {
@@ -35,7 +35,7 @@ public struct WaveformView: View {
                     baseline.addLine(to: CGPoint(x: size.width, y: midY))
                     context.stroke(
                         baseline,
-                        with: .color(.secondary.opacity(0.2)),
+                        with: .color(.secondary.opacity(0.10)),
                         lineWidth: 1
                     )
 
@@ -63,31 +63,94 @@ public struct WaveformView: View {
         }
 
         let centerX = size.width / 2
-        let sampleSpacing = baseSampleSpacing * CGFloat(zoom)
+        let sampleSpacing = baseSampleSpacing * CGFloat(pow(zoom, 1.35))
         let middleSample = progress * Double(max(samples.count - 1, 0))
-        let maxHeight = (size.height * maxBarHeightRatio)
-        let barWidth: CGFloat = 1.2
+        let maxHalfHeight = size.height * maxWaveHeightRatio
+        let columns = max(Int(size.width.rounded(.up)), 2)
 
-        var waveform = Path()
-        for index in samples.indices {
-            let x = centerX + (CGFloat(index) - CGFloat(middleSample)) * sampleSpacing
-            if x < -sampleSpacing || x > size.width + sampleSpacing {
-                continue
-            }
+        var points: [CGPoint] = []
+        points.reserveCapacity(columns)
+        var smoothedAmplitude: CGFloat = 0
 
-            let normalized = CGFloat(min(max(samples[index], 0), 1))
-            let halfBarHeight = max(1, normalized * maxHeight)
-            let alignedX = x.rounded(.toNearestOrAwayFromZero)
-            let barRect = CGRect(
-                x: alignedX - (barWidth / 2),
-                y: (size.height / 2) - halfBarHeight,
-                width: barWidth,
-                height: halfBarHeight * 2
-            )
-            waveform.addRect(barRect)
+        for column in 0..<columns {
+            let x = CGFloat(column)
+            let samplePosition = middleSample + Double((x - centerX) / sampleSpacing)
+            let amplitude = interpolatedSample(at: samplePosition)
+            let clampedAmplitude = CGFloat(min(max(amplitude, 0), 1))
+            smoothedAmplitude += (clampedAmplitude - smoothedAmplitude) * 0.22
+            let halfHeight = max(0.15, smoothedAmplitude * maxHalfHeight)
+            points.append(CGPoint(x: x, y: halfHeight))
         }
 
-        context.fill(waveform, with: .color(.blue.opacity(0.85)))
+        guard points.count > 4 else {
+            return
+        }
+
+        let midY = size.height / 2
+        var body = Path()
+        body.move(to: CGPoint(x: points[0].x, y: midY - points[0].y))
+        addSmoothedUpperContour(to: &body, points: points, midY: midY)
+        addSmoothedLowerContour(to: &body, points: points, midY: midY)
+        body.closeSubpath()
+
+        context.fill(body, with: .color(Color(uiColor: .systemGray2).opacity(0.7)))
+
+        var playedContext = context
+        playedContext.clip(to: Path(CGRect(x: 0, y: 0, width: centerX, height: size.height)))
+        playedContext.fill(body, with: .color(Color.orange.opacity(0.9)))
+
+        var upperEdge = Path()
+        upperEdge.move(to: CGPoint(x: points[0].x, y: midY - points[0].y))
+        addSmoothedUpperContour(to: &upperEdge, points: points, midY: midY)
+        context.stroke(upperEdge, with: .color(.white.opacity(0.20)), lineWidth: 1)
+    }
+
+    private func interpolatedSample(at position: Double) -> Double {
+        guard !samples.isEmpty else { return 0 }
+        if position < 0 || position > Double(samples.count - 1) { return 0 }
+
+        let lowerIndex = Int(position.rounded(.down))
+        let upperIndex = min(lowerIndex + 1, samples.count - 1)
+        let fraction = position - Double(lowerIndex)
+        let lower = Double(samples[lowerIndex])
+        let upper = Double(samples[upperIndex])
+        return lower + ((upper - lower) * fraction)
+    }
+
+    private func addSmoothedUpperContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
+        guard points.count > 1 else { return }
+        for index in 1..<points.count {
+            let previous = points[index - 1]
+            let current = points[index]
+            let control = CGPoint(
+                x: (previous.x + current.x) * 0.5,
+                y: midY - ((previous.y + current.y) * 0.5)
+            )
+            path.addQuadCurve(
+                to: CGPoint(x: current.x, y: midY - current.y),
+                control: control
+            )
+        }
+    }
+
+    private func addSmoothedLowerContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
+        guard points.count > 1 else { return }
+        for index in stride(from: points.count - 1, through: 0, by: -1) {
+            let current = points[index]
+            if index == points.count - 1 {
+                path.addLine(to: CGPoint(x: current.x, y: midY + current.y))
+                continue
+            }
+            let next = points[index + 1]
+            let control = CGPoint(
+                x: (current.x + next.x) * 0.5,
+                y: midY + ((current.y + next.y) * 0.5)
+            )
+            path.addQuadCurve(
+                to: CGPoint(x: current.x, y: midY + current.y),
+                control: control
+            )
+        }
     }
 }
 
