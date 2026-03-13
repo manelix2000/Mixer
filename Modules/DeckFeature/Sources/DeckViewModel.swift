@@ -62,6 +62,8 @@ public final class DeckViewModel: ObservableObject {
     private var lastTurntableUpdateTimestamp: TimeInterval = 0
     private var lastScrubAngleTimestamp: TimeInterval = 0
     private var smoothedScratchAngularVelocity: Double = 0
+    private var latestScratchAngularVelocity: Double = 0
+    private var latestScratchDirection: Double = 1
     private var scratchMotionMode: ScratchMotionMode = .scrub
     private var turntablePhysics = TurntablePhysics()
 
@@ -442,6 +444,8 @@ public final class DeckViewModel: ObservableObject {
         lastScratchCommitTimestamp = 0
         lastCommittedScratchTime = scratchCurrentTime
         smoothedScratchAngularVelocity = 0
+        latestScratchAngularVelocity = 0
+        latestScratchDirection = 1
         scratchMotionMode = .scrub
         stopPlaybackTimer()
         playbackStatusText = "Scratching"
@@ -472,6 +476,10 @@ public final class DeckViewModel: ObservableObject {
 
         let safeDeltaTime = max(scrubDeltaTime, 0.001)
         let instantaneousAngularVelocity = angleDelta / safeDeltaTime
+        latestScratchAngularVelocity = instantaneousAngularVelocity
+        if abs(angleDelta) >= Self.scratchDirectionAngleThreshold {
+            latestScratchDirection = angleDelta >= 0 ? 1 : -1
+        }
         smoothedScratchAngularVelocity +=
             (instantaneousAngularVelocity - smoothedScratchAngularVelocity) * Self.scratchVelocitySmoothing
 
@@ -514,6 +522,8 @@ public final class DeckViewModel: ObservableObject {
         isPlatterScrubbing = false
         lastScrubAngleTimestamp = 0
         smoothedScratchAngularVelocity = 0
+        latestScratchAngularVelocity = 0
+        latestScratchDirection = 1
         scratchMotionMode = .scrub
         scratchInteractionState = .idle
 
@@ -635,7 +645,11 @@ public final class DeckViewModel: ObservableObject {
         }
 
         do {
-            try audioEngine.scratch(to: scratchCurrentTime)
+            let signedVelocity = max(abs(latestScratchAngularVelocity), 0.001) * latestScratchDirection
+            try audioEngine.scratch(
+                to: scratchCurrentTime,
+                angularVelocity: signedVelocity
+            )
             playbackState = audioEngine.playbackState
             lastScratchCommitTimestamp = now
             lastCommittedScratchTime = scratchCurrentTime
@@ -996,6 +1010,7 @@ public final class DeckViewModel: ObservableObject {
     public static let maxScratchModeStep: TimeInterval = 0.20
     public static let scratchAngularVelocityThreshold: Double = 3.0
     public static let scratchVelocitySmoothing: Double = 0.35
+    public static let scratchDirectionAngleThreshold: Double = 0.0025
     public static let scratchJitterAngleThreshold: Double = 0.002
     public static let scratchJitterVelocityThreshold: Double = 0.6
     public static let minScrubCommitInterval: TimeInterval = 1.0 / 240.0

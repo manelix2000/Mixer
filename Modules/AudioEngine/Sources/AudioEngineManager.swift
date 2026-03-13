@@ -26,7 +26,7 @@ public protocol AudioEngineControlling: AnyObject {
     func pause()
     func seek(to time: TimeInterval) throws
     func beginScratch() throws
-    func scratch(to time: TimeInterval) throws
+    func scratch(to time: TimeInterval, angularVelocity: Double) throws
     func endScratch(resumePlayback: Bool) throws
     func setVolume(_ value: Float)
     func setPan(_ value: Float)
@@ -294,7 +294,7 @@ public final class AudioEngineManager: AudioEngineControlling {
         }
     }
 
-    public func scratch(to time: TimeInterval) throws {
+    public func scratch(to time: TimeInterval, angularVelocity: Double) throws {
         try withStateLock {
             guard let file = loadedFile else {
                 throw AudioEngineManagerError.noFileLoaded
@@ -305,33 +305,48 @@ public final class AudioEngineManager: AudioEngineControlling {
 
             let duration = totalDurationLocked()
             let clampedTime = min(max(time, 0), duration)
-            let sampleRate = file.processingFormat.sampleRate
-            let startFrame = AVAudioFramePosition(clampedTime * sampleRate)
-            let availableFrames = max(file.length - startFrame, 0)
-
             scratchCurrentTime = clampedTime
             playbackStartOffset = clampedTime
             lastKnownCurrentTime = clampedTime
 
+            // Reverse scratch path: read a small chunk and schedule reversed mono buffer.
+            if angularVelocity < 0 {
+                let sampleRate = file.processingFormat.sampleRate
+                let speed = abs(angularVelocity)
+                let dynamicDuration = min(max(0.04 + (speed * 0.008), 0.04), 0.10)
+                let previewFrames = AVAudioFramePosition(min(max(sampleRate * dynamicDuration, 1_024), 8_192))
+                let centerFrame = AVAudioFramePosition(clampedTime * sampleRate)
+                let startFrame = max(0, centerFrame - previewFrames)
+                let frameCount = AVAudioFrameCount(max(1, centerFrame - startFrame))
+
+                let mono = try readMonoSamplesLocked(
+                    from: file,
+                    startFrame: startFrame,
+                    frameCount: frameCount
+                )
+                if !mono.isEmpty {
+                    if scheduleMonoScratchBufferLocked(samples: mono, reversed: true) {
+                        internalPlaybackState = .playing
+                        return
+                    }
+                }
+            }
+
+            // Fallback path: segment scheduling from file (forward only).
+            let sampleRate = file.processingFormat.sampleRate
+            let startFrame = AVAudioFramePosition(clampedTime * sampleRate)
+            let availableFrames = max(file.length - startFrame, 0)
             guard availableFrames > 0 else {
                 playerNode.stop()
                 playerNode.reset()
                 internalPlaybackState = .paused
                 return
             }
-
             let previewFrames = AVAudioFramePosition(min(max(sampleRate * 0.06, 2_048), 8_192))
             let frameCount = AVAudioFrameCount(min(availableFrames, previewFrames))
-
             playerNode.stop()
             playerNode.reset()
-            playerNode.scheduleSegment(
-                file,
-                startingFrame: startFrame,
-                frameCount: frameCount,
-                at: nil,
-                completionHandler: nil
-            )
+            playerNode.scheduleSegment(file, startingFrame: startFrame, frameCount: frameCount, at: nil, completionHandler: nil)
             playerNode.play()
             internalPlaybackState = .playing
         }
@@ -775,6 +790,102 @@ public final class AudioEngineManager: AudioEngineControlling {
             return 0
         }
         return Double(file.length) / file.processingFormat.sampleRate
+    }
+
+    private func readMonoSamplesLocked(
+        from file: AVAudioFile,
+        startFrame: AVAudioFramePosition,
+        frameCount: AVAudioFrameCount
+    ) throws -> [Float] {
+        guard frameCount > 0 else { return [] }
+        let format = file.processingFormat
+        let channels = Int(format.channelCount)
+        guard channels > 0 else { return [] }
+
+        let clampedStartFrame = max(0, min(startFrame, max(file.length - 1, 0)))
+        file.framePosition = clampedStartFrame
+
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: frameCount
+        ) else {
+            return []
+        }
+        try file.read(into: buffer, frameCount: frameCount)
+        let framesRead = Int(buffer.frameLength)
+        guard framesRead > 0 else { return [] }
+
+        var mono = [Float](repeating: 0, count: framesRead)
+        if let floatData = buffer.floatChannelData {
+            let invChannels = 1.0 / Float(channels)
+            for frame in 0..<framesRead {
+                var sum: Float = 0
+                for channel in 0..<channels {
+                    sum += floatData[channel][frame]
+                }
+                mono[frame] = sum * invChannels
+            }
+            return mono
+        }
+
+        if let int16Data = buffer.int16ChannelData {
+            let invChannels = 1.0 / Float(channels)
+            let scale = 1.0 / Float(Int16.max)
+            for frame in 0..<framesRead {
+                var sum: Float = 0
+                for channel in 0..<channels {
+                    sum += Float(int16Data[channel][frame]) * scale
+                }
+                mono[frame] = sum * invChannels
+            }
+            return mono
+        }
+
+        if let int32Data = buffer.int32ChannelData {
+            let invChannels = 1.0 / Float(channels)
+            let scale = 1.0 / Float(Int32.max)
+            for frame in 0..<framesRead {
+                var sum: Float = 0
+                for channel in 0..<channels {
+                    sum += Float(int32Data[channel][frame]) * scale
+                }
+                mono[frame] = sum * invChannels
+            }
+            return mono
+        }
+
+        return []
+    }
+
+    private func scheduleMonoScratchBufferLocked(samples: [Float], reversed: Bool) -> Bool {
+        guard !samples.isEmpty else { return false }
+        let outputFormat = playerNode.outputFormat(forBus: 0)
+        let channelCount = max(Int(outputFormat.channelCount), 1)
+        let frameCount = samples.count
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: outputFormat,
+            frameCapacity: AVAudioFrameCount(frameCount)
+        ) else {
+            return false
+        }
+        buffer.frameLength = AVAudioFrameCount(frameCount)
+        guard let channelData = buffer.floatChannelData else {
+            return false
+        }
+
+        for frame in 0..<frameCount {
+            let sourceIndex = reversed ? (frameCount - 1 - frame) : frame
+            let value = samples[sourceIndex]
+            for channel in 0..<channelCount {
+                channelData[channel][frame] = value
+            }
+        }
+
+        playerNode.stop()
+        playerNode.reset()
+        playerNode.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
+        playerNode.play()
+        return true
     }
 
     private func resolvedCurrentTimeLocked() -> TimeInterval {
