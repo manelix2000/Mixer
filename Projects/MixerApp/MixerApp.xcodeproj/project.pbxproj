@@ -1,0 +1,431 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 55;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2509C41B302CB4E97032909E /* AudioEngine.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94EB9D16108EAA3B5E3BE1D6 /* AudioEngine.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		261E41A0142206421218BF53 /* MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A196EBB221D0D75884D07C1E /* MixerApp.swift */; };
+		2E99908A5B1CEB0B0D77BBAC /* TuistBundle+MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */; };
+		34E48199C6F3564AEAA8FC3E /* Sample.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1E90FFC3EFA41B3F3C0DEFD2 /* Sample.mp3 */; };
+		438656BED1CF59F9D4965B29 /* DSP.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 23004629BECBC75B92307B6E /* DSP.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		4FD5AFFAB591F98954AE8B0F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */; };
+		68F6C6F91C554B12F1E6C7B1 /* DeckFeature.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 346C498AC1CFCBF80413CE25 /* DeckFeature.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		CDA2C06AA0F08726B5931BF6 /* DeckFeature.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 346C498AC1CFCBF80413CE25 /* DeckFeature.framework */; };
+		CF2CEE63808D417DD6CCBDDD /* Waveform.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F20A18C847ECC5083DB98E0D /* Waveform.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DBDBE31571AD9DB73DA18CD9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 595C42B0619A046E4AF515C3 /* ContentView.swift */; };
+		EB3BB116449B2276FA03D313 /* UIComponents.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		74914967BD3F6F8D4B66DFC8 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				2509C41B302CB4E97032909E /* AudioEngine.framework in Embed Frameworks */,
+				438656BED1CF59F9D4965B29 /* DSP.framework in Embed Frameworks */,
+				68F6C6F91C554B12F1E6C7B1 /* DeckFeature.framework in Embed Frameworks */,
+				EB3BB116449B2276FA03D313 /* UIComponents.framework in Embed Frameworks */,
+				CF2CEE63808D417DD6CCBDDD /* Waveform.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1E90FFC3EFA41B3F3C0DEFD2 /* Sample.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Sample.mp3; sourceTree = "<group>"; };
+		23004629BECBC75B92307B6E /* DSP.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DSP.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		346C498AC1CFCBF80413CE25 /* DeckFeature.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DeckFeature.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		595C42B0619A046E4AF515C3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6955E5813FC3FBF99FA3E9AF /* MixerApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "MixerApp-Info.plist"; sourceTree = "<group>"; };
+		79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = UIComponents.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		94EB9D16108EAA3B5E3BE1D6 /* AudioEngine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AudioEngine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A196EBB221D0D75884D07C1E /* MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerApp.swift; sourceTree = "<group>"; };
+		C6BD01C56D9A23AAFF645882 /* MixerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MixerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F20A18C847ECC5083DB98E0D /* Waveform.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Waveform.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+MixerApp.swift"; sourceTree = "<group>"; };
+		FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2FD52057F48B24525371084D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDA2C06AA0F08726B5931BF6 /* DeckFeature.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4B7E0DD8C2D577C304C2F064 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				595C42B0619A046E4AF515C3 /* ContentView.swift */,
+				A196EBB221D0D75884D07C1E /* MixerApp.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		56D4DF47C0694C86FA6569DD /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		5DFAC3BD1960640E73CC20EA /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		810863C6186D1B4045452569 = {
+			isa = PBXGroup;
+			children = (
+				942802B3C0924D800F96FA07 /* Products */,
+				DE7EE044DD927DA28C9EEF52 /* Project */,
+			);
+			sourceTree = "<group>";
+		};
+		91003DA1CD7BBE33B0C5127A /* InfoPlists */ = {
+			isa = PBXGroup;
+			children = (
+				6955E5813FC3FBF99FA3E9AF /* MixerApp-Info.plist */,
+			);
+			path = InfoPlists;
+			sourceTree = "<group>";
+		};
+		942802B3C0924D800F96FA07 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				94EB9D16108EAA3B5E3BE1D6 /* AudioEngine.framework */,
+				346C498AC1CFCBF80413CE25 /* DeckFeature.framework */,
+				23004629BECBC75B92307B6E /* DSP.framework */,
+				C6BD01C56D9A23AAFF645882 /* MixerApp.app */,
+				79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */,
+				F20A18C847ECC5083DB98E0D /* Waveform.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DE7EE044DD927DA28C9EEF52 /* Project */ = {
+			isa = PBXGroup;
+			children = (
+				EBB7C93AC6DCD644BD7625E5 /* Derived */,
+				5DFAC3BD1960640E73CC20EA /* Resources */,
+				4B7E0DD8C2D577C304C2F064 /* Sources */,
+				1E90FFC3EFA41B3F3C0DEFD2 /* Sample.mp3 */,
+			);
+			name = Project;
+			sourceTree = "<group>";
+		};
+		EBB7C93AC6DCD644BD7625E5 /* Derived */ = {
+			isa = PBXGroup;
+			children = (
+				91003DA1CD7BBE33B0C5127A /* InfoPlists */,
+				56D4DF47C0694C86FA6569DD /* Sources */,
+			);
+			path = Derived;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		7827622EFE431DD7A7CF46D2 /* MixerApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B0B6E8660D575AD19F35567 /* Build configuration list for PBXNativeTarget "MixerApp" */;
+			buildPhases = (
+				4CF7271C8EC2185E94124E0E /* Sources */,
+				E3D839DEC1057C2741BE30D6 /* Resources */,
+				2FD52057F48B24525371084D /* Frameworks */,
+				74914967BD3F6F8D4B66DFC8 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MixerApp;
+			packageProductDependencies = (
+			);
+			productName = MixerApp;
+			productReference = C6BD01C56D9A23AAFF645882 /* MixerApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BD25331633A36C43B1DBF4E2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = D4A9ED3EA158DED02F712F5C /* Build configuration list for PBXProject "MixerApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 810863C6186D1B4045452569;
+			productRefGroup = 942802B3C0924D800F96FA07 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				7827622EFE431DD7A7CF46D2 /* MixerApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E3D839DEC1057C2741BE30D6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4FD5AFFAB591F98954AE8B0F /* LaunchScreen.storyboard in Resources */,
+				34E48199C6F3564AEAA8FC3E /* Sample.mp3 in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4CF7271C8EC2185E94124E0E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E99908A5B1CEB0B0D77BBAC /* TuistBundle+MixerApp.swift in Sources */,
+				DBDBE31571AD9DB73DA18CD9 /* ContentView.swift in Sources */,
+				261E41A0142206421218BF53 /* MixerApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		707A4AE21C733BA2EDA4BA9D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		A26DCCEDD581EBE6A171AFDD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = FX8D5XGPA8;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = FX8D5XGPA8;
+				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
+				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.manelix.Mixer;
+				PRODUCT_NAME = MixerApp;
+				PROVISIONING_PROFILE_SPECIFIER = "Privalia Wildcard";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Privalia Wildcard";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E4662D3BFEEBFA0346453645 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		F6536116376ECAE5C4B4F52B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = FX8D5XGPA8;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = FX8D5XGPA8;
+				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
+				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.manelix.Mixer;
+				PRODUCT_NAME = MixerApp;
+				PROVISIONING_PROFILE_SPECIFIER = "Privalia Wildcard";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Privalia Wildcard";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1B0B6E8660D575AD19F35567 /* Build configuration list for PBXNativeTarget "MixerApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A26DCCEDD581EBE6A171AFDD /* Debug */,
+				F6536116376ECAE5C4B4F52B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D4A9ED3EA158DED02F712F5C /* Build configuration list for PBXProject "MixerApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				707A4AE21C733BA2EDA4BA9D /* Debug */,
+				E4662D3BFEEBFA0346453645 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BD25331633A36C43B1DBF4E2 /* Project object */;
+}
