@@ -1,6 +1,7 @@
 import SwiftUI
 import UIComponents
 import UniformTypeIdentifiers
+import UIKit
 
 @MainActor
 public struct DeckView: View {
@@ -31,15 +32,10 @@ public struct DeckView: View {
             .padding(12)
             .background(Color(uiColor: .systemBackground))
         }
-        .fileImporter(
-            isPresented: $isImportingTrack,
-            allowedContentTypes: Self.supportedAudioTypes,
-            allowsMultipleSelection: false
-        ) { result in
-            guard case let .success(urls) = result, let selectedURL = urls.first else {
-                return
+        .sheet(isPresented: $isImportingTrack) {
+            TrackDocumentPicker(contentTypes: Self.supportedAudioTypes) { selectedURL in
+                viewModel.selectTrack(url: selectedURL)
             }
-            viewModel.selectTrack(url: selectedURL)
         }
     }
 
@@ -538,6 +534,40 @@ public struct DeckView: View {
 
     private static let waveformPointsPerRevolution: Double = 180.0
     private static let minWaveformPointsPerRevolution: Double = 60.0
+}
+
+private struct TrackDocumentPicker: UIViewControllerRepresentable {
+    let contentTypes: [UTType]
+    let onPick: (URL) -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: contentTypes,
+            asCopy: true
+        )
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick)
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: (URL) -> Void
+
+        init(onPick: @escaping (URL) -> Void) {
+            self.onPick = onPick
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let first = urls.first else { return }
+            onPick(first)
+        }
+    }
 }
 
 private struct VerticalPitchFader: View {

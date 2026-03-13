@@ -113,6 +113,15 @@ public final class DeckViewModel: ObservableObject {
     }
 
     public func selectTrack(url: URL) {
+        let resolvedURL: URL
+        do {
+            resolvedURL = try importedTrackURL(from: url)
+        } catch {
+            playbackState = .idle
+            playbackStatusText = "Failed to import selected track"
+            return
+        }
+
         stopPlaybackTimer()
         waveformLoadTask?.cancel()
         waveformLoadTask = nil
@@ -131,17 +140,17 @@ public final class DeckViewModel: ObservableObject {
         scratchInteractionState = .idle
         turntablePhysics.reset()
         publishTurntableState()
-        selectedTrackURL = url
+        selectedTrackURL = resolvedURL
         selectedTrackName = url.lastPathComponent
         isPitchLockedToExternalBPM = false
 
         do {
-            try audioEngine.loadFile(url: url)
+            try audioEngine.loadFile(url: resolvedURL)
             playbackState = audioEngine.playbackState
             playbackStatusText = ""
             refreshPlaybackTimeText()
-            loadWaveform(url: url)
-            detectBPM(url: url)
+            loadWaveform(url: resolvedURL)
+            detectBPM(url: resolvedURL)
         } catch {
             playbackState = .idle
             playbackStatusText = "Failed to load selected track"
@@ -491,7 +500,8 @@ public final class DeckViewModel: ObservableObject {
             return
         }
 
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        // Keep text updates lightweight; waveform progress is updated per-frame.
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
                 self?.refreshPlaybackTimeText()
@@ -580,7 +590,26 @@ public final class DeckViewModel: ObservableObject {
         let shouldDrive = playbackState == .playing && !isPlatterScrubbing
         let targetAngularVelocity = shouldDrive ? Self.basePlatterAngularVelocity * playbackRate : nil
         turntablePhysics.step(deltaTime: deltaTime, driveAngularVelocity: targetAngularVelocity)
+        if shouldDrive {
+            refreshPlaybackProgressOnly()
+        }
         publishTurntableState()
+    }
+
+    private func refreshPlaybackProgressOnly() {
+        let current = audioEngine.currentTime
+        let total = audioEngine.totalDuration
+        guard total > 0 else {
+            if playbackProgress != 0 {
+                playbackProgress = 0
+            }
+            return
+        }
+
+        let normalizedProgress = min(max(current / total, 0), 1)
+        if abs(playbackProgress - normalizedProgress) > 0.0001 {
+            playbackProgress = normalizedProgress
+        }
     }
 
     private func publishTurntableState() {
@@ -620,6 +649,66 @@ public final class DeckViewModel: ObservableObject {
 
             waveformLoadTask = nil
         }
+    }
+
+    private func importedTrackURL(from sourceURL: URL) throws -> URL {
+        // Keep imported tracks inside app sandbox to avoid security-scoped URL lifetime issues.
+        let fileManager = FileManager.default
+        let importsDirectory = fileManager.urls(
+            for: .cachesDirectory,
+            in: .userDomainMask
+        )[0].appendingPathComponent("ImportedTracks", isDirectory: true)
+        try fileManager.createDirectory(at: importsDirectory, withIntermediateDirectories: true)
+
+        let destinationURL = importsDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(sourceURL.pathExtension)
+
+        if sourceURL.isFileURL {
+            let didAccess = sourceURL.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    sourceURL.stopAccessingSecurityScopedResource()
+                }
+            }
+        }
+
+        var coordinationError: NSError?
+        var copyError: Error?
+        NSFileCoordinator().coordinate(readingItemAt: sourceURL, options: [], error: &coordinationError) { coordinatedURL in
+            do {
+                try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
+            } catch {
+                copyError = error
+            }
+        }
+
+        // Some File Provider picker sessions can disconnect the view service while still
+        // leaving us with a readable URL. Prefer successful copy if destination exists.
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            return destinationURL
+        }
+
+        if let copyError {
+            // Fallback path: try direct copy from original URL while security scope is active.
+            do {
+                try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                return destinationURL
+            } catch {
+                throw copyError
+            }
+        }
+
+        if let coordinationError {
+            // Final fallback in case coordinator failed but source URL is still readable.
+            do {
+                try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                return destinationURL
+            } catch {
+                throw coordinationError
+            }
+        }
+        return destinationURL
     }
 
     private func detectBPM(url: URL) {
