@@ -390,6 +390,35 @@ public final class DeckViewModel: ObservableObject {
         isPlatterScrubbing
     }
 
+    public func seekFromWaveformTap(xOffset: Double, baseSampleSpacing: Double) {
+        guard hasSelectedTrack else {
+            return
+        }
+        guard !waveformData.isEmpty else {
+            return
+        }
+
+        let sampleSpacing = max(baseSampleSpacing * waveformZoom, 0.001)
+        let deltaSamples = xOffset / sampleSpacing
+        let denominator = Double(max(waveformData.count - 1, 1))
+        let targetProgress = min(max(playbackProgress + (deltaSamples / denominator), 0), 1)
+        let targetTime = targetProgress * audioEngine.totalDuration
+
+        do {
+            try audioEngine.seek(to: targetTime)
+            playbackState = audioEngine.playbackState
+            if playbackState == .playing {
+                playbackStatusText = "Playing"
+                startPlaybackTimer()
+            } else {
+                stopPlaybackTimer()
+            }
+            refreshPlaybackTimeText()
+        } catch {
+            playbackStatusText = "Seek unavailable"
+        }
+    }
+
     public func beginTurntableScrub() {
         guard hasSelectedTrack else {
             return

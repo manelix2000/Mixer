@@ -185,36 +185,46 @@ public struct DeckView: View {
 
             HStack(spacing: 8) {
 
-                ZStack(alignment: Alignment(horizontal: .leading, vertical: .center)) {
-                    WaveformView(
-                        samples: viewModel.waveformData,
-                        progress: viewModel.playbackProgress,
-                        isLoading: viewModel.isWaveformLoading,
-                        zoom: viewModel.waveformZoom
-                    )
-                    if viewModel.isWaveformLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                            .padding(.leading, 8)
+                GeometryReader { waveformGeometry in
+                    ZStack(alignment: Alignment(horizontal: .leading, vertical: .center)) {
+                        WaveformView(
+                            samples: viewModel.waveformData,
+                            progress: viewModel.playbackProgress,
+                            isLoading: viewModel.isWaveformLoading,
+                            zoom: viewModel.waveformZoom
+                        )
+                        if viewModel.isWaveformLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                                .padding(.leading, 8)
+                        }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let xOffset = location.x - (waveformGeometry.size.width * 0.5)
+                        viewModel.seekFromWaveformTap(
+                            xOffset: Double(xOffset),
+                            baseSampleSpacing: Self.waveformBaseSampleSpacing
+                        )
+                    }
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { scale in
+                                if pinchStartZoom == nil {
+                                    pinchStartZoom = viewModel.waveformZoom
+                                }
+                                let startZoom = pinchStartZoom ?? viewModel.waveformZoom
+                                viewModel.setWaveformZoom(startZoom * scale)
+                            }
+                            .onEnded { _ in
+                                pinchStartZoom = nil
+                            }
+                    )
+                    .simultaneousGesture(waveformScratchGesture())
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { scale in
-                            if pinchStartZoom == nil {
-                                pinchStartZoom = viewModel.waveformZoom
-                            }
-                            let startZoom = pinchStartZoom ?? viewModel.waveformZoom
-                            viewModel.setWaveformZoom(startZoom * scale)
-                        }
-                        .onEnded { _ in
-                            pinchStartZoom = nil
-                        }
-                )
-                .simultaneousGesture(waveformScratchGesture())
 
                 Button {
                     viewModel.zoomInWaveform()
@@ -534,6 +544,7 @@ public struct DeckView: View {
 
     private static let waveformPointsPerRevolution: Double = 60.0
     private static let minWaveformPointsPerRevolution: Double = 20.0
+    private static let waveformBaseSampleSpacing: Double = 2.0
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
