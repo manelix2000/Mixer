@@ -45,7 +45,8 @@ public struct TurntableDeckView: View {
 
                         TurntableView(
                             isPlaying: viewModel.isPlaybackActive,
-                            platterAngleDegrees: viewModel.platterRotationDegrees
+                            platterAngleDegrees: viewModel.platterRotationDegrees,
+                            tonearmAngleDegrees: viewModel.tonearmRotationDegrees
                         )
                         .frame(width: size, height: size)
                         .overlay {
@@ -443,6 +444,11 @@ public struct TurntableDeckView: View {
     }
 
     private func handlePlatterTouchBegan(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
+        guard platterAngle(for: location, size: platterSize) != nil else {
+            platterLastAngle = nil
+            return
+        }
+
         if !viewModel.isTurntableScrubbing {
             viewModel.beginTurntablePressureTouch(
                 pressure: normalizedPressure(pressure),
@@ -459,6 +465,11 @@ public struct TurntableDeckView: View {
     }
 
     private func handlePlatterTouchMoved(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
+        guard platterAngle(for: location, size: platterSize) != nil else {
+            platterLastAngle = nil
+            return
+        }
+
         if !viewModel.isTurntableScrubbing {
             viewModel.updateTurntablePressureTouch(
                 pressure: normalizedPressure(pressure),
@@ -547,8 +558,10 @@ public struct TurntableDeckView: View {
         let dx = point.x - center.x
         let dy = point.y - center.y
         let radius = sqrt((dx * dx) + (dy * dy))
-        let minRadius = size * 0.12
-        let maxRadius = size * 0.5
+        // Match interactive area with visible platter circle in TurntableView, which has fixed outer padding.
+        let visiblePlatterDiameter = max(size - (Self.turntableVisualOuterInset * 2.0), 0)
+        let minRadius = visiblePlatterDiameter * 0.12
+        let maxRadius = visiblePlatterDiameter * 0.5
 
         guard radius >= minRadius, radius <= maxRadius else {
             return nil
@@ -572,6 +585,7 @@ public struct TurntableDeckView: View {
     private static let waveformBaseSampleSpacing: Double = 2.0
     private static let waveformTapSeekHorizontalMargin: CGFloat = 40.0
     private static let platterScratchActivationAngleThreshold: Double = 0.002
+    private static let turntableVisualOuterInset: CGFloat = 10.0
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {

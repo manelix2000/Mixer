@@ -178,7 +178,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         do {
             try audioEngine.play()
             playbackState = audioEngine.playbackState
-            playbackStatusText = "Playing"
+            playbackStatusText = ""
             startPlaybackTimer()
         } catch {
             playbackStatusText = "Unable to start playback"
@@ -193,7 +193,7 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         audioEngine.pause()
         playbackState = audioEngine.playbackState
-        playbackStatusText = "Paused"
+        playbackStatusText = ""
         stopPlaybackTimer()
         refreshPlaybackTimeText()
     }
@@ -359,6 +359,12 @@ public final class TurntableDeckViewModel: ObservableObject {
         effectiveTargetBPMForCurrentState()
     }
 
+    public var tonearmRotationDegrees: Double {
+        let clampedProgress = min(max(playbackProgress, 0), 1)
+        return Self.tonearmStartRotationDegrees +
+            (Self.tonearmEndRotationDegrees - Self.tonearmStartRotationDegrees) * clampedProgress
+    }
+
     public func seekFromWaveformTap(xOffset: Double, baseSampleSpacing: Double) {
         guard hasSelectedTrack else {
             return
@@ -377,7 +383,7 @@ public final class TurntableDeckViewModel: ObservableObject {
             try audioEngine.seek(to: targetTime)
             playbackState = audioEngine.playbackState
             if playbackState == .playing {
-                playbackStatusText = "Playing"
+                playbackStatusText = ""
                 startPlaybackTimer()
             } else {
                 stopPlaybackTimer()
@@ -477,8 +483,12 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         scratchInteractionState = .release
         commitScratchAudio(force: true)
+        let totalDuration = audioEngine.totalDuration
+        let isAtTrackEnd = hasReachedTrackEnd(current: scratchCurrentTime, total: totalDuration)
+        let shouldResumePlaybackAfterScratch = wasPlayingBeforePlatterScrub && !isAtTrackEnd
+
         do {
-            try audioEngine.endScratch(resumePlayback: wasPlayingBeforePlatterScrub)
+            try audioEngine.endScratch(resumePlayback: shouldResumePlaybackAfterScratch)
         } catch {
             playbackStatusText = "Scratch release failed"
         }
@@ -491,15 +501,19 @@ public final class TurntableDeckViewModel: ObservableObject {
         scratchMotionMode = .scrub
         scratchInteractionState = .idle
 
-        if wasPlayingBeforePlatterScrub {
+        if shouldResumePlaybackAfterScratch {
             playbackState = audioEngine.playbackState
-            playbackStatusText = "Playing"
+            playbackStatusText = ""
             startPlaybackTimer()
         } else {
-            audioEngine.pause()
-            playbackState = audioEngine.playbackState
-            playbackStatusText = "Paused"
-            stopPlaybackTimer()
+            if isAtTrackEnd {
+                stopPlaybackAtTrackEnd(total: totalDuration)
+            } else {
+                audioEngine.pause()
+                playbackState = audioEngine.playbackState
+                playbackStatusText = ""
+                stopPlaybackTimer()
+            }
         }
 
         refreshPlaybackTimeText()
@@ -610,6 +624,11 @@ public final class TurntableDeckViewModel: ObservableObject {
     }
 
     private func updatePlaybackDisplay(current: TimeInterval, total: TimeInterval) {
+        if playbackState == .playing, hasReachedTrackEnd(current: current, total: total) {
+            stopPlaybackAtTrackEnd(total: total)
+            return
+        }
+
         let formattedTime = "\(format(time: current)) / \(format(time: total))"
         if playbackTimeText != formattedTime {
             playbackTimeText = formattedTime
@@ -688,6 +707,10 @@ public final class TurntableDeckViewModel: ObservableObject {
     private func refreshPlaybackProgressOnly() {
         let current = audioEngine.currentTime
         let total = audioEngine.totalDuration
+        if playbackState == .playing, hasReachedTrackEnd(current: current, total: total) {
+            stopPlaybackAtTrackEnd(total: total)
+            return
+        }
         guard total > 0 else {
             if playbackProgress != 0 {
                 playbackProgress = 0
@@ -706,6 +729,28 @@ public final class TurntableDeckViewModel: ObservableObject {
         if abs(platterRotationDegrees - degrees) > 0.01 {
             platterRotationDegrees = degrees
         }
+    }
+
+    private func hasReachedTrackEnd(current: TimeInterval, total: TimeInterval) -> Bool {
+        guard total > 0 else {
+            return false
+        }
+        return current >= (total - Self.trackEndTolerance)
+    }
+
+    private func stopPlaybackAtTrackEnd(total: TimeInterval) {
+        audioEngine.pause()
+        do {
+            try audioEngine.seek(to: total)
+        } catch {
+            // Keep paused state even if precise end seek fails.
+        }
+
+        playbackState = audioEngine.playbackState
+        playbackStatusText = "Stopped"
+        stopPlaybackTimer()
+        playbackProgress = total > 0 ? 1.0 : 0
+        playbackTimeText = "\(format(time: total)) / \(format(time: total))"
     }
 
     private func loadWaveform(url: URL) {
@@ -971,6 +1016,9 @@ public final class TurntableDeckViewModel: ObservableObject {
     public static let normalProgressEpsilon: Double = 0.0005
     public static let scratchProgressEpsilon: Double = 0.00002
     public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
+    public static let tonearmStartRotationDegrees: Double = 48
+    public static let tonearmEndRotationDegrees: Double = 75
+    public static let trackEndTolerance: TimeInterval = 0.01
     public static let maxPressureSlowdownFraction: Double = 0.9
     public static let minPressureSlowdownMultiplier: Double = 0.08
     public static let maxPressureAccelerationFraction: Double = 0.9

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		35A4261AC172B67527DECE24 /* TurntableTonearmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD4CA4F7BC70C5BA7BBACE7 /* TurntableTonearmView.swift */; };
 		4EE954B314BA4E7A55777A9D /* UIComponentsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 519264C5EF4381BAAAF90428 /* UIComponentsModule.swift */; };
 		9EFA826D61DC697ED450B6DC /* TurntableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBE2E2C4C3476C6BBC1579B /* TurntableView.swift */; };
 		D3DA37FB6564994344E896AF /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D962A2F67E6DEBAE484D936E /* WaveformView.swift */; };
@@ -26,6 +27,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BD4CA4F7BC70C5BA7BBACE7 /* TurntableTonearmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurntableTonearmView.swift; sourceTree = "<group>"; };
 		0F34F8CF262B74DDBB90AA3E /* UIComponents.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = UIComponents.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		519264C5EF4381BAAAF90428 /* UIComponentsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIComponentsModule.swift; sourceTree = "<group>"; };
 		7ED246B6CA3453AC76E4600C /* UIComponents-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "UIComponents-Info.plist"; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 		D32CE432A5625272712E7831 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				0BD4CA4F7BC70C5BA7BBACE7 /* TurntableTonearmView.swift */,
 				9DBE2E2C4C3476C6BBC1579B /* TurntableView.swift */,
 				519264C5EF4381BAAAF90428 /* UIComponentsModule.swift */,
 				D962A2F67E6DEBAE484D936E /* WaveformView.swift */,
@@ -161,6 +164,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				35A4261AC172B67527DECE24 /* TurntableTonearmView.swift in Sources */,
 				9EFA826D61DC697ED450B6DC /* TurntableView.swift in Sources */,
 				4EE954B314BA4E7A55777A9D /* UIComponentsModule.swift in Sources */,
 				D3DA37FB6564994344E896AF /* WaveformView.swift in Sources */,

@@ -3,13 +3,16 @@ import SwiftUI
 public struct TurntableView: View {
     public let isPlaying: Bool
     public let platterAngleDegrees: Double
+    public let tonearmAngleDegrees: Double
 
     public init(
         isPlaying: Bool,
-        platterAngleDegrees: Double = 0
+        platterAngleDegrees: Double = 0,
+        tonearmAngleDegrees: Double = 48
     ) {
         self.isPlaying = isPlaying
         self.platterAngleDegrees = platterAngleDegrees
+        self.tonearmAngleDegrees = tonearmAngleDegrees
     }
 
     public var body: some View {
@@ -41,6 +44,13 @@ public struct TurntableView: View {
                     .rotationEffect(.degrees(platterAngleDegrees))
 
                 spindle(size: size)
+
+                TurntableTonearmView(
+                    anchor: CGPoint(x: 0.99, y: 0.16),
+                    relativeScale: 0.46,
+                    relativeOffset: .zero,
+                    armRotationDegrees: tonearmAngleDegrees
+                )
             }
             .padding(10)
             .frame(width: size, height: size)
