@@ -29,7 +29,7 @@ public struct DeckView: View {
 
                 if areControlsVisible {
                         controlsColumn
-                            .frame(width: max(240, geometry.size.width * 0.28))
+                            .frame(width: max(200, geometry.size.width * 0.28))
                             .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
@@ -88,7 +88,8 @@ public struct DeckView: View {
 
             GeometryReader { geometry in
                 let size = min(geometry.size.width, geometry.size.height)
-
+                let pitchSize = 70.0
+                let turntableSize = geometry.size.width - pitchSize - 12
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -116,7 +117,7 @@ public struct DeckView: View {
 
                         VStack {
                             HStack {
-                        if viewModel.isPitchLockedToExternalBPM {
+                                if viewModel.isPitchLockedToExternalBPM {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Locked Pitch")
                                             .font(.caption2.weight(.semibold))
@@ -150,11 +151,10 @@ public struct DeckView: View {
                         }
                         .padding(10)
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(width: turntableSize)
                     
-
                     bpmPitchCard
-                        .frame(maxWidth: 130)
+                        .frame(width: pitchSize)
                 }
             }
         }
@@ -312,26 +312,23 @@ public struct DeckView: View {
 
     private var volumeControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Volume")
-                .font(.subheadline.weight(.semibold))
-            HStack(spacing: 10) {
+            HStack {
                 Image(systemName: "speaker.fill")
                     .foregroundStyle(.secondary)
-
-                Slider(
-                    value: Binding(
-                        get: { viewModel.volume },
-                        set: { viewModel.setVolume($0) }
-                    ),
-                    in: 0...1
-                )
-                .accessibilityLabel("Volume")
-
+                Spacer()
                 Text(String(format: "%.2f", viewModel.volume))
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 42, alignment: .trailing)
             }
+            Slider(
+                value: Binding(
+                    get: { viewModel.volume },
+                    set: { viewModel.setVolume($0) }
+                ),
+                in: 0...1
+            )
+            .accessibilityLabel("Volume")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -342,10 +339,9 @@ public struct DeckView: View {
     private var bpmPitchCard: some View {
         GeometryReader { geometry in
             let safeOriginalBPM = max(viewModel.originalBPM, DeckViewModel.minBPM)
-            let sensitivityPercent = viewModel.pitchSensitivityPercent
             let sensitivityFraction = viewModel.pitchSensitivityFraction
 
-            HStack {
+            VStack(spacing: 5) {
                 VStack(alignment: .center, spacing: 0) {
                     VerticalPitchFader(
                         value: Binding(
@@ -378,35 +374,35 @@ public struct DeckView: View {
                 }
                 
                 
-                VStack(spacing: 6) {
-                    Button {
-                        viewModel.decreasePitchSensitivity()
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .frame(minWidth: 10)
+                VStack(spacing: 0) {
+                    HStack(spacing: 5) {
+                        Button {
+                            viewModel.increasePitchSensitivity()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!viewModel.canIncreasePitchSensitivity)
+                        .accessibilityLabel("Increase pitch sensitivity")
+                        .frame(maxWidth: 40)
+                        
+                        Button {
+                            viewModel.decreasePitchSensitivity()
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!viewModel.canDecreasePitchSensitivity)
+                        .accessibilityLabel("Decrease pitch sensitivity")
+                        .frame(maxWidth: 40)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(!viewModel.canDecreasePitchSensitivity)
-                    .accessibilityLabel("Decrease pitch sensitivity")
-                    .frame(maxWidth: 40)
-
-                    Button {
-                        viewModel.increasePitchSensitivity()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .frame(minWidth: 10)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!viewModel.canIncreasePitchSensitivity)
-                    .accessibilityLabel("Increase pitch sensitivity")
-                    .frame(maxWidth: 40)
                     
                     Text("±\(viewModel.pitchSensitivityPercent)%")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(10)
+            .padding(5)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .tertiarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

@@ -1033,8 +1033,7 @@ public final class DeckViewModel: ObservableObject {
 
     private func refreshBPMText() {
         bpmText = String(
-            format: "Original %.1f | Target %.1f | %.3fx",
-            originalBPM,
+            format: "Target %.1f | %.3fx",
             targetBPM,
             playbackRate
         )
