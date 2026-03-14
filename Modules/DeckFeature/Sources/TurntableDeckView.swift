@@ -102,11 +102,11 @@ public struct TurntableDeckView: View {
                         VStack {
                             Spacer()
                             HStack {
-                                technicsStartPauseButton
+                                technicsStartPauseButton(containerWidth: turntableSize)
                                 Spacer()
-                                technicsStopButton
+                                technicsStopButton(containerWidth: turntableSize)
                             }
-                            .padding(12)
+                            .padding(max(size * 0.035, 8))
                         }
                     }
                     .frame(width: turntableSize)
@@ -143,28 +143,27 @@ public struct TurntableDeckView: View {
             }
 
             HStack(spacing: 8) {
-                GeometryReader { waveformGeometry in
-                    HStack {
-                        Button {
-                            isImportingTrack = true
-                        } label: {
-                            Image(systemName: "folder.badge.plus")
-                                .frame(maxWidth: 14)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityLabel("Load track")
+                Button {
+                    isImportingTrack = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .frame(maxWidth: 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel("Load track")
 
-                        #if targetEnvironment(simulator)
-                        Button {
-                            loadSampleTrack()
-                        } label: {
-                            Image(systemName: "music.note")
-                                .frame(maxWidth: 14)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Load sample track")
-                        #endif
-                        
+                #if targetEnvironment(simulator)
+                Button {
+                    loadSampleTrack()
+                } label: {
+                    Image(systemName: "music.note")
+                        .frame(maxWidth: 14)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Load sample track")
+                #endif
+
+                GeometryReader { waveformGeometry in
                         ZStack(alignment: Alignment(horizontal: .center, vertical: .center)) {
                             WaveformView(
                                 samples: viewModel.waveformData,
@@ -235,7 +234,6 @@ public struct TurntableDeckView: View {
                                 }
                         )
                         .simultaneousGesture(waveformScratchGesture(width: waveformGeometry.size.width))
-                    }
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
@@ -267,7 +265,7 @@ public struct TurntableDeckView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private var technicsStartPauseButton: some View {
+    private func technicsStartPauseButton(containerWidth: CGFloat) -> some View {
         Button {
             if viewModel.isPlaybackActive {
                 viewModel.pause()
@@ -282,8 +280,13 @@ public struct TurntableDeckView: View {
                     ? 0.0
                     : (isPlaying ? 0.90 : flashingGlowOpacity(at: context.date))
 
-                technicsRectangleLabel(text: isPlaying ? "PAUSE" : "START")
-                    .shadow(color: Color.yellow.opacity(glowOpacity), radius: 8, x: 0, y: 0)
+                technicsRectangleLabel(text: isPlaying ? "PAUSE" : "START", containerWidth: containerWidth)
+                    .shadow(
+                        color: Color.yellow.opacity(glowOpacity),
+                        radius: max(containerWidth * 0.022, 5.0),
+                        x: 0,
+                        y: 0
+                    )
             }
         }
         .buttonStyle(.plain)
@@ -292,11 +295,11 @@ public struct TurntableDeckView: View {
         .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Start")
     }
 
-    private var technicsStopButton: some View {
+    private func technicsStopButton(containerWidth: CGFloat) -> some View {
         Button {
             viewModel.stop()
         } label: {
-            technicsRectangleLabel(text: "STOP")
+            technicsRectangleLabel(text: "STOP", containerWidth: containerWidth)
         }
         .buttonStyle(.plain)
         .disabled(!viewModel.hasSelectedTrack)
@@ -304,14 +307,22 @@ public struct TurntableDeckView: View {
         .accessibilityLabel("Stop")
     }
 
-    private func technicsRectangleLabel(text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold, design: .default))
+    private func technicsRectangleLabel(text: String, containerWidth: CGFloat) -> some View {
+        let baseRatio = max(min(containerWidth / 340.0, 1.0), 0.5)
+        let fontSize = CGFloat(8.2) * baseRatio
+        let width = CGFloat(72.0) * baseRatio
+        let height = CGFloat(27.0) * baseRatio
+        let outerLine = max(CGFloat(1.0) * baseRatio, 0.9)
+        let innerLine = max(CGFloat(0.6) * baseRatio, 0.55)
+        let corner = max(CGFloat(2.0) * baseRatio, 1.4)
+
+        return Text(text)
+            .font(.system(size: fontSize, weight: .semibold, design: .default))
             .tracking(0.6)
             .foregroundStyle(.black.opacity(0.92))
-            .frame(minWidth: 78, minHeight: 30)
+            .frame(minWidth: width, minHeight: height)
             .background(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -324,13 +335,13 @@ public struct TurntableDeckView: View {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .stroke(Color.black.opacity(0.92), lineWidth: 1.6)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(Color.black.opacity(0.92), lineWidth: outerLine)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .stroke(Color.black.opacity(0.28), lineWidth: 0.6)
-                    .padding(2)
+                RoundedRectangle(cornerRadius: max(corner - (0.8 * baseRatio), 1), style: .continuous)
+                    .stroke(Color.black.opacity(0.28), lineWidth: innerLine)
+                    .padding(max(CGFloat(2.0) * baseRatio, 1.2))
             )
     }
 

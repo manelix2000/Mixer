@@ -15,21 +15,8 @@ public struct TurntableView: View {
     public var body: some View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
-
             ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(uiColor: .secondarySystemBackground),
-                                Color(uiColor: .tertiarySystemBackground)
-                            ],
-                            center: .center,
-                            startRadius: size * 0.06,
-                            endRadius: size * 0.52
-                        )
-                    )
-
+                dottedStrobeRing(size: size, rotationDegrees: platterAngleDegrees)
                 Circle()
                     .fill(
                         RadialGradient(
@@ -55,8 +42,64 @@ public struct TurntableView: View {
 
                 spindle(size: size)
             }
+            .padding(10)
             .frame(width: size, height: size)
         }
+    }
+
+    private func dottedStrobeRing(size: CGFloat, rotationDegrees: Double) -> some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.96))
+
+            Circle()
+                .stroke(Color(white: 0.34), lineWidth: size * 0.014)
+                .padding(size * 0.006)
+
+            Circle()
+                .stroke(Color.black.opacity(0.78), lineWidth: size * 0.007)
+                .padding(size * 0.02)
+
+            ZStack {
+                dottedArc(size: size, inset: size * 0.03, dotSize: size * 0.009, spacing: size * 0.021, color: Color(white: 0.62))
+                dottedArc(size: size, inset: size * 0.045, dotSize: size * 0.017, spacing: size * 0.027, color: Color(white: 0.78))
+                dottedArc(size: size, inset: size * 0.063, dotSize: size * 0.009, spacing: size * 0.021, color: Color(white: 0.6))
+            }
+            .rotationEffect(.degrees(rotationDegrees))
+        }
+    }
+
+    private func dottedArc(
+        size: CGFloat,
+        inset: CGFloat,
+        dotSize: CGFloat,
+        spacing: CGFloat,
+        color: Color
+    ) -> some View {
+        Circle()
+            .stroke(
+                color,
+                style: StrokeStyle(
+                    lineWidth: dotSize,
+                    lineCap: .round,
+                    dash: [0.001, spacing]
+                )
+            )
+            .padding(inset)
+            .overlay(
+                Circle()
+                    .stroke(
+                        Color.black.opacity(0.35),
+                        style: StrokeStyle(
+                            lineWidth: max(dotSize * 1.1, size * 0.005),
+                            lineCap: .round,
+                            dash: [0.001, spacing]
+                        )
+                    )
+                    .padding(inset)
+            )
+            .blendMode(.normal)
+            .shadow(color: Color.black.opacity(0.25), radius: size * 0.002, x: 0, y: 0)
     }
 
     private func grooves(size: CGFloat) -> some View {
@@ -125,5 +168,4 @@ public struct TurntableView: View {
         TurntableView(isPlaying: true, platterAngleDegrees: 180)
             .padding(0)
     }
-    .background(.red)
 }
