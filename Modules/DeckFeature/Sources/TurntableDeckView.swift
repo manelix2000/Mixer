@@ -130,7 +130,11 @@ public struct TurntableDeckView: View {
     }
 
     private var turntableMetalPlateBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        metalPlateBackground(cornerRadius: 12)
+    }
+
+    private func metalPlateBackground(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
@@ -158,7 +162,7 @@ public struct TurntableDeckView: View {
                     .blendMode(.softLight)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
                             colors: [
@@ -172,7 +176,7 @@ public struct TurntableDeckView: View {
                     )
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: max(cornerRadius - 1, 0), style: .continuous)
                     .stroke(Color.black.opacity(0.15), lineWidth: 0.6)
                     .padding(1)
             }
@@ -189,7 +193,7 @@ public struct TurntableDeckView: View {
                 Spacer()
                 Text(viewModel.playbackTimeText)
                     .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.black)
             }
 
             HStack(spacing: 8) {
@@ -299,19 +303,19 @@ public struct TurntableDeckView: View {
                 HStack {
                     Text(viewModel.bpmText)
                         .font(.system(size: 10, weight: .regular))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(viewModel.bpmDetectionStatusText ?? "")
                         .font(.system(size: 10, weight: .regular))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(Color(uiColor: .tertiarySystemBackground))
+        .background(metalPlateBackground(cornerRadius: 10))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -434,7 +438,7 @@ public struct TurntableDeckView: View {
 
                     Text(String(format: "%+.1f%%", ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black)
                         .padding(.top, 2)
                 }
 
@@ -446,7 +450,7 @@ public struct TurntableDeckView: View {
                             Image(systemName: "plus.circle.fill")
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(.black)
                         .disabled(!viewModel.canIncreasePitchSensitivity)
                         .accessibilityLabel("Increase pitch sensitivity")
                         .frame(maxWidth: 40)
@@ -457,7 +461,7 @@ public struct TurntableDeckView: View {
                             Image(systemName: "minus.circle.fill")
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(.black)
                         .disabled(!viewModel.canDecreasePitchSensitivity)
                         .accessibilityLabel("Decrease pitch sensitivity")
                         .frame(maxWidth: 40)
@@ -465,12 +469,12 @@ public struct TurntableDeckView: View {
 
                     Text("±\(viewModel.pitchSensitivityPercent)%")
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black)
                 }
             }
             .padding(5)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(uiColor: .tertiarySystemBackground))
+            .background(metalPlateBackground(cornerRadius: 10))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
