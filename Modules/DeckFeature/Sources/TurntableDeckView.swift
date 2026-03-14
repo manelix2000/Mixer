@@ -18,6 +18,7 @@ public struct TurntableDeckView: View {
     @State private var isImportingTrack = false
     @State private var pinchStartZoom: Double?
     @State private var platterLastAngle: Double?
+    @State private var platterTouchStartPoint: CGPoint?
     @State private var waveformLastDragX: CGFloat?
 
     public init(
@@ -527,6 +528,7 @@ public struct TurntableDeckView: View {
             viewModel.endTurntablePressureTouch()
         }
 
+        platterTouchStartPoint = normalized
         platterLastAngle = angle
     }
 
@@ -559,7 +561,17 @@ public struct TurntableDeckView: View {
             )
             viewModel.endTurntablePressureTouch()
         }
-        
+
+        if !viewModel.isTurntableScrubbing, viewModel.isPressureTouchActive, let touchStart = platterTouchStartPoint {
+            let movement = hypot(normalized.x - touchStart.x, normalized.y - touchStart.y)
+            let movementThreshold = platterSize * Self.pressureToScratchMovementThresholdRatio
+            if movement < movementThreshold {
+                platterLastAngle = angle
+                return
+            }
+            viewModel.endTurntablePressureTouch()
+        }
+
         if let previousAngle = platterLastAngle {
             let delta = normalizedAngleDelta(from: previousAngle, to: angle)
             if !viewModel.isTurntableScrubbing, abs(delta) >= Self.platterScratchActivationAngleThreshold {
@@ -575,6 +587,7 @@ public struct TurntableDeckView: View {
 
     private func handlePlatterTouchEnded() {
         platterLastAngle = nil
+        platterTouchStartPoint = nil
         viewModel.endTurntablePressureTouch()
         if viewModel.isTurntableScrubbing {
             viewModel.endTurntableScrub()
@@ -687,6 +700,7 @@ public struct TurntableDeckView: View {
     private static let platterScratchActivationAngleThreshold: Double = 0.002
     private static let turntableVisualOuterInset: CGFloat = 10.0
     private static let pressureBottomBlockedZoneRatio: CGFloat = 0.18
+    private static let pressureToScratchMovementThresholdRatio: CGFloat = 0.07
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
