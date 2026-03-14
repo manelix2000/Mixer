@@ -105,7 +105,7 @@ public final class AudioEngineManager: AudioEngineControlling {
         engine: AVAudioEngine = AVAudioEngine(),
         playerNode: AVAudioPlayerNode = AVAudioPlayerNode(),
         varispeedNode: AVAudioUnitVarispeed = AVAudioUnitVarispeed(),
-        initialVolume: Float = 0.8,
+        initialVolume: Float = 1.0,
         initialPan: Float = 0.0,
         initialPlaybackRate: Float = 1.0
     ) {

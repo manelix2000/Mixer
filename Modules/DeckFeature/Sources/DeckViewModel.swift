@@ -16,6 +16,7 @@ public final class DeckViewModel: ObservableObject {
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
 
     public let turntableDeckViewModel: TurntableDeckViewModel
+    public let turntableRightDeckViewModel: TurntableDeckViewModel
 
     private let audioEngine: AudioEngineControlling
     private let microphoneBPMPipeline = MicrophoneBPMPipeline()
@@ -41,6 +42,11 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: audioEngine,
             waveformAnalyzer: waveformAnalyzer
         )
+        
+        self.turntableRightDeckViewModel = TurntableDeckViewModel(
+            audioEngine: audioEngine,
+            waveformAnalyzer: waveformAnalyzer
+        )
 
         microphoneBPMPipeline.setResultHandler { [weak self] result in
             self?.handleMicrophoneBPMResult(result)
@@ -53,12 +59,12 @@ public final class DeckViewModel: ObservableObject {
 
     public var panRoutingText: String {
         if pan < -0.1 {
-            return "Left"
+            return "L"
         }
         if pan > 0.1 {
-            return "Right"
+            return "R"
         }
-        return "Center"
+        return "C"
     }
 
     public func setVolume(_ value: Double) {

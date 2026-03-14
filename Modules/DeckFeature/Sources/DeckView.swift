@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 public struct DeckView: View {
     @StateObject private var viewModel: DeckViewModel
-    @State private var areControlsVisible = true
+    @State private var areControlsVisible = false
 
     public init() {
         _viewModel = StateObject(wrappedValue: DeckViewModel())
@@ -18,19 +18,23 @@ public struct DeckView: View {
             HStack(alignment: .top, spacing: 12) {
                 controlsVisibilityButton
 
-                if areControlsVisible {
-                    controlsColumn
-                        .frame(maxWidth: 180)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
+                VStack(alignment: .leading, spacing: 12) {
+                    if areControlsVisible {
+                        controlsColumn
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
 
-                TurntableDeckView(
-                    viewModel: viewModel.turntableDeckViewModel,
-                    isPitchLockedToExternalBPM: Binding(
-                        get: { viewModel.isPitchLockedToExternalBPM },
-                        set: { viewModel.setPitchLockEnabled($0) }
-                    )
-                )
+                    HStack {
+                        TurntableDeckView(
+                            viewModel: viewModel.turntableDeckViewModel,
+                            isPitchLockedToExternalBPM: Binding(
+                                get: { viewModel.isPitchLockedToExternalBPM },
+                                set: { viewModel.setPitchLockEnabled($0) }
+                            ),
+                            areControlsVisible: $areControlsVisible
+                        )
+                    }
+                }
             }
             .padding(12)
             .animation(.easeInOut(duration: 0.22), value: areControlsVisible)
@@ -39,52 +43,68 @@ public struct DeckView: View {
     }
 
     private var controlsVisibilityButton: some View {
-        Button {
-            areControlsVisible.toggle()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.subheadline.weight(.semibold))
-                Image(systemName: areControlsVisible ? "chevron.left" : "chevron.right")
+        VStack {
+            Button {
+                areControlsVisible.toggle()
+            } label: {
+                Image(systemName: areControlsVisible ? "xmark" : "line.3.horizontal")
                     .font(.caption.weight(.bold))
+                    .frame(maxWidth: 14)
+                    .frame(minHeight: 20)
             }
-            .foregroundStyle(Color.primary)
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
+            
+            if areControlsVisible {
+                VStack {
+                    Button {
+                        if viewModel.isMicrophoneBPMDetectionActive {
+                            viewModel.stopMicrophoneBPMDetection()
+                        } else {
+                            viewModel.startMicrophoneBPMDetection()
+                        }
+                    } label: {
+                        Image(systemName: viewModel.isMicrophoneBPMDetectionActive ? "mic.slash.fill" : "mic.fill")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel(
+                        viewModel.isMicrophoneBPMDetectionActive
+                        ? "Stop microphone BPM detection"
+                        : "Start microphone BPM detection"
+                    )
+                    
+                    Button {
+                        viewModel.togglePitchLockToExternalBPM()
+                    } label: {
+                        Image(systemName: viewModel.isPitchLockedToExternalBPM ? "lock.fill" : "lock.open.fill")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.isPitchLockedToExternalBPM && !viewModel.canLockPitchToExternalBPM)
+                    .accessibilityLabel(viewModel.isPitchLockedToExternalBPM ? "Unlock pitch from external BPM" : "Lock pitch to external BPM")
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .buttonStyle(.plain)
-        .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
         .frame(width: 44)
         .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
         .accessibilityHint("Toggles the controls column visibility")
     }
 
     private var controlsColumn: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             externalBPMControls
             volumeControls
             panControls
-
-            Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(Color(uiColor: .secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var volumeControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "speaker.fill")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(String(format: "%.2f", viewModel.volume))
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 42, alignment: .trailing)
-            }
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.fill")
+                .foregroundStyle(.secondary)
+
             Slider(
                 value: Binding(
                     get: { viewModel.volume },
@@ -93,6 +113,11 @@ public struct DeckView: View {
                 in: 0...1
             )
             .accessibilityLabel("Volume")
+
+            Text(String(format: "%.2f", viewModel.volume))
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 42, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -101,16 +126,9 @@ public struct DeckView: View {
     }
 
     private var panControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Pan")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(viewModel.panRoutingText) (\(String(format: "%.2f", viewModel.pan)))")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.left.and.right")
+                .foregroundStyle(.secondary)
             Slider(
                 value: Binding(
                     get: { viewModel.pan },
@@ -118,6 +136,11 @@ public struct DeckView: View {
                 ),
                 in: -1...1
             )
+
+            Text("\(String(format: "%.2f", viewModel.pan)) \(viewModel.panRoutingText)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 60, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -126,58 +149,27 @@ public struct DeckView: View {
     }
 
     private var externalBPMControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Mic BPM")
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Text("Mic BPM ")
                     .font(.subheadline.weight(.semibold))
                 if viewModel.isExternalBPMLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
+                
+                Spacer()
+                
+                Text(viewModel.externalBPMText)
+                    .font(.footnote.monospacedDigit().weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.startMicrophoneBPMDetection()
-                } label: {
-                    Image(systemName: "play.fill")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.isMicrophoneBPMDetectionActive)
-                .accessibilityLabel("Start microphone BPM detection")
-
-                Button {
-                    viewModel.stopMicrophoneBPMDetection()
-                } label: {
-                    Image(systemName: "stop.fill")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.isMicrophoneBPMDetectionActive)
-                .accessibilityLabel("Stop microphone BPM detection")
-
-                Button {
-                    viewModel.togglePitchLockToExternalBPM()
-                } label: {
-                    Image(systemName: viewModel.isPitchLockedToExternalBPM ? "lock.fill" : "lock.open.fill")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.isPitchLockedToExternalBPM && !viewModel.canLockPitchToExternalBPM)
-                .accessibilityLabel(viewModel.isPitchLockedToExternalBPM ? "Unlock pitch from external BPM" : "Lock pitch to external BPM")
-            }
-
-            Text(viewModel.externalBPMText)
-                .font(.footnote.monospacedDigit().weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-
+            
             Text(viewModel.externalBPMStatusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(Color(uiColor: .tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

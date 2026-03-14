@@ -14,6 +14,7 @@ public struct TurntableDeckView: View {
 
     @StateObject private var viewModel: TurntableDeckViewModel
     @Binding private var isPitchLockedToExternalBPM: Bool
+    @Binding private var areControlsVisible: Bool
     @State private var isImportingTrack = false
     @State private var pinchStartZoom: Double?
     @State private var platterLastAngle: Double?
@@ -21,10 +22,12 @@ public struct TurntableDeckView: View {
 
     public init(
         viewModel: TurntableDeckViewModel,
-        isPitchLockedToExternalBPM: Binding<Bool>
+        isPitchLockedToExternalBPM: Binding<Bool>,
+        areControlsVisible: Binding<Bool>
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _isPitchLockedToExternalBPM = isPitchLockedToExternalBPM
+        _areControlsVisible = areControlsVisible
     }
 
     public var body: some View {
@@ -129,52 +132,54 @@ public struct TurntableDeckView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
-                Button {
-                    isImportingTrack = true
-                } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityLabel("Load track")
-
-                #if targetEnvironment(simulator)
-                Button {
-                    loadSampleTrack()
-                } label: {
-                    Image(systemName: "music.note")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Load sample track")
-                #endif
-
-                Button {
-                    if viewModel.isPlaybackActive {
-                        viewModel.pause()
-                    } else {
-                        viewModel.play()
+            if !areControlsVisible {
+                HStack(spacing: 8) {
+                    Button {
+                        isImportingTrack = true
+                    } label: {
+                        Image(systemName: "folder.badge.plus")
+                            .frame(maxWidth: 14)
                     }
-                } label: {
-                    Image(systemName: viewModel.isPlaybackActive ? "pause.fill" : "play.fill")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.hasSelectedTrack)
-                .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Play")
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Load track")
 
-                Button {
-                    viewModel.stop()
-                } label: {
-                    Image(systemName: "stop.fill")
-                        .frame(maxWidth: 14)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.hasSelectedTrack)
-                .accessibilityLabel("Stop")
+                    #if targetEnvironment(simulator)
+                    Button {
+                        loadSampleTrack()
+                    } label: {
+                        Image(systemName: "music.note")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Load sample track")
+                    #endif
 
-                Spacer()
+                    Button {
+                        if viewModel.isPlaybackActive {
+                            viewModel.pause()
+                        } else {
+                            viewModel.play()
+                        }
+                    } label: {
+                        Image(systemName: viewModel.isPlaybackActive ? "pause.fill" : "play.fill")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.hasSelectedTrack)
+                    .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Play")
+
+                    Button {
+                        viewModel.stop()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.hasSelectedTrack)
+                    .accessibilityLabel("Stop")
+
+                    Spacer()
+                }
             }
 
             HStack(spacing: 8) {
@@ -263,12 +268,12 @@ public struct TurntableDeckView: View {
             } else {
                 HStack {
                     Text(viewModel.bpmText)
-                        .font(.footnote)
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(viewModel.bpmDetectionStatusText ?? "")
-                        .font(.footnote)
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -325,6 +330,7 @@ public struct TurntableDeckView: View {
                             Image(systemName: "plus.circle.fill")
                         }
                         .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
                         .disabled(!viewModel.canIncreasePitchSensitivity)
                         .accessibilityLabel("Increase pitch sensitivity")
                         .frame(maxWidth: 40)
@@ -335,6 +341,7 @@ public struct TurntableDeckView: View {
                             Image(systemName: "minus.circle.fill")
                         }
                         .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
                         .disabled(!viewModel.canDecreasePitchSensitivity)
                         .accessibilityLabel("Decrease pitch sensitivity")
                         .frame(maxWidth: 40)
