@@ -135,26 +135,6 @@ public struct TurntableDeckView: View {
             if !areControlsVisible {
                 HStack(spacing: 8) {
                     Button {
-                        isImportingTrack = true
-                    } label: {
-                        Image(systemName: "folder.badge.plus")
-                            .frame(maxWidth: 14)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel("Load track")
-
-                    #if targetEnvironment(simulator)
-                    Button {
-                        loadSampleTrack()
-                    } label: {
-                        Image(systemName: "music.note")
-                            .frame(maxWidth: 14)
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel("Load sample track")
-                    #endif
-
-                    Button {
                         if viewModel.isPlaybackActive {
                             viewModel.pause()
                         } else {
@@ -184,76 +164,98 @@ public struct TurntableDeckView: View {
 
             HStack(spacing: 8) {
                 GeometryReader { waveformGeometry in
-                    ZStack(alignment: Alignment(horizontal: .center, vertical: .center)) {
-                        WaveformView(
-                            samples: viewModel.waveformData,
-                            progress: viewModel.playbackProgress,
-                            isLoading: viewModel.isWaveformLoading,
-                            zoom: viewModel.waveformZoom
-                        )
-                        HStack {
-                            Button {
-                                Self.log.debug("zoom in button tapped")
-                                viewModel.zoomInWaveform()
-                            } label: {
-                                Image(systemName: "plus.magnifyingglass")
-                                    .frame(maxWidth: 10)
-                            }
-                            .buttonStyle(.bordered)
-                            .foregroundColor(.white)
-                            .disabled(!viewModel.canZoomInWaveform)
+                    HStack {
+                        Button {
+                            isImportingTrack = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                                .frame(maxWidth: 14)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityLabel("Load track")
 
-                            Spacer()
-
-                            Button {
-                                Self.log.debug("zoom out button tapped")
-                                viewModel.zoomOutWaveform()
-                            } label: {
-                                Image(systemName: "minus.magnifyingglass")
-                                    .frame(maxWidth: 10)
-                            }
-                            .buttonStyle(.bordered)
-                            .foregroundColor(.white)
-                            .disabled(!viewModel.canZoomOutWaveform)
+                        #if targetEnvironment(simulator)
+                        Button {
+                            loadSampleTrack()
+                        } label: {
+                            Image(systemName: "music.note")
+                                .frame(maxWidth: 14)
                         }
-                        if viewModel.isWaveformLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let leftBoundary = Self.waveformTapSeekHorizontalMargin
-                        let rightBoundary = waveformGeometry.size.width - Self.waveformTapSeekHorizontalMargin
-                        Self.log.debug(
-                            "waveform tap | x=\(location.x, format: .fixed(precision: 2)) width=\(waveformGeometry.size.width, format: .fixed(precision: 2)) left=\(leftBoundary, format: .fixed(precision: 2)) right=\(rightBoundary, format: .fixed(precision: 2))"
-                        )
-                        guard location.x >= leftBoundary, location.x <= rightBoundary else {
-                            Self.log.debug("waveform tap ignored by margin")
-                            return
-                        }
-                        let xOffset = location.x - (waveformGeometry.size.width * 0.5)
-                        Self.log.debug("waveform seek triggered | xOffset=\(xOffset, format: .fixed(precision: 2))")
-                        viewModel.seekFromWaveformTap(
-                            xOffset: Double(xOffset),
-                            baseSampleSpacing: Self.waveformBaseSampleSpacing
-                        )
-                    }
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { scale in
-                                if pinchStartZoom == nil {
-                                    pinchStartZoom = viewModel.waveformZoom
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("Load sample track")
+                        #endif
+                        
+                        ZStack(alignment: Alignment(horizontal: .center, vertical: .center)) {
+                            WaveformView(
+                                samples: viewModel.waveformData,
+                                progress: viewModel.playbackProgress,
+                                isLoading: viewModel.isWaveformLoading,
+                                zoom: viewModel.waveformZoom
+                            )
+                            HStack {
+                                Button {
+                                    Self.log.debug("zoom in button tapped")
+                                    viewModel.zoomInWaveform()
+                                } label: {
+                                    Image(systemName: "plus.magnifyingglass")
+                                        .frame(maxWidth: 10)
                                 }
-                                let startZoom = pinchStartZoom ?? viewModel.waveformZoom
-                                viewModel.setWaveformZoom(startZoom * scale)
+                                .buttonStyle(.bordered)
+                                .foregroundColor(.white)
+                                .disabled(!viewModel.canZoomInWaveform)
+                                
+                                Spacer()
+                                
+                                Button {
+                                    Self.log.debug("zoom out button tapped")
+                                    viewModel.zoomOutWaveform()
+                                } label: {
+                                    Image(systemName: "minus.magnifyingglass")
+                                        .frame(maxWidth: 10)
+                                }
+                                .buttonStyle(.bordered)
+                                .foregroundColor(.white)
+                                .disabled(!viewModel.canZoomOutWaveform)
                             }
-                            .onEnded { _ in
-                                pinchStartZoom = nil
+                            if viewModel.isWaveformLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
                             }
-                    )
-                    .simultaneousGesture(waveformScratchGesture(width: waveformGeometry.size.width))
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            let leftBoundary = Self.waveformTapSeekHorizontalMargin
+                            let rightBoundary = waveformGeometry.size.width - Self.waveformTapSeekHorizontalMargin
+                            Self.log.debug(
+                                "waveform tap | x=\(location.x, format: .fixed(precision: 2)) width=\(waveformGeometry.size.width, format: .fixed(precision: 2)) left=\(leftBoundary, format: .fixed(precision: 2)) right=\(rightBoundary, format: .fixed(precision: 2))"
+                            )
+                            guard location.x >= leftBoundary, location.x <= rightBoundary else {
+                                Self.log.debug("waveform tap ignored by margin")
+                                return
+                            }
+                            let xOffset = location.x - (waveformGeometry.size.width * 0.5)
+                            Self.log.debug("waveform seek triggered | xOffset=\(xOffset, format: .fixed(precision: 2))")
+                            viewModel.seekFromWaveformTap(
+                                xOffset: Double(xOffset),
+                                baseSampleSpacing: Self.waveformBaseSampleSpacing
+                            )
+                        }
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { scale in
+                                    if pinchStartZoom == nil {
+                                        pinchStartZoom = viewModel.waveformZoom
+                                    }
+                                    let startZoom = pinchStartZoom ?? viewModel.waveformZoom
+                                    viewModel.setWaveformZoom(startZoom * scale)
+                                }
+                                .onEnded { _ in
+                                    pinchStartZoom = nil
+                                }
+                        )
+                        .simultaneousGesture(waveformScratchGesture(width: waveformGeometry.size.width))
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
@@ -774,4 +776,8 @@ private struct VerticalPitchFader: View {
         let span = range.upperBound - range.lowerBound
         return range.lowerBound + (clamped * span)
     }
+}
+
+#Preview("Landscape View", traits: .landscapeLeft) {
+    TurntableDeckView(viewModel: TurntableDeckViewModel(), isPitchLockedToExternalBPM: .constant(false), areControlsVisible: .constant(false))
 }
