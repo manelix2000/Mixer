@@ -931,7 +931,7 @@ public final class DeckViewModel: ObservableObject {
                     applyTargetBPM()
                     refreshBPMText()
                     bpmDetectionStatusText = String(
-                        format: "Detected %.1f BPM (confidence %.2f)",
+                        format: "Detected %.1f BPM (acc. %.2f)",
                         clampedBPM,
                         confidence
                     )
@@ -1033,7 +1033,7 @@ public final class DeckViewModel: ObservableObject {
 
     private func refreshBPMText() {
         bpmText = String(
-            format: "Target %.1f | %.3fx",
+            format: "BPM %.1f | %.3fx",
             targetBPM,
             playbackRate
         )
@@ -1045,7 +1045,7 @@ public final class DeckViewModel: ObservableObject {
             latestExternalBPM = bpm
             externalBPMText = String(format: "%.1f BPM", bpm)
             externalBPMStatusText = String(
-                format: "Mic detected (confidence %.2f)",
+                format: "Mic BPM (acc. %.2f)",
                 confidence
             )
             isExternalBPMLoading = false
@@ -1088,7 +1088,7 @@ public final class DeckViewModel: ObservableObject {
     }
 
     private func startMicrophoneCapturePipeline() {
-        externalBPMStatusText = "Listening to microphone..."
+        externalBPMStatusText = "Listening to MIC..."
         do {
             let pipeline = microphoneBPMPipeline
             try audioEngine.startMicrophoneCapture { input in

@@ -29,10 +29,11 @@ public struct DeckView: View {
 
                 if areControlsVisible {
                         controlsColumn
-                            .frame(width: max(200, geometry.size.width * 0.28))
+                            .frame(maxWidth: 180)
                             .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
+                
                 deckArea
             }
             .padding(12)
@@ -87,9 +88,9 @@ public struct DeckView: View {
             waveformCard
 
             GeometryReader { geometry in
-                let size = min(geometry.size.width, geometry.size.height)
                 let pitchSize = 70.0
                 let turntableSize = geometry.size.width - pitchSize - 12
+                let size = min(turntableSize, geometry.size.height)
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -156,6 +157,7 @@ public struct DeckView: View {
                     bpmPitchCard
                         .frame(width: pitchSize)
                 }
+                
             }
         }
         .padding(12)
@@ -181,7 +183,7 @@ public struct DeckView: View {
                     isImportingTrack = true
                 } label: {
                     Image(systemName: "folder.badge.plus")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityLabel("Load track")
@@ -190,7 +192,7 @@ public struct DeckView: View {
                     loadSampleTrack()
                 } label: {
                     Image(systemName: "music.note")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.bordered)
                 .accessibilityLabel("Load sample track")
@@ -203,7 +205,7 @@ public struct DeckView: View {
                     }
                 } label: {
                     Image(systemName: viewModel.isPlaybackActive ? "pause.fill" : "play.fill")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!viewModel.hasSelectedTrack)
@@ -213,7 +215,7 @@ public struct DeckView: View {
                     viewModel.stop()
                 } label: {
                     Image(systemName: "stop.fill")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.hasSelectedTrack)
@@ -225,18 +227,40 @@ public struct DeckView: View {
             HStack(spacing: 8) {
 
                 GeometryReader { waveformGeometry in
-                    ZStack(alignment: Alignment(horizontal: .leading, vertical: .center)) {
+                    ZStack(alignment: Alignment(horizontal: .center, vertical: .center)) {
                         WaveformView(
                             samples: viewModel.waveformData,
                             progress: viewModel.playbackProgress,
                             isLoading: viewModel.isWaveformLoading,
                             zoom: viewModel.waveformZoom
                         )
+                        HStack {
+                            Button {
+                                viewModel.zoomInWaveform()
+                            } label: {
+                                Image(systemName: "plus.magnifyingglass")
+                                    .frame(maxWidth: 10)
+                            }
+                            .buttonStyle(.bordered)
+                            .foregroundColor(.white)
+                            .disabled(!viewModel.canZoomInWaveform)
+                            
+                            Spacer()
+                            
+                            Button {
+                                viewModel.zoomOutWaveform()
+                            } label: {
+                                Image(systemName: "minus.magnifyingglass")
+                                    .frame(maxWidth: 10)
+                            }
+                            .buttonStyle(.bordered)
+                            .foregroundColor(.white)
+                            .disabled(!viewModel.canZoomOutWaveform)
+                        }
                         if viewModel.isWaveformLoading {
                             ProgressView()
                                 .controlSize(.small)
                                 .tint(.white)
-                                .padding(.leading, 8)
                         }
                     }
                     .contentShape(Rectangle())
@@ -264,24 +288,6 @@ public struct DeckView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
-
-                Button {
-                    viewModel.zoomInWaveform()
-                } label: {
-                    Image(systemName: "plus.magnifyingglass")
-                        .frame(minWidth: 24)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.canZoomInWaveform)
-
-                Button {
-                    viewModel.zoomOutWaveform()
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                        .frame(minWidth: 24)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.canZoomOutWaveform)
             }
 
             if viewModel.isBPMLoading {
@@ -295,12 +301,12 @@ public struct DeckView: View {
                     Text(viewModel.bpmText)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(viewModel.bpmDetectionStatusText ?? "")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -437,7 +443,7 @@ public struct DeckView: View {
     private var externalBPMControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("External BPM (Mic)")
+                Text("Mic BPM")
                     .font(.subheadline.weight(.semibold))
                 if viewModel.isExternalBPMLoading {
                     ProgressView()
@@ -450,7 +456,7 @@ public struct DeckView: View {
                     viewModel.startMicrophoneBPMDetection()
                 } label: {
                     Image(systemName: "play.fill")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.isMicrophoneBPMDetectionActive)
@@ -460,7 +466,7 @@ public struct DeckView: View {
                     viewModel.stopMicrophoneBPMDetection()
                 } label: {
                     Image(systemName: "stop.fill")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.isMicrophoneBPMDetectionActive)
@@ -470,7 +476,7 @@ public struct DeckView: View {
                     viewModel.togglePitchLockToExternalBPM()
                 } label: {
                     Image(systemName: viewModel.isPitchLockedToExternalBPM ? "lock.fill" : "lock.open.fill")
-                        .frame(minWidth: 24)
+                        .frame(maxWidth: 14)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.isPitchLockedToExternalBPM && !viewModel.canLockPitchToExternalBPM)
@@ -479,6 +485,7 @@ public struct DeckView: View {
 
             Text(viewModel.externalBPMText)
                 .font(.footnote.monospacedDigit().weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(viewModel.externalBPMStatusText)
                 .font(.caption)
