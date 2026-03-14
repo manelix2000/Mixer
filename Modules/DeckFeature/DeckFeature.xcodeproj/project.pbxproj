@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		2000B240E39284D7DBA78CFA /* TurntablePhysics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2A1CB6FADF3D493FC1D7BD /* TurntablePhysics.swift */; };
+		22F7B627F6DAC8ADE922DED2 /* TurntableDeckViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5CF08B10B01E9B26051AB4 /* TurntableDeckViewModel.swift */; };
 		25FF9E752D334A2BE94BC036 /* UIComponents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 081AE1A053E3017729D4EC58 /* UIComponents.framework */; };
 		453C0ED1A99B1F5D29A49D08 /* AudioEngine.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1E917BB9D5C083B88D2B691 /* AudioEngine.framework */; };
 		8609255B257E8A2FFBCFE50B /* DeckViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A38CF437367ECF9FD22D109 /* DeckViewModel.swift */; };
 		ACB54A00FB7CA16BC90FA274 /* DeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A972A148C040BBE8AED4C8D9 /* DeckView.swift */; };
 		D5B239388D678AC62B94F19A /* DSP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FBDC1D7B9ADB7903A13D66 /* DSP.framework */; };
+		DA2DD3F84C45869A630EBCDC /* TurntableDeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AF00DBDF64B07399D05871 /* TurntableDeckView.swift */; };
 		FE38B629CC44030863FA384F /* Waveform.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98EA8ED51AEF1E8EE7B6E44A /* Waveform.framework */; };
 /* End PBXBuildFile section */
 
@@ -33,6 +35,8 @@
 		01282753727E9BED64DDCED5 /* DeckFeature-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "DeckFeature-Info.plist"; sourceTree = "<group>"; };
 		081AE1A053E3017729D4EC58 /* UIComponents.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = UIComponents.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C2A1CB6FADF3D493FC1D7BD /* TurntablePhysics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurntablePhysics.swift; sourceTree = "<group>"; };
+		2F5CF08B10B01E9B26051AB4 /* TurntableDeckViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurntableDeckViewModel.swift; sourceTree = "<group>"; };
+		66AF00DBDF64B07399D05871 /* TurntableDeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurntableDeckView.swift; sourceTree = "<group>"; };
 		6EAEBB30A06035EA1D545687 /* DeckFeature.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DeckFeature.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A38CF437367ECF9FD22D109 /* DeckViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckViewModel.swift; sourceTree = "<group>"; };
 		91FBDC1D7B9ADB7903A13D66 /* DSP.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DSP.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,6 +85,8 @@
 			children = (
 				A972A148C040BBE8AED4C8D9 /* DeckView.swift */,
 				8A38CF437367ECF9FD22D109 /* DeckViewModel.swift */,
+				66AF00DBDF64B07399D05871 /* TurntableDeckView.swift */,
+				2F5CF08B10B01E9B26051AB4 /* TurntableDeckViewModel.swift */,
 				1C2A1CB6FADF3D493FC1D7BD /* TurntablePhysics.swift */,
 			);
 			path = Sources;
@@ -179,6 +185,8 @@
 			files = (
 				ACB54A00FB7CA16BC90FA274 /* DeckView.swift in Sources */,
 				8609255B257E8A2FFBCFE50B /* DeckViewModel.swift in Sources */,
+				DA2DD3F84C45869A630EBCDC /* TurntableDeckView.swift in Sources */,
+				22F7B627F6DAC8ADE922DED2 /* TurntableDeckViewModel.swift in Sources */,
 				2000B240E39284D7DBA78CFA /* TurntablePhysics.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

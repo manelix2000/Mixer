@@ -4,249 +4,51 @@ import DSP
 import Foundation
 import QuartzCore
 import Waveform
-import os
 
 @MainActor
 public final class DeckViewModel: ObservableObject {
-    private static let log = Logger(
-        subsystem: "dev.manelix.Mixer",
-        category: "DeckViewModel.PressureTouch"
-    )
-
-    public enum ScratchInteractionState: Equatable {
-        case idle
-        case touchDown
-        case dragging
-        case release
-    }
-
-    private enum ScratchMotionMode {
-        case scrub
-        case scratch
-    }
-
-    @Published public private(set) var bpmText: String
-    @Published public var waveformText: String
-    @Published public var platterText: String
     @Published public private(set) var volume: Double
     @Published public private(set) var pan: Double
-    @Published public private(set) var selectedTrackURL: URL?
-    @Published public private(set) var selectedTrackName: String?
-    @Published public private(set) var playbackStatusText: String
-    @Published public private(set) var playbackState: AudioPlaybackState
-    @Published public private(set) var playbackTimeText: String
-    @Published public private(set) var playbackProgress: Double
-    @Published public private(set) var waveformZoom: Double
-    @Published public private(set) var waveformData: [Float]
-    @Published public private(set) var isWaveformLoading: Bool
-    @Published public private(set) var isBPMLoading: Bool
-    @Published public private(set) var bpmDetectionStatusText: String?
-    @Published public private(set) var originalBPM: Double
-    @Published public private(set) var targetBPM: Double
-    @Published public private(set) var pitchSensitivityPercent: Int
     @Published public private(set) var externalBPMText: String
     @Published public private(set) var externalBPMStatusText: String
     @Published public private(set) var isExternalBPMLoading: Bool
     @Published public private(set) var isMicrophoneBPMDetectionActive: Bool
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
-    @Published public private(set) var platterRotationDegrees: Double
-    @Published public private(set) var scratchInteractionState: ScratchInteractionState
+
+    public let turntableDeckViewModel: TurntableDeckViewModel
 
     private let audioEngine: AudioEngineControlling
-    private let waveformAnalyzer: WaveformAnalyzing
     private let microphoneBPMPipeline = MicrophoneBPMPipeline()
-    private var playbackTimer: Timer?
-    private var turntableTimer: Timer?
-    private var waveformLoadTask: Task<Void, Never>?
-    private var waveformLoadID = UUID()
-    private var bpmLoadTask: Task<Void, Never>?
-    private var isPlatterScrubbing = false
-    private var wasPlayingBeforePlatterScrub = false
-    private var scratchCurrentTime: TimeInterval = 0
-    private var lastScratchCommitTimestamp: TimeInterval = 0
-    private var lastCommittedScratchTime: TimeInterval = 0
-    private var lastTurntableUpdateTimestamp: TimeInterval = 0
-    private var lastScrubAngleTimestamp: TimeInterval = 0
-    private var smoothedScratchAngularVelocity: Double = 0
-    private var latestScratchAngularVelocity: Double = 0
-    private var latestScratchDirection: Double = 1
-    private var scratchMotionMode: ScratchMotionMode = .scrub
-    private var pressureTouchStartTargetBPM: Double?
-    private var pressureTouchIntensity: Double = 0
-    private var pressureTouchDirection: Double = -1
-    private var lastPressureDebugLogTimestamp: TimeInterval = 0
-    private var lastLoggedPressureIntensity: Double = -1
-    private var turntablePhysics = TurntablePhysics()
+    private var latestExternalBPM: Double?
 
     public init(
-        bpmText: String = "-- BPM",
-        waveformText: String = "Waveform Placeholder",
-        platterText: String = "Platter Placeholder",
         volume: Double = 0.8,
         pan: Double = 0.0,
-        originalBPM: Double = 0,
         audioEngine: AudioEngineControlling = AudioEngineManager(),
         waveformAnalyzer: WaveformAnalyzing = WaveformAnalyzer()
     ) {
-        let clampedOriginalBPM = min(max(originalBPM, Self.minBPM), Self.maxBPM)
-        self.originalBPM = clampedOriginalBPM
-        self.targetBPM = clampedOriginalBPM
-        self.pitchSensitivityPercent = 16
-        self.bpmText = bpmText
-        self.waveformText = waveformText
-        self.platterText = platterText
         self.audioEngine = audioEngine
-        self.waveformAnalyzer = waveformAnalyzer
-        self.audioEngine.setVolume(Float(volume))
-        self.audioEngine.setPan(Float(pan))
+        self.audioEngine.setVolume(Float(min(max(volume, 0), 1)))
+        self.audioEngine.setPan(Float(min(max(pan, -1), 1)))
         self.volume = Double(self.audioEngine.volume)
         self.pan = Double(self.audioEngine.pan)
-        self.playbackState = .idle
-        self.playbackStatusText = ""
-        self.playbackTimeText = "00:00 / 00:00"
-        self.playbackProgress = 0
-        self.waveformZoom = 1.0
-        self.waveformData = []
-        self.isWaveformLoading = false
-        self.isBPMLoading = false
-        self.bpmDetectionStatusText = nil
         self.externalBPMText = "-- BPM"
         self.externalBPMStatusText = "Mic BPM stopped"
         self.isExternalBPMLoading = false
         self.isMicrophoneBPMDetectionActive = false
         self.isPitchLockedToExternalBPM = false
-        self.platterRotationDegrees = 0
-        self.scratchInteractionState = .idle
-        self.microphoneBPMPipeline.setResultHandler { [weak self] result in
+        self.turntableDeckViewModel = TurntableDeckViewModel(
+            audioEngine: audioEngine,
+            waveformAnalyzer: waveformAnalyzer
+        )
+
+        microphoneBPMPipeline.setResultHandler { [weak self] result in
             self?.handleMicrophoneBPMResult(result)
         }
-        applyTargetBPM()
-        refreshBPMText()
-        startTurntableTimer()
     }
 
     deinit {
         audioEngine.stopMicrophoneCapture()
-        playbackTimer?.invalidate()
-        turntableTimer?.invalidate()
-        waveformLoadTask?.cancel()
-        bpmLoadTask?.cancel()
-    }
-
-    public func selectTrack(url: URL) {
-        let resolvedURL: URL
-        do {
-            resolvedURL = try importedTrackURL(from: url)
-        } catch {
-            playbackState = .idle
-            playbackStatusText = "Failed to import selected track"
-            return
-        }
-
-        stopPlaybackTimer()
-        waveformLoadTask?.cancel()
-        waveformLoadTask = nil
-        bpmLoadTask?.cancel()
-        bpmLoadTask = nil
-        isWaveformLoading = false
-        isBPMLoading = false
-        bpmDetectionStatusText = nil
-        isPlatterScrubbing = false
-        wasPlayingBeforePlatterScrub = false
-        scratchCurrentTime = 0
-        lastScratchCommitTimestamp = 0
-        lastCommittedScratchTime = 0
-        lastTurntableUpdateTimestamp = 0
-        lastScrubAngleTimestamp = 0
-        pressureTouchStartTargetBPM = nil
-        pressureTouchIntensity = 0
-        pressureTouchDirection = -1
-        lastPressureDebugLogTimestamp = 0
-        lastLoggedPressureIntensity = -1
-        scratchInteractionState = .idle
-        turntablePhysics.reset()
-        publishTurntableState()
-        selectedTrackURL = resolvedURL
-        selectedTrackName = url.lastPathComponent
-        isPitchLockedToExternalBPM = false
-
-        do {
-            try audioEngine.loadFile(url: resolvedURL)
-            playbackState = audioEngine.playbackState
-            playbackStatusText = ""
-            refreshPlaybackTimeText()
-            loadWaveform(url: resolvedURL)
-            detectBPM(url: resolvedURL)
-        } catch {
-            playbackState = .idle
-            playbackStatusText = "Failed to load selected track"
-            playbackTimeText = "00:00 / 00:00"
-            playbackProgress = 0
-            waveformData = []
-            waveformText = "Waveform unavailable"
-            isWaveformLoading = false
-            isBPMLoading = false
-            bpmDetectionStatusText = "BPM detection skipped: track failed to load."
-        }
-    }
-
-    public func play() {
-        guard selectedTrackURL != nil else {
-            playbackStatusText = "Select a track first"
-            return
-        }
-
-        do {
-            try audioEngine.play()
-            playbackState = audioEngine.playbackState
-            playbackStatusText = "Playing"
-            startPlaybackTimer()
-        } catch {
-            playbackStatusText = "Unable to start playback"
-        }
-    }
-
-    public func pause() {
-        guard selectedTrackURL != nil else {
-            playbackStatusText = "Select a track first"
-            return
-        }
-
-        audioEngine.pause()
-        playbackState = audioEngine.playbackState
-        playbackStatusText = "Paused"
-        stopPlaybackTimer()
-        refreshPlaybackTimeText()
-    }
-
-    public func stop() {
-        guard selectedTrackURL != nil else {
-            playbackStatusText = "Select a track first"
-            return
-        }
-
-        audioEngine.pause()
-        do {
-            try audioEngine.seek(to: 0)
-            playbackState = audioEngine.playbackState
-            playbackStatusText = "Stopped"
-            stopPlaybackTimer()
-            refreshPlaybackTimeText()
-        } catch {
-            playbackStatusText = "Unable to stop playback"
-        }
-    }
-
-    public var hasSelectedTrack: Bool {
-        selectedTrackURL != nil
-    }
-
-    public var isPlaybackActive: Bool {
-        playbackState == .playing
-    }
-
-    public var playbackRate: Double {
-        Double(audioEngine.playbackRate)
     }
 
     public var panRoutingText: String {
@@ -257,18 +59,6 @@ public final class DeckViewModel: ObservableObject {
             return "Right"
         }
         return "Center"
-    }
-
-    public func volumeUp() {
-        let newValue = min(Float(volume) + 0.05, 1.0)
-        audioEngine.setVolume(newValue)
-        volume = Double(audioEngine.volume)
-    }
-
-    public func volumeDown() {
-        let newValue = max(Float(volume) - 0.05, 0.0)
-        audioEngine.setVolume(newValue)
-        volume = Double(audioEngine.volume)
     }
 
     public func setVolume(_ value: Double) {
@@ -282,96 +72,13 @@ public final class DeckViewModel: ObservableObject {
         pan = Double(audioEngine.pan)
     }
 
-    public func incrementBPM() {
-        guard !isPitchLockedToExternalBPM else {
-            return
-        }
-        targetBPM = min(targetBPM + Self.bpmStep, Self.maxBPM)
-        applyTargetBPM()
-        refreshBPMText()
-    }
-
-    public func decrementBPM() {
-        guard !isPitchLockedToExternalBPM else {
-            return
-        }
-        targetBPM = max(targetBPM - Self.bpmStep, Self.minBPM)
-        applyTargetBPM()
-        refreshBPMText()
-    }
-
-    public func setTargetBPM(_ value: Double) {
-        guard !isPitchLockedToExternalBPM else {
-            return
-        }
-        targetBPM = min(max(value, Self.minBPM), Self.maxBPM)
-        applyTargetBPM()
-        refreshBPMText()
-    }
-
-    public func setPitchOffset(_ offset: Double) {
-        guard !isPitchLockedToExternalBPM else {
-            return
-        }
-        let maxOffset = pitchSensitivityFraction
-        let clampedOffset = min(max(offset, -maxOffset), maxOffset)
-        let safeOriginal = max(originalBPM, 1.0)
-        targetBPM = safeOriginal * (1.0 + clampedOffset)
-        applyTargetBPM()
-        refreshBPMText()
-    }
-
-    public var pitchSensitivityFraction: Double {
-        Double(pitchSensitivityPercent) / 100.0
-    }
-
-    public var canIncreasePitchSensitivity: Bool {
-        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent) else {
-            return false
-        }
-        return index < (Self.allowedPitchSensitivityPercents.count - 1)
-    }
-
-    public var canDecreasePitchSensitivity: Bool {
-        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent) else {
-            return false
-        }
-        return index > 0
-    }
-
-    public func increasePitchSensitivity() {
-        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent),
-              index < (Self.allowedPitchSensitivityPercents.count - 1) else {
-            return
-        }
-        pitchSensitivityPercent = Self.allowedPitchSensitivityPercents[index + 1]
-        clampPitchOffsetToSensitivityIfNeeded()
-    }
-
-    public func decreasePitchSensitivity() {
-        guard let index = Self.allowedPitchSensitivityPercents.firstIndex(of: pitchSensitivityPercent),
-              index > 0 else {
-            return
-        }
-        pitchSensitivityPercent = Self.allowedPitchSensitivityPercents[index - 1]
-        clampPitchOffsetToSensitivityIfNeeded()
-    }
-
-    public var canIncrementBPM: Bool {
-        !isPitchLockedToExternalBPM && targetBPM < Self.maxBPM
-    }
-
-    public var canDecrementBPM: Bool {
-        !isPitchLockedToExternalBPM && targetBPM > Self.minBPM
-    }
-
     public var canLockPitchToExternalBPM: Bool {
         isMicrophoneBPMDetectionActive
     }
 
     public func togglePitchLockToExternalBPM() {
         if isPitchLockedToExternalBPM {
-            isPitchLockedToExternalBPM = false
+            setPitchLockEnabled(false)
             return
         }
 
@@ -384,255 +91,21 @@ public final class DeckViewModel: ObservableObject {
             return
         }
 
-        isPitchLockedToExternalBPM = true
-        let clampedBPM = min(max(externalBPM, Self.minBPM), Self.maxBPM)
-        targetBPM = clampedBPM
-        applyTargetBPM()
-        refreshBPMText()
+        setPitchLockEnabled(true, externalBPM: externalBPM)
         stopMicrophoneBPMDetection()
     }
 
-    public func zoomInWaveform() {
-        setWaveformZoom(waveformZoom + 0.25)
-    }
-
-    public func zoomOutWaveform() {
-        setWaveformZoom(waveformZoom - 0.25)
-    }
-
-    public func setWaveformZoom(_ value: Double) {
-        waveformZoom = min(max(value, Self.minWaveformZoom), Self.maxWaveformZoom)
-    }
-
-    public var canZoomInWaveform: Bool {
-        waveformZoom < Self.maxWaveformZoom
-    }
-
-    public var canZoomOutWaveform: Bool {
-        waveformZoom > Self.minWaveformZoom
-    }
-
-    public var isTurntableScrubbing: Bool {
-        isPlatterScrubbing
-    }
-
-    public var isPressureTouchActive: Bool {
-        pressureTouchStartTargetBPM != nil
-    }
-
-    public var displayedTargetBPM: Double {
-        effectiveTargetBPMForCurrentState()
-    }
-
-    public func seekFromWaveformTap(xOffset: Double, baseSampleSpacing: Double) {
-        guard hasSelectedTrack else {
-            return
-        }
-        guard !waveformData.isEmpty else {
-            return
-        }
-
-        let sampleSpacing = max(baseSampleSpacing * waveformZoom, 0.001)
-        let deltaSamples = xOffset / sampleSpacing
-        let denominator = Double(max(waveformData.count - 1, 1))
-        let targetProgress = min(max(playbackProgress + (deltaSamples / denominator), 0), 1)
-        let targetTime = targetProgress * audioEngine.totalDuration
-
-        do {
-            try audioEngine.seek(to: targetTime)
-            playbackState = audioEngine.playbackState
-            if playbackState == .playing {
-                playbackStatusText = "Playing"
-                startPlaybackTimer()
-            } else {
-                stopPlaybackTimer()
+    public func setPitchLockEnabled(_ isEnabled: Bool) {
+        if isEnabled {
+            guard let externalBPM = latestExternalBPM else {
+                return
             }
-            refreshPlaybackTimeText()
-        } catch {
-            playbackStatusText = "Seek unavailable"
-        }
-    }
-
-    public func beginTurntableScrub() {
-        guard hasSelectedTrack else {
-            return
-        }
-        guard !isPlatterScrubbing else {
+            setPitchLockEnabled(true, externalBPM: externalBPM)
             return
         }
 
-        // Scratching and pressure-brake are mutually exclusive.
-        if pressureTouchStartTargetBPM != nil {
-            endTurntablePressureTouch()
-        }
-
-        isPlatterScrubbing = true
-        wasPlayingBeforePlatterScrub = playbackState == .playing
-        scratchInteractionState = .touchDown
-        scratchCurrentTime = audioEngine.currentTime
-        lastScratchCommitTimestamp = 0
-        lastCommittedScratchTime = scratchCurrentTime
-        smoothedScratchAngularVelocity = 0
-        latestScratchAngularVelocity = 0
-        latestScratchDirection = 1
-        scratchMotionMode = .scrub
-        stopPlaybackTimer()
-        playbackStatusText = "Scratching"
-
-        do {
-            try audioEngine.beginScratch()
-        } catch {
-            playbackStatusText = "Scratch unavailable"
-        }
-        updatePlaybackDisplay(current: scratchCurrentTime, total: audioEngine.totalDuration)
-    }
-
-    public func updateTurntableScrub(angleDelta: Double) {
-        guard isPlatterScrubbing else {
-            beginTurntableScrub()
-            return
-        }
-
-        scratchInteractionState = .dragging
-        let now = CACurrentMediaTime()
-        let scrubDeltaTime: TimeInterval
-        if lastScrubAngleTimestamp > 0 {
-            scrubDeltaTime = now - lastScrubAngleTimestamp
-        } else {
-            scrubDeltaTime = 1.0 / 60.0
-        }
-        lastScrubAngleTimestamp = now
-
-        let safeDeltaTime = max(scrubDeltaTime, 0.001)
-        let instantaneousAngularVelocity = angleDelta / safeDeltaTime
-        latestScratchAngularVelocity = instantaneousAngularVelocity
-        if abs(angleDelta) >= Self.scratchDirectionAngleThreshold {
-            latestScratchDirection = angleDelta >= 0 ? 1 : -1
-        }
-        smoothedScratchAngularVelocity +=
-            (instantaneousAngularVelocity - smoothedScratchAngularVelocity) * Self.scratchVelocitySmoothing
-
-        let isScratch = abs(smoothedScratchAngularVelocity) >= Self.scratchAngularVelocityThreshold
-        scratchMotionMode = isScratch ? .scratch : .scrub
-
-        let isJitter =
-            abs(angleDelta) < Self.scratchJitterAngleThreshold &&
-            abs(smoothedScratchAngularVelocity) < Self.scratchJitterVelocityThreshold
-        if isJitter {
-            return
-        }
-
-        let secondsPerRadian = isScratch ? Self.scratchSecondsPerRadian : Self.scrubSecondsPerRadian
-        let rawTimeDelta = angleDelta * secondsPerRadian
-        let maxStep = isScratch ? Self.maxScratchModeStep : Self.maxScrubModeStep
-        let clampedDelta = min(max(rawTimeDelta, -maxStep), maxStep)
-        let duration = audioEngine.totalDuration
-        scratchCurrentTime = min(max(scratchCurrentTime + clampedDelta, 0), duration)
-
-        turntablePhysics.applyAngularDrag(deltaAngle: angleDelta, deltaTime: safeDeltaTime)
-        publishTurntableState()
-        updatePlaybackDisplay(current: scratchCurrentTime, total: duration)
-        commitScratchAudio(force: false, mode: scratchMotionMode)
-    }
-
-    public func endTurntableScrub() {
-        guard isPlatterScrubbing else {
-            return
-        }
-
-        scratchInteractionState = .release
-        commitScratchAudio(force: true)
-        do {
-            try audioEngine.endScratch(resumePlayback: wasPlayingBeforePlatterScrub)
-        } catch {
-            playbackStatusText = "Scratch release failed"
-        }
-
-        isPlatterScrubbing = false
-        lastScrubAngleTimestamp = 0
-        smoothedScratchAngularVelocity = 0
-        latestScratchAngularVelocity = 0
-        latestScratchDirection = 1
-        scratchMotionMode = .scrub
-        scratchInteractionState = .idle
-
-        if wasPlayingBeforePlatterScrub {
-            playbackState = audioEngine.playbackState
-            playbackStatusText = "Playing"
-            startPlaybackTimer()
-        } else {
-            audioEngine.pause()
-            playbackState = audioEngine.playbackState
-            playbackStatusText = "Paused"
-            stopPlaybackTimer()
-        }
-
-        refreshPlaybackTimeText()
-    }
-
-    public func beginTurntablePressureTouch(pressure: Double, direction: Double) {
-        guard hasSelectedTrack else {
-            return
-        }
-        guard !isPlatterScrubbing else {
-            return
-        }
-
-        if pressureTouchStartTargetBPM == nil {
-            pressureTouchStartTargetBPM = targetBPM
-        }
-
-        pressureTouchIntensity = min(max(pressure, 0), 1)
-        pressureTouchDirection = direction >= 0 ? 1 : -1
-        lastPressureDebugLogTimestamp = CACurrentMediaTime()
-        lastLoggedPressureIntensity = pressureTouchIntensity
-        applyTargetBPM()
-        refreshBPMText()
-        Self.log.info(
-            "Pressure began | pressure=\(self.pressureTouchIntensity, format: .fixed(precision: 3)) direction=\(self.pressureTouchDirection, format: .fixed(precision: 1)) startBPM=\(self.pressureTouchStartTargetBPM ?? 0, format: .fixed(precision: 2)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
-        )
-    }
-
-    public func updateTurntablePressureTouch(pressure: Double, direction: Double) {
-        guard !isPlatterScrubbing else {
-            return
-        }
-        guard pressureTouchStartTargetBPM != nil else {
-            beginTurntablePressureTouch(pressure: pressure, direction: direction)
-            return
-        }
-
-        pressureTouchIntensity = min(max(pressure, 0), 1)
-        pressureTouchDirection = direction >= 0 ? 1 : -1
-        applyTargetBPM()
-        refreshBPMText()
-        let now = CACurrentMediaTime()
-        let elapsed = now - lastPressureDebugLogTimestamp
-        if abs(pressureTouchIntensity - lastLoggedPressureIntensity) >= 0.05 || elapsed >= 0.4 {
-            lastPressureDebugLogTimestamp = now
-            lastLoggedPressureIntensity = pressureTouchIntensity
-            Self.log.info(
-                "Pressure moved | pressure=\(self.pressureTouchIntensity, format: .fixed(precision: 3)) direction=\(self.pressureTouchDirection, format: .fixed(precision: 1)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
-            )
-        }
-    }
-
-    public func endTurntablePressureTouch() {
-        guard let startBPM = pressureTouchStartTargetBPM else {
-            return
-        }
-
-        pressureTouchStartTargetBPM = nil
-        pressureTouchIntensity = 0
-        pressureTouchDirection = -1
-        lastPressureDebugLogTimestamp = 0
-        lastLoggedPressureIntensity = -1
-        targetBPM = min(max(startBPM, Self.minBPM), Self.maxBPM)
-        applyTargetBPM()
-        refreshBPMText()
-        Self.log.info(
-            "Pressure ended | restoredBPM=\(self.targetBPM, format: .fixed(precision: 2)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
-        )
+        isPitchLockedToExternalBPM = false
+        turntableDeckViewModel.unlockPitch()
     }
 
     public func startMicrophoneBPMDetection() {
@@ -658,385 +131,15 @@ public final class DeckViewModel: ObservableObject {
         externalBPMStatusText = "Mic BPM stopped"
     }
 
-    private func startPlaybackTimer() {
-        guard playbackTimer == nil else {
+    private func setPitchLockEnabled(_ isEnabled: Bool, externalBPM: Double) {
+        if !isEnabled {
+            isPitchLockedToExternalBPM = false
+            turntableDeckViewModel.unlockPitch()
             return
         }
 
-        // Keep text updates lightweight; waveform progress is updated per-frame.
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor [weak self] in
-                self?.refreshPlaybackTimeText()
-            }
-        }
-        RunLoop.main.add(playbackTimer!, forMode: .common)
-    }
-
-    private func stopPlaybackTimer() {
-        playbackTimer?.invalidate()
-        playbackTimer = nil
-    }
-
-    private func startTurntableTimer() {
-        guard turntableTimer == nil else {
-            return
-        }
-
-        turntableTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor [weak self] in
-                self?.updateTurntablePhysics()
-            }
-        }
-        RunLoop.main.add(turntableTimer!, forMode: .common)
-    }
-
-    private func refreshPlaybackTimeText() {
-        let current = audioEngine.currentTime
-        let total = audioEngine.totalDuration
-        updatePlaybackDisplay(current: current, total: total)
-    }
-
-    private func updatePlaybackDisplay(current: TimeInterval, total: TimeInterval) {
-        let formattedTime = "\(format(time: current)) / \(format(time: total))"
-        if playbackTimeText != formattedTime {
-            playbackTimeText = formattedTime
-        }
-        if total > 0 {
-            let normalizedProgress = min(max(current / total, 0), 1)
-            let progressEpsilon = isPlatterScrubbing ? Self.scratchProgressEpsilon : Self.normalProgressEpsilon
-            if abs(playbackProgress - normalizedProgress) > progressEpsilon {
-                playbackProgress = normalizedProgress
-            }
-        } else {
-            playbackProgress = 0
-        }
-    }
-
-    private func commitScratchAudio(force: Bool, mode: ScratchMotionMode = .scrub) {
-        guard hasSelectedTrack else {
-            return
-        }
-
-        let now = CACurrentMediaTime()
-        let elapsed = now - lastScratchCommitTimestamp
-        let moved = abs(scratchCurrentTime - lastCommittedScratchTime)
-        let minInterval: TimeInterval
-        let minDelta: TimeInterval
-        switch mode {
-        case .scrub:
-            minInterval = Self.minScrubCommitInterval
-            minDelta = Self.minScrubCommitDelta
-        case .scratch:
-            minInterval = Self.minScratchCommitInterval
-            minDelta = Self.minScratchCommitDelta
-        }
-        if !force {
-            guard elapsed >= minInterval || moved >= minDelta else {
-                return
-            }
-        }
-
-        do {
-            let signedVelocity = max(abs(latestScratchAngularVelocity), 0.001) * latestScratchDirection
-            try audioEngine.scratch(
-                to: scratchCurrentTime,
-                angularVelocity: signedVelocity
-            )
-            playbackState = audioEngine.playbackState
-            lastScratchCommitTimestamp = now
-            lastCommittedScratchTime = scratchCurrentTime
-        } catch {
-            if !force {
-                playbackStatusText = "Scrub unavailable"
-            }
-            return
-        }
-    }
-
-    private func updateTurntablePhysics() {
-        let now = CACurrentMediaTime()
-        let deltaTime: TimeInterval
-        if lastTurntableUpdateTimestamp > 0 {
-            deltaTime = now - lastTurntableUpdateTimestamp
-        } else {
-            deltaTime = 1.0 / 60.0
-        }
-        lastTurntableUpdateTimestamp = now
-
-        let shouldDrive = playbackState == .playing && !isPlatterScrubbing
-        let targetAngularVelocity = shouldDrive ? Self.basePlatterAngularVelocity * playbackRate : nil
-        turntablePhysics.step(deltaTime: deltaTime, driveAngularVelocity: targetAngularVelocity)
-        if shouldDrive {
-            refreshPlaybackProgressOnly()
-        }
-        publishTurntableState()
-    }
-
-    private func refreshPlaybackProgressOnly() {
-        let current = audioEngine.currentTime
-        let total = audioEngine.totalDuration
-        guard total > 0 else {
-            if playbackProgress != 0 {
-                playbackProgress = 0
-            }
-            return
-        }
-
-        let normalizedProgress = min(max(current / total, 0), 1)
-        if abs(playbackProgress - normalizedProgress) > 0.0001 {
-            playbackProgress = normalizedProgress
-        }
-    }
-
-    private func publishTurntableState() {
-        let degrees = turntablePhysics.platterPosition * 180.0 / .pi
-        if abs(platterRotationDegrees - degrees) > 0.01 {
-            platterRotationDegrees = degrees
-        }
-    }
-
-    private func loadWaveform(url: URL) {
-        waveformLoadTask?.cancel()
-        waveformLoadTask = nil
-        let loadID = UUID()
-        waveformLoadID = loadID
-        isWaveformLoading = true
-        waveformText = "Loading waveform..."
-        let sampleCount = 4096
-
-        waveformLoadTask = Task { [waveformAnalyzer] in
-            let result = await Task.detached(priority: .userInitiated) {
-                try waveformAnalyzer.generateWaveform(
-                    url: url,
-                    sampleCount: sampleCount
-                ) { progress in
-                    Task { @MainActor [progress] in
-                        guard self.waveformLoadID == loadID else {
-                            return
-                        }
-                        self.waveformData = progress.samples
-                        self.waveformText = "Loading waveform \(Int(progress.fraction * 100))%"
-                    }
-                }
-            }.result
-
-            guard !Task.isCancelled else {
-                return
-            }
-            guard self.waveformLoadID == loadID else {
-                return
-            }
-
-            switch result {
-            case let .success(waveform):
-                waveformData = waveform
-                waveformText = "Loaded!"
-                isWaveformLoading = false
-            case .failure:
-                waveformText = "Waveform unavailable"
-                isWaveformLoading = false
-            }
-
-            waveformLoadTask = nil
-        }
-    }
-
-    private func importedTrackURL(from sourceURL: URL) throws -> URL {
-        // Keep imported tracks inside app sandbox to avoid security-scoped URL lifetime issues.
-        let fileManager = FileManager.default
-        let importsDirectory = fileManager.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-        )[0].appendingPathComponent("ImportedTracks", isDirectory: true)
-        try fileManager.createDirectory(at: importsDirectory, withIntermediateDirectories: true)
-
-        let destinationURL = importsDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(sourceURL.pathExtension)
-
-        if sourceURL.isFileURL {
-            let didAccess = sourceURL.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    sourceURL.stopAccessingSecurityScopedResource()
-                }
-            }
-        }
-
-        var coordinationError: NSError?
-        var copyError: Error?
-        NSFileCoordinator().coordinate(readingItemAt: sourceURL, options: [], error: &coordinationError) { coordinatedURL in
-            do {
-                try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
-            } catch {
-                copyError = error
-            }
-        }
-
-        // Some File Provider picker sessions can disconnect the view service while still
-        // leaving us with a readable URL. Prefer successful copy if destination exists.
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            return destinationURL
-        }
-
-        if let copyError {
-            // Fallback path: try direct copy from original URL while security scope is active.
-            do {
-                try fileManager.copyItem(at: sourceURL, to: destinationURL)
-                return destinationURL
-            } catch {
-                throw copyError
-            }
-        }
-
-        if let coordinationError {
-            // Final fallback in case coordinator failed but source URL is still readable.
-            do {
-                try fileManager.copyItem(at: sourceURL, to: destinationURL)
-                return destinationURL
-            } catch {
-                throw coordinationError
-            }
-        }
-        return destinationURL
-    }
-
-    private func detectBPM(url: URL) {
-        bpmLoadTask?.cancel()
-        bpmLoadTask = nil
-        isBPMLoading = true
-        bpmDetectionStatusText = "Detecting BPM..."
-
-        let configuration = TempoDetectorConfiguration()
-        bpmLoadTask = Task {
-            let result = await Task.detached(priority: .utility) { () throws -> BPMResult in
-                let input = try Self.makeTempoInputBuffer(url: url)
-                let detector = DSPModule.makeTempoDetector(configuration: configuration)
-                return try detector.detectTempo(in: input)
-            }.result
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            switch result {
-            case let .success(bpmResult):
-                switch bpmResult {
-                case let .detected(bpm, confidence):
-                    let clampedBPM = min(max(bpm, Self.minBPM), Self.maxBPM)
-                    originalBPM = clampedBPM
-                    targetBPM = clampedBPM
-                    applyTargetBPM()
-                    refreshBPMText()
-                    bpmDetectionStatusText = String(
-                        format: "Detected %.1f BPM (acc. %.2f)",
-                        clampedBPM,
-                        confidence
-                    )
-                case let .unavailable(reason):
-                    refreshBPMText()
-                    bpmDetectionStatusText = "BPM detection unavailable (\(reason)). Manual control active."
-                }
-            case .failure:
-                refreshBPMText()
-                bpmDetectionStatusText = "BPM detection failed. Manual control active."
-            }
-
-            isBPMLoading = false
-            bpmLoadTask = nil
-        }
-    }
-
-    nonisolated private static func makeTempoInputBuffer(url: URL) throws -> TempoInputBuffer {
-        let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
-        let maxFrames = AVAudioFramePosition(Self.maxBPMAnalysisFrames)
-        let frameCountToRead = min(file.length, maxFrames)
-
-        guard frameCountToRead > 0 else {
-            throw TempoDetectionError.emptyInput
-        }
-
-        guard let buffer = AVAudioPCMBuffer(
-            pcmFormat: format,
-            frameCapacity: AVAudioFrameCount(frameCountToRead)
-        ) else {
-            throw TempoDetectionError.nativeProcessingFailed
-        }
-
-        try file.read(into: buffer, frameCount: AVAudioFrameCount(frameCountToRead))
-
-        let framesRead = Int(buffer.frameLength)
-        guard framesRead > 0 else {
-            throw TempoDetectionError.emptyInput
-        }
-
-        guard let channelData = buffer.floatChannelData else {
-            throw TempoDetectionError.nativeProcessingFailed
-        }
-
-        let channelCount = Int(format.channelCount)
-        guard channelCount > 0 else {
-            throw TempoDetectionError.invalidChannelCount
-        }
-
-        var samples = [Float]()
-        samples.reserveCapacity(framesRead * channelCount)
-        for channel in 0..<channelCount {
-            let channelSamples = UnsafeBufferPointer(start: channelData[channel], count: framesRead)
-            samples.append(contentsOf: channelSamples)
-        }
-
-        return TempoInputBuffer(
-            samples: samples,
-            sampleRate: format.sampleRate,
-            channelCount: channelCount,
-            isInterleaved: false
-        )
-    }
-
-    private func format(time: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(time.rounded(.down)))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private func applyTargetBPM() {
-        let safeOriginal = max(originalBPM, Self.minBPM)
-        let effectiveTargetBPM = effectiveTargetBPMForCurrentState()
-        let ratio = effectiveTargetBPM / safeOriginal
-        let clampedRatio = min(max(ratio, Self.minPlaybackRate), Self.maxPlaybackRate)
-        audioEngine.setPlaybackRate(Float(clampedRatio))
-    }
-
-    private func effectiveTargetBPMForCurrentState() -> Double {
-        guard let pressureStartBPM = pressureTouchStartTargetBPM else {
-            return targetBPM
-        }
-
-        let normalizedPressure = min(max(pressureTouchIntensity, 0), 1)
-        let pressureCurve = pow(normalizedPressure, Self.pressureCurveExponent)
-
-        if pressureTouchDirection < 0 {
-            let slowdown = pressureCurve * Self.maxPressureSlowdownFraction
-            let multiplier = max(1.0 - slowdown, Self.minPressureSlowdownMultiplier)
-            return pressureStartBPM * multiplier
-        }
-
-        let acceleration = pressureCurve * Self.maxPressureAccelerationFraction
-        let multiplier = min(1.0 + acceleration, Self.maxPressureAccelerationMultiplier)
-        return pressureStartBPM * multiplier
-    }
-
-    private func refreshBPMText() {
-        bpmText = String(
-            format: "BPM %.1f | %.3fx",
-            targetBPM,
-            playbackRate
-        )
+        isPitchLockedToExternalBPM = true
+        turntableDeckViewModel.lockPitch(to: externalBPM)
     }
 
     private func handleMicrophoneBPMResult(_ result: BPMResult) {
@@ -1049,6 +152,9 @@ public final class DeckViewModel: ObservableObject {
                 confidence
             )
             isExternalBPMLoading = false
+            if isPitchLockedToExternalBPM {
+                turntableDeckViewModel.lockPitch(to: bpm)
+            }
         case .unavailable:
             externalBPMStatusText = "Listening... no stable tempo yet"
             if externalBPMText == "-- BPM" {
@@ -1105,53 +211,6 @@ public final class DeckViewModel: ObservableObject {
                 externalBPMStatusText = "Mic BPM unavailable: \(error.localizedDescription)"
             }
         }
-    }
-
-    public static let minBPM: Double = 60
-    public static let maxBPM: Double = 200
-    public static let bpmStep: Double = 0.5
-    public static let minPlaybackRate: Double = 0.5
-    public static let maxPlaybackRate: Double = 2.0
-    nonisolated public static let maxBPMAnalysisFrames: AVAudioFrameCount = 44_100 * 45
-    public static let minWaveformZoom: Double = 0.5
-    public static let maxWaveformZoom: Double = 8.0
-    public static let allowedPitchSensitivityPercents: [Int] = [2, 4, 8, 16]
-    public static let scrubSecondsPerRevolution: Double = 1.8
-    public static let scrubSecondsPerRadian: Double = scrubSecondsPerRevolution / (2.0 * .pi)
-    public static let scratchSecondsPerRadian: Double = 0.20
-    public static let maxScrubModeStep: TimeInterval = 0.10
-    public static let maxScratchModeStep: TimeInterval = 0.20
-    public static let scratchAngularVelocityThreshold: Double = 3.0
-    public static let scratchVelocitySmoothing: Double = 0.35
-    public static let scratchDirectionAngleThreshold: Double = 0.0025
-    public static let scratchJitterAngleThreshold: Double = 0.002
-    public static let scratchJitterVelocityThreshold: Double = 0.6
-    public static let minScrubCommitInterval: TimeInterval = 1.0 / 240.0
-    public static let minScratchCommitInterval: TimeInterval = 1.0 / 180.0
-    public static let minScrubCommitDelta: TimeInterval = 0.001
-    public static let minScratchCommitDelta: TimeInterval = 0.003
-    public static let normalProgressEpsilon: Double = 0.0005
-    public static let scratchProgressEpsilon: Double = 0.00002
-    public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
-    public static let maxPressureSlowdownFraction: Double = 0.9
-    public static let minPressureSlowdownMultiplier: Double = 0.08
-    public static let maxPressureAccelerationFraction: Double = 0.9
-    public static let maxPressureAccelerationMultiplier: Double = 1.92
-    public static let pressureCurveExponent: Double = 1.6
-
-    private var latestExternalBPM: Double?
-
-    private func clampPitchOffsetToSensitivityIfNeeded() {
-        guard !isPitchLockedToExternalBPM else {
-            return
-        }
-        let safeOriginal = max(originalBPM, 1.0)
-        let offset = (targetBPM / safeOriginal) - 1.0
-        let maxOffset = pitchSensitivityFraction
-        let clampedOffset = min(max(offset, -maxOffset), maxOffset)
-        targetBPM = safeOriginal * (1.0 + clampedOffset)
-        applyTargetBPM()
-        refreshBPMText()
     }
 }
 
