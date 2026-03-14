@@ -913,6 +913,10 @@ private struct VerticalPitchFader: View {
                     .fill(Color(uiColor: .systemGray5))
                     .frame(width: 10)
                     .frame(maxHeight: .infinity)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
 
                 Capsule()
                     .fill(Color.accentColor.opacity(0.25))
