@@ -4,9 +4,15 @@ import DSP
 import Foundation
 import QuartzCore
 import Waveform
+import os
 
 @MainActor
 public final class DeckViewModel: ObservableObject {
+    private static let log = Logger(
+        subsystem: "dev.manelix.Mixer",
+        category: "DeckViewModel.PressureTouch"
+    )
+
     public enum ScratchInteractionState: Equatable {
         case idle
         case touchDown
@@ -65,6 +71,11 @@ public final class DeckViewModel: ObservableObject {
     private var latestScratchAngularVelocity: Double = 0
     private var latestScratchDirection: Double = 1
     private var scratchMotionMode: ScratchMotionMode = .scrub
+    private var pressureTouchStartTargetBPM: Double?
+    private var pressureTouchIntensity: Double = 0
+    private var pressureTouchDirection: Double = -1
+    private var lastPressureDebugLogTimestamp: TimeInterval = 0
+    private var lastLoggedPressureIntensity: Double = -1
     private var turntablePhysics = TurntablePhysics()
 
     public init(
@@ -147,6 +158,11 @@ public final class DeckViewModel: ObservableObject {
         lastCommittedScratchTime = 0
         lastTurntableUpdateTimestamp = 0
         lastScrubAngleTimestamp = 0
+        pressureTouchStartTargetBPM = nil
+        pressureTouchIntensity = 0
+        pressureTouchDirection = -1
+        lastPressureDebugLogTimestamp = 0
+        lastLoggedPressureIntensity = -1
         scratchInteractionState = .idle
         turntablePhysics.reset()
         publishTurntableState()
@@ -400,6 +416,14 @@ public final class DeckViewModel: ObservableObject {
         isPlatterScrubbing
     }
 
+    public var isPressureTouchActive: Bool {
+        pressureTouchStartTargetBPM != nil
+    }
+
+    public var displayedTargetBPM: Double {
+        effectiveTargetBPMForCurrentState()
+    }
+
     public func seekFromWaveformTap(xOffset: Double, baseSampleSpacing: Double) {
         guard hasSelectedTrack else {
             return
@@ -435,6 +459,11 @@ public final class DeckViewModel: ObservableObject {
         }
         guard !isPlatterScrubbing else {
             return
+        }
+
+        // Scratching and pressure-brake are mutually exclusive.
+        if pressureTouchStartTargetBPM != nil {
+            endTurntablePressureTouch()
         }
 
         isPlatterScrubbing = true
@@ -539,6 +568,71 @@ public final class DeckViewModel: ObservableObject {
         }
 
         refreshPlaybackTimeText()
+    }
+
+    public func beginTurntablePressureTouch(pressure: Double, direction: Double) {
+        guard hasSelectedTrack else {
+            return
+        }
+        guard !isPlatterScrubbing else {
+            return
+        }
+
+        if pressureTouchStartTargetBPM == nil {
+            pressureTouchStartTargetBPM = targetBPM
+        }
+
+        pressureTouchIntensity = min(max(pressure, 0), 1)
+        pressureTouchDirection = direction >= 0 ? 1 : -1
+        lastPressureDebugLogTimestamp = CACurrentMediaTime()
+        lastLoggedPressureIntensity = pressureTouchIntensity
+        applyTargetBPM()
+        refreshBPMText()
+        Self.log.info(
+            "Pressure began | pressure=\(self.pressureTouchIntensity, format: .fixed(precision: 3)) direction=\(self.pressureTouchDirection, format: .fixed(precision: 1)) startBPM=\(self.pressureTouchStartTargetBPM ?? 0, format: .fixed(precision: 2)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
+        )
+    }
+
+    public func updateTurntablePressureTouch(pressure: Double, direction: Double) {
+        guard !isPlatterScrubbing else {
+            return
+        }
+        guard pressureTouchStartTargetBPM != nil else {
+            beginTurntablePressureTouch(pressure: pressure, direction: direction)
+            return
+        }
+
+        pressureTouchIntensity = min(max(pressure, 0), 1)
+        pressureTouchDirection = direction >= 0 ? 1 : -1
+        applyTargetBPM()
+        refreshBPMText()
+        let now = CACurrentMediaTime()
+        let elapsed = now - lastPressureDebugLogTimestamp
+        if abs(pressureTouchIntensity - lastLoggedPressureIntensity) >= 0.05 || elapsed >= 0.4 {
+            lastPressureDebugLogTimestamp = now
+            lastLoggedPressureIntensity = pressureTouchIntensity
+            Self.log.info(
+                "Pressure moved | pressure=\(self.pressureTouchIntensity, format: .fixed(precision: 3)) direction=\(self.pressureTouchDirection, format: .fixed(precision: 1)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
+            )
+        }
+    }
+
+    public func endTurntablePressureTouch() {
+        guard let startBPM = pressureTouchStartTargetBPM else {
+            return
+        }
+
+        pressureTouchStartTargetBPM = nil
+        pressureTouchIntensity = 0
+        pressureTouchDirection = -1
+        lastPressureDebugLogTimestamp = 0
+        lastLoggedPressureIntensity = -1
+        targetBPM = min(max(startBPM, Self.minBPM), Self.maxBPM)
+        applyTargetBPM()
+        refreshBPMText()
+        Self.log.info(
+            "Pressure ended | restoredBPM=\(self.targetBPM, format: .fixed(precision: 2)) rate=\(self.playbackRate, format: .fixed(precision: 3))"
+        )
     }
 
     public func startMicrophoneBPMDetection() {
@@ -912,9 +1006,29 @@ public final class DeckViewModel: ObservableObject {
 
     private func applyTargetBPM() {
         let safeOriginal = max(originalBPM, Self.minBPM)
-        let ratio = targetBPM / safeOriginal
+        let effectiveTargetBPM = effectiveTargetBPMForCurrentState()
+        let ratio = effectiveTargetBPM / safeOriginal
         let clampedRatio = min(max(ratio, Self.minPlaybackRate), Self.maxPlaybackRate)
         audioEngine.setPlaybackRate(Float(clampedRatio))
+    }
+
+    private func effectiveTargetBPMForCurrentState() -> Double {
+        guard let pressureStartBPM = pressureTouchStartTargetBPM else {
+            return targetBPM
+        }
+
+        let normalizedPressure = min(max(pressureTouchIntensity, 0), 1)
+        let pressureCurve = pow(normalizedPressure, Self.pressureCurveExponent)
+
+        if pressureTouchDirection < 0 {
+            let slowdown = pressureCurve * Self.maxPressureSlowdownFraction
+            let multiplier = max(1.0 - slowdown, Self.minPressureSlowdownMultiplier)
+            return pressureStartBPM * multiplier
+        }
+
+        let acceleration = pressureCurve * Self.maxPressureAccelerationFraction
+        let multiplier = min(1.0 + acceleration, Self.maxPressureAccelerationMultiplier)
+        return pressureStartBPM * multiplier
     }
 
     private func refreshBPMText() {
@@ -1020,6 +1134,11 @@ public final class DeckViewModel: ObservableObject {
     public static let normalProgressEpsilon: Double = 0.0005
     public static let scratchProgressEpsilon: Double = 0.00002
     public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
+    public static let maxPressureSlowdownFraction: Double = 0.9
+    public static let minPressureSlowdownMultiplier: Double = 0.08
+    public static let maxPressureAccelerationFraction: Double = 0.9
+    public static let maxPressureAccelerationMultiplier: Double = 1.92
+    public static let pressureCurveExponent: Double = 1.6
 
     private var latestExternalBPM: Double?
 

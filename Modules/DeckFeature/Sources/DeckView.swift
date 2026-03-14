@@ -2,6 +2,8 @@ import SwiftUI
 import UIComponents
 import UniformTypeIdentifiers
 import UIKit
+import os
+import QuartzCore
 
 @MainActor
 public struct DeckView: View {
@@ -69,20 +71,32 @@ public struct DeckView: View {
                             platterAngleDegrees: viewModel.platterRotationDegrees
                         )
                         .frame(width: size, height: size)
-                        .contentShape(Circle())
-                        .gesture(platterDragGesture(platterSize: size))
+                        .overlay {
+                            TurntableTouchSurface(
+                                onTouchBegan: { location, pressure in
+                                    handlePlatterTouchBegan(at: location, pressure: pressure, platterSize: size)
+                                },
+                                onTouchMoved: { location, pressure in
+                                    handlePlatterTouchMoved(at: location, pressure: pressure, platterSize: size)
+                                },
+                                onTouchEnded: {
+                                    handlePlatterTouchEnded()
+                                }
+                            )
+                            .clipShape(Circle())
+                        }
 
                         VStack {
                             HStack {
-                                if viewModel.isPitchLockedToExternalBPM {
+                        if viewModel.isPitchLockedToExternalBPM {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Locked Pitch")
                                             .font(.caption2.weight(.semibold))
                                         Text(
-                                            String(
-                                                format: "%.1f BPM | %+.1f%%",
-                                                viewModel.targetBPM,
-                                                ((viewModel.targetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
+                                                String(
+                                                    format: "%.1f BPM | %+.1f%%",
+                                                viewModel.displayedTargetBPM,
+                                                ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
                                             )
                                         )
                                         .font(.caption2.monospacedDigit())
@@ -308,7 +322,7 @@ public struct DeckView: View {
                     VerticalPitchFader(
                         value: Binding(
                             get: {
-                                ((viewModel.targetBPM / safeOriginalBPM) - 1.0)
+                                ((viewModel.displayedTargetBPM / safeOriginalBPM) - 1.0)
                             },
                             set: { newPitch in
                                 viewModel.setPitchOffset(newPitch)
@@ -317,11 +331,19 @@ public struct DeckView: View {
                         range: -sensitivityFraction...sensitivityFraction
                     )
                     .frame(maxHeight: .infinity)
-                    .disabled(viewModel.isPitchLockedToExternalBPM)
-                    .opacity(viewModel.isPitchLockedToExternalBPM ? 0.45 : 1)
+                    .disabled(
+                        viewModel.isPitchLockedToExternalBPM ||
+                        viewModel.isTurntableScrubbing ||
+                        viewModel.isPressureTouchActive
+                    )
+                    .opacity(
+                        (viewModel.isPitchLockedToExternalBPM ||
+                         viewModel.isTurntableScrubbing ||
+                         viewModel.isPressureTouchActive) ? 0.45 : 1
+                    )
                     .accessibilityLabel("Pitch fader")
                     
-                    Text(String(format: "%+.1f%%", ((viewModel.targetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
+                    Text(String(format: "%+.1f%%", ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .padding(.top, 2)
@@ -459,32 +481,62 @@ public struct DeckView: View {
         viewModel.selectTrack(url: sampleURL)
     }
 
-    private func platterDragGesture(platterSize: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                // Enter scratch mode as soon as finger touches the platter.
-                if !viewModel.isTurntableScrubbing {
-                    viewModel.beginTurntableScrub()
-                }
+    private func handlePlatterTouchBegan(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
+        if !viewModel.isTurntableScrubbing {
+            viewModel.beginTurntablePressureTouch(
+                pressure: normalizedPressure(pressure),
+                direction: pressureDirection(for: location, platterSize: platterSize)
+            )
+        }
 
-                guard let angle = platterAngle(for: value.location, size: platterSize) else {
-                    platterLastAngle = nil
-                    return
-                }
+        guard let angle = platterAngle(for: location, size: platterSize) else {
+            platterLastAngle = nil
+            return
+        }
 
-                if let previousAngle = platterLastAngle {
-                    let delta = normalizedAngleDelta(from: previousAngle, to: angle)
-                    viewModel.updateTurntableScrub(angleDelta: delta)
-                }
+        platterLastAngle = angle
+    }
 
-                platterLastAngle = angle
+    private func handlePlatterTouchMoved(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
+        if !viewModel.isTurntableScrubbing {
+            viewModel.updateTurntablePressureTouch(
+                pressure: normalizedPressure(pressure),
+                direction: pressureDirection(for: location, platterSize: platterSize)
+            )
+        }
+
+        guard let angle = platterAngle(for: location, size: platterSize) else {
+            platterLastAngle = nil
+            return
+        }
+
+        if let previousAngle = platterLastAngle {
+            let delta = normalizedAngleDelta(from: previousAngle, to: angle)
+            if !viewModel.isTurntableScrubbing, abs(delta) >= Self.platterScratchActivationAngleThreshold {
+                viewModel.beginTurntableScrub()
             }
-            .onEnded { _ in
-                platterLastAngle = nil
-                if viewModel.isTurntableScrubbing {
-                    viewModel.endTurntableScrub()
-                }
+            if viewModel.isTurntableScrubbing {
+                viewModel.updateTurntableScrub(angleDelta: delta)
             }
+        }
+
+        platterLastAngle = angle
+    }
+
+    private func handlePlatterTouchEnded() {
+        platterLastAngle = nil
+        viewModel.endTurntablePressureTouch()
+        if viewModel.isTurntableScrubbing {
+            viewModel.endTurntableScrub()
+        }
+    }
+
+    private func normalizedPressure(_ rawPressure: CGFloat) -> Double {
+        min(max(Double(rawPressure), 0), 1)
+    }
+
+    private func pressureDirection(for location: CGPoint, platterSize: CGFloat) -> Double {
+        location.x < (platterSize * 0.5) ? -1 : 1
     }
 
     private func waveformScratchGesture() -> some Gesture {
@@ -542,6 +594,7 @@ public struct DeckView: View {
     private static let waveformPointsPerRevolution: Double = 60.0
     private static let minWaveformPointsPerRevolution: Double = 20.0
     private static let waveformBaseSampleSpacing: Double = 2.0
+    private static let platterScratchActivationAngleThreshold: Double = 0.002
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
@@ -576,6 +629,165 @@ private struct TrackDocumentPicker: UIViewControllerRepresentable {
             onPick(first)
         }
     }
+}
+
+private struct TurntableTouchSurface: UIViewRepresentable {
+    let onTouchBegan: (CGPoint, CGFloat) -> Void
+    let onTouchMoved: (CGPoint, CGFloat) -> Void
+    let onTouchEnded: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onTouchBegan: onTouchBegan,
+            onTouchMoved: onTouchMoved,
+            onTouchEnded: onTouchEnded
+        )
+    }
+
+    func makeUIView(context: Context) -> TouchSurfaceView {
+        let view = TouchSurfaceView()
+        view.backgroundColor = .clear
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: TouchSurfaceView, context: Context) {
+        uiView.coordinator = context.coordinator
+    }
+
+    final class Coordinator {
+        let onTouchBegan: (CGPoint, CGFloat) -> Void
+        let onTouchMoved: (CGPoint, CGFloat) -> Void
+        let onTouchEnded: () -> Void
+
+        init(
+            onTouchBegan: @escaping (CGPoint, CGFloat) -> Void,
+            onTouchMoved: @escaping (CGPoint, CGFloat) -> Void,
+            onTouchEnded: @escaping () -> Void
+        ) {
+            self.onTouchBegan = onTouchBegan
+            self.onTouchMoved = onTouchMoved
+            self.onTouchEnded = onTouchEnded
+        }
+    }
+}
+
+private final class TouchSurfaceView: UIView {
+    private static let log = Logger(
+        subsystem: "dev.manelix.Mixer",
+        category: "TurntableTouchSurface"
+    )
+
+    weak var coordinator: TurntableTouchSurface.Coordinator?
+    private var didLogNoForceSupport = false
+    private var lastMoveLogTime: TimeInterval = 0
+    private var lastLoggedPressure: CGFloat = -1
+    private var activeTouchLocation: CGPoint?
+    private var fallbackPressureStartTime: TimeInterval?
+    private var fallbackPressureDisplayLink: CADisplayLink?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isMultipleTouchEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        activeTouchLocation = touch.location(in: self)
+        let pressure = normalizedPressure(for: touch)
+        let rawForce = touch.force
+        let maxForce = touch.maximumPossibleForce
+        Self.log.info(
+            "touchesBegan | rawForce=\(rawForce, format: .fixed(precision: 3)) maxForce=\(maxForce, format: .fixed(precision: 3)) normalized=\(pressure, format: .fixed(precision: 3))"
+        )
+        if maxForce > 0 {
+            stopFallbackPressureUpdates()
+            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, pressure)
+        } else {
+            fallbackPressureStartTime = CACurrentMediaTime()
+            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, 0)
+            startFallbackPressureUpdates()
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        activeTouchLocation = touch.location(in: self)
+        let pressure = normalizedPressure(for: touch)
+        let now = CACurrentMediaTime()
+        let shouldLog = abs(pressure - lastLoggedPressure) >= 0.05 || (now - lastMoveLogTime) >= 0.35
+        if shouldLog {
+            lastMoveLogTime = now
+            lastLoggedPressure = pressure
+            Self.log.info(
+                "touchesMoved | rawForce=\(touch.force, format: .fixed(precision: 3)) maxForce=\(touch.maximumPossibleForce, format: .fixed(precision: 3)) normalized=\(pressure, format: .fixed(precision: 3))"
+            )
+        }
+        if touch.maximumPossibleForce > 0 {
+            stopFallbackPressureUpdates()
+            coordinator?.onTouchMoved(activeTouchLocation ?? .zero, pressure)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        Self.log.info("touchesEnded")
+        stopFallbackPressureUpdates()
+        activeTouchLocation = nil
+        fallbackPressureStartTime = nil
+        coordinator?.onTouchEnded()
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        Self.log.info("touchesCancelled")
+        stopFallbackPressureUpdates()
+        activeTouchLocation = nil
+        fallbackPressureStartTime = nil
+        coordinator?.onTouchEnded()
+    }
+
+    private func normalizedPressure(for touch: UITouch) -> CGFloat {
+        let maxForce = touch.maximumPossibleForce
+        guard maxForce > 0 else {
+            if !didLogNoForceSupport {
+                didLogNoForceSupport = true
+                Self.log.warning("Force touch unsupported on current input route (maximumPossibleForce == 0)")
+            }
+            return 0
+        }
+        return min(max(touch.force / maxForce, 0), 1)
+    }
+
+    private func startFallbackPressureUpdates() {
+        guard fallbackPressureDisplayLink == nil else { return }
+        let displayLink = CADisplayLink(target: self, selector: #selector(handleFallbackPressureTick))
+        displayLink.add(to: .main, forMode: .common)
+        fallbackPressureDisplayLink = displayLink
+        Self.log.info("Fallback pressure enabled (force unsupported): press-hold will ramp pressure")
+    }
+
+    private func stopFallbackPressureUpdates() {
+        fallbackPressureDisplayLink?.invalidate()
+        fallbackPressureDisplayLink = nil
+    }
+
+    @objc
+    private func handleFallbackPressureTick() {
+        guard let startTime = fallbackPressureStartTime,
+              let location = activeTouchLocation else {
+            return
+        }
+
+        let elapsed = CACurrentMediaTime() - startTime
+        let normalized = min(max(elapsed / Self.fallbackPressureRampDuration, 0), 1)
+        coordinator?.onTouchMoved(location, normalized)
+    }
+
+    private static let fallbackPressureRampDuration: TimeInterval = 1.2
 }
 
 private struct VerticalPitchFader: View {
