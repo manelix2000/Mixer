@@ -26,7 +26,7 @@ public struct DeckView: View {
 
                     HStack {
                         TurntableDeckView(
-                            viewModel: viewModel.turntableDeckViewModel,
+                            viewModel: viewModel.leftTurntableDeckViewModel,
                             isPitchLockedToExternalBPM: Binding(
                                 get: { viewModel.isPitchLockedToExternalBPM },
                                 set: { viewModel.setPitchLockEnabled($0) }

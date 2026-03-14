@@ -15,7 +15,7 @@ public final class DeckViewModel: ObservableObject {
     @Published public private(set) var isMicrophoneBPMDetectionActive: Bool
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
 
-    public let turntableDeckViewModel: TurntableDeckViewModel
+    public let leftTurntableDeckViewModel: TurntableDeckViewModel
     public let turntableRightDeckViewModel: TurntableDeckViewModel
 
     private let audioEngine: AudioEngineControlling
@@ -38,7 +38,7 @@ public final class DeckViewModel: ObservableObject {
         self.isExternalBPMLoading = false
         self.isMicrophoneBPMDetectionActive = false
         self.isPitchLockedToExternalBPM = false
-        self.turntableDeckViewModel = TurntableDeckViewModel(
+        self.leftTurntableDeckViewModel = TurntableDeckViewModel(
             audioEngine: audioEngine,
             waveformAnalyzer: waveformAnalyzer
         )
@@ -111,7 +111,7 @@ public final class DeckViewModel: ObservableObject {
         }
 
         isPitchLockedToExternalBPM = false
-        turntableDeckViewModel.unlockPitch()
+        leftTurntableDeckViewModel.unlockPitch()
     }
 
     public func startMicrophoneBPMDetection() {
@@ -140,12 +140,12 @@ public final class DeckViewModel: ObservableObject {
     private func setPitchLockEnabled(_ isEnabled: Bool, externalBPM: Double) {
         if !isEnabled {
             isPitchLockedToExternalBPM = false
-            turntableDeckViewModel.unlockPitch()
+            leftTurntableDeckViewModel.unlockPitch()
             return
         }
 
         isPitchLockedToExternalBPM = true
-        turntableDeckViewModel.lockPitch(to: externalBPM)
+        leftTurntableDeckViewModel.lockPitch(to: externalBPM)
     }
 
     private func handleMicrophoneBPMResult(_ result: BPMResult) {
@@ -159,7 +159,7 @@ public final class DeckViewModel: ObservableObject {
             )
             isExternalBPMLoading = false
             if isPitchLockedToExternalBPM {
-                turntableDeckViewModel.lockPitch(to: bpm)
+                leftTurntableDeckViewModel.lockPitch(to: bpm)
             }
         case .unavailable:
             externalBPMStatusText = "Listening... no stable tempo yet"
