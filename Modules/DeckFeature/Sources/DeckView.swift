@@ -8,6 +8,7 @@ import QuartzCore
 @MainActor
 public struct DeckView: View {
     @StateObject private var viewModel: DeckViewModel
+    @State private var areControlsVisible = true
     @State private var isImportingTrack = false
     @State private var pinchStartZoom: Double?
     @State private var platterLastAngle: Double?
@@ -24,14 +25,18 @@ public struct DeckView: View {
     public var body: some View {
         GeometryReader { geometry in
             HStack(alignment: .top, spacing: 12) {
-                ScrollView {
-                    controlsColumn
-                        .frame(width: max(240, geometry.size.width * 0.28))
+                controlsVisibilityButton
+
+                if areControlsVisible {
+                        controlsColumn
+                            .frame(width: max(240, geometry.size.width * 0.28))
+                            .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
                 deckArea
             }
             .padding(12)
+            .animation(.easeInOut(duration: 0.22), value: areControlsVisible)
             .background(Color(uiColor: .systemBackground))
         }
         .sheet(isPresented: $isImportingTrack) {
@@ -39,6 +44,29 @@ public struct DeckView: View {
                 viewModel.selectTrack(url: selectedURL)
             }
         }
+    }
+
+    private var controlsVisibilityButton: some View {
+        Button {
+            areControlsVisible.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.subheadline.weight(.semibold))
+                Image(systemName: areControlsVisible ? "chevron.left" : "chevron.right")
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
+        .frame(width: 44)
+        .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
+        .accessibilityHint("Toggles the controls column visibility")
     }
 
     private var controlsColumn: some View {
