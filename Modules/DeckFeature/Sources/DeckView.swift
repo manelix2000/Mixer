@@ -7,6 +7,11 @@ import QuartzCore
 
 @MainActor
 public struct DeckView: View {
+    private static let log = Logger(
+        subsystem: "dev.manelix.Mixer",
+        category: "DeckView"
+    )
+
     @StateObject private var viewModel: DeckViewModel
     @State private var areControlsVisible = true
     @State private var isImportingTrack = false
@@ -188,6 +193,7 @@ public struct DeckView: View {
                 .buttonStyle(.borderedProminent)
                 .accessibilityLabel("Load track")
 
+                #if targetEnvironment(simulator)
                 Button {
                     loadSampleTrack()
                 } label: {
@@ -196,6 +202,7 @@ public struct DeckView: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityLabel("Load sample track")
+                #endif
 
                 Button {
                     if viewModel.isPlaybackActive {
@@ -236,6 +243,7 @@ public struct DeckView: View {
                         )
                         HStack {
                             Button {
+                                Self.log.debug("zoom in button tapped")
                                 viewModel.zoomInWaveform()
                             } label: {
                                 Image(systemName: "plus.magnifyingglass")
@@ -248,6 +256,7 @@ public struct DeckView: View {
                             Spacer()
                             
                             Button {
+                                Self.log.debug("zoom out button tapped")
                                 viewModel.zoomOutWaveform()
                             } label: {
                                 Image(systemName: "minus.magnifyingglass")
@@ -263,13 +272,23 @@ public struct DeckView: View {
                                 .tint(.white)
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let xOffset = location.x - (waveformGeometry.size.width * 0.5)
-                        viewModel.seekFromWaveformTap(
-                            xOffset: Double(xOffset),
-                            baseSampleSpacing: Self.waveformBaseSampleSpacing
-                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            let leftBoundary = Self.waveformTapSeekHorizontalMargin
+                            let rightBoundary = waveformGeometry.size.width - Self.waveformTapSeekHorizontalMargin
+                            Self.log.debug(
+                                "waveform tap | x=\(location.x, format: .fixed(precision: 2)) width=\(waveformGeometry.size.width, format: .fixed(precision: 2)) left=\(leftBoundary, format: .fixed(precision: 2)) right=\(rightBoundary, format: .fixed(precision: 2))"
+                            )
+                            guard location.x >= leftBoundary, location.x <= rightBoundary else {
+                                Self.log.debug("waveform tap ignored by margin")
+                                return
+                            }
+                            let xOffset = location.x - (waveformGeometry.size.width * 0.5)
+                            Self.log.debug("waveform seek triggered | xOffset=\(xOffset, format: .fixed(precision: 2))")
+                            viewModel.seekFromWaveformTap(
+                                xOffset: Double(xOffset),
+                                baseSampleSpacing: Self.waveformBaseSampleSpacing
+                            )
                     }
                     .gesture(
                         MagnificationGesture()
@@ -284,7 +303,7 @@ public struct DeckView: View {
                                 pinchStartZoom = nil
                             }
                     )
-                    .simultaneousGesture(waveformScratchGesture())
+                    .simultaneousGesture(waveformScratchGesture(width: waveformGeometry.size.width))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
@@ -570,10 +589,21 @@ public struct DeckView: View {
         location.x < (platterSize * 0.5) ? -1 : 1
     }
 
-    private func waveformScratchGesture() -> some Gesture {
+    private func waveformScratchGesture(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                let leftBoundary = Self.waveformTapSeekHorizontalMargin
+                let rightBoundary = width - Self.waveformTapSeekHorizontalMargin
+                guard value.location.x >= leftBoundary, value.location.x <= rightBoundary else {
+                    Self.log.debug(
+                        "waveform scratch ignored by margin | x=\(value.location.x, format: .fixed(precision: 2)) left=\(leftBoundary, format: .fixed(precision: 2)) right=\(rightBoundary, format: .fixed(precision: 2))"
+                    )
+                    waveformLastDragX = nil
+                    return
+                }
+
                 if !viewModel.isTurntableScrubbing {
+                    Self.log.debug("waveform scratch begin")
                     viewModel.beginTurntableScrub()
                 }
 
@@ -584,6 +614,9 @@ public struct DeckView: View {
                         Self.waveformPointsPerRevolution * viewModel.waveformZoom
                     )
                     let angleDelta = -(Double(deltaX) / zoomScaledPointsPerRevolution) * (2.0 * .pi)
+                    Self.log.debug(
+                        "waveform scratch update | deltaX=\(deltaX, format: .fixed(precision: 2)) angleDelta=\(angleDelta, format: .fixed(precision: 4))"
+                    )
                     viewModel.updateTurntableScrub(angleDelta: angleDelta)
                 }
 
@@ -592,6 +625,7 @@ public struct DeckView: View {
             .onEnded { _ in
                 waveformLastDragX = nil
                 if viewModel.isTurntableScrubbing {
+                    Self.log.debug("waveform scratch end")
                     viewModel.endTurntableScrub()
                 }
             }
@@ -625,6 +659,7 @@ public struct DeckView: View {
     private static let waveformPointsPerRevolution: Double = 60.0
     private static let minWaveformPointsPerRevolution: Double = 20.0
     private static let waveformBaseSampleSpacing: Double = 2.0
+    private static let waveformTapSeekHorizontalMargin: CGFloat = 40.0
     private static let platterScratchActivationAngleThreshold: Double = 0.002
 }
 
