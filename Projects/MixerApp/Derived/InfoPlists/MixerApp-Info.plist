@@ -22,6 +22,11 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mixer uses the microphone to detect external BPM.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>MicrogrammaDExtendedBold.otf</string>
+		<string>MicrogrammaDExtendedBold.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

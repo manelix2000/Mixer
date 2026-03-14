@@ -12,6 +12,10 @@ let project = Project(
             infoPlist: .extendingDefault(
                 with: [
                     "UILaunchStoryboardName": "LaunchScreen",
+                    "UIAppFonts": [
+                        "MicrogrammaDExtendedBold.otf",
+                        "MicrogrammaDExtendedBold.ttf"
+                    ],
                     "NSMicrophoneUsageDescription": "Mixer uses the microphone to detect external BPM.",
                     "UISupportedInterfaceOrientations": [
                         "UIInterfaceOrientationLandscapeLeft",

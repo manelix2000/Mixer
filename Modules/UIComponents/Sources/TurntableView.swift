@@ -1,6 +1,14 @@
 import SwiftUI
+import UIKit
+import CoreText
+import os
 
 public struct TurntableView: View {
+    private static let log = Logger(
+        subsystem: "dev.manelix.Mixer",
+        category: "TurntableView.Font"
+    )
+
     public let isPlaying: Bool
     public let platterAngleDegrees: Double
     public let tonearmAngleDegrees: Double
@@ -36,6 +44,8 @@ public struct TurntableView: View {
 
                 grooves(size: size)
                     .rotationEffect(.degrees(platterAngleDegrees))
+
+                technicsRingLogos(size: size, rotationDegrees: platterAngleDegrees)
 
                 labelDisc(size: size)
                     .rotationEffect(.degrees(platterAngleDegrees * 0.95))
@@ -138,6 +148,92 @@ public struct TurntableView: View {
             Circle()
                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
                 .padding(size * 0.36)
+        }
+    }
+
+    private func technicsRingLogos(size: CGFloat, rotationDegrees: Double) -> some View {
+        let logoWidth = size * 0.72
+        let logoYOffset = size * 0.08
+        let logoFontSize = size * 0.110
+
+        return ZStack {
+            VStack(spacing: size * 0.25) {
+                Text("Technics")
+                    .font(technicsLogoFont(size: logoFontSize))
+                    .tracking(-0.5)
+                    .foregroundStyle(Color(red: 0.50, green: 0.58, blue: 0.68).opacity(0.78))
+                    .shadow(color: Color.black.opacity(0.30), radius: size * 0.003, x: 0, y: size * 0.0015)
+                    .frame(width: logoWidth)
+                Text("\nTechnics")
+                    .font(technicsLogoFont(size: logoFontSize))
+                    .tracking(-0.5)
+                    .foregroundStyle(Color(red: 0.50, green: 0.58, blue: 0.68).opacity(0.60))
+                    .shadow(color: Color.black.opacity(0.30), radius: size * 0.003, x: 0, y: size * 0.0015)
+                    .rotationEffect(.degrees(180))
+                    .frame(width: logoWidth)
+            }
+            .offset(y: logoYOffset)
+        }
+        .rotationEffect(.degrees(rotationDegrees))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func technicsLogoFont(size: CGFloat) -> Font {
+        Self.ensureTechnicsFontRegistered()
+        Self.logTechnicsFontDebugIfNeeded()
+        for name in Self.technicsLogoFontCandidates {
+            if UIFont(name: name, size: size) != nil {
+                Self.log.info("Technics font selected: \(name, privacy: .public)")
+                return .custom(name, size: size)
+            }
+        }
+        Self.log.error("Technics font fallback used. No candidate matched.")
+        return .system(size: size, weight: .regular, design: .rounded).italic()
+    }
+
+    private static let technicsLogoFontCandidates: [String] = [
+        "MicrogrammaD-BoldExte",
+        "Microgramma D Bold Extended",
+        "Microgramma D ExtendedBold",
+        "MicrogrammaD-BoldExtended",
+        "Microgramma D Extended",
+        "Microgramma D"
+    ]
+
+    private static var hasRegisteredTechnicsFont = false
+    private static var hasLoggedTechnicsFontDebug = false
+
+    private static func ensureTechnicsFontRegistered() {
+        guard !hasRegisteredTechnicsFont else {
+            return
+        }
+        hasRegisteredTechnicsFont = true
+
+        guard let fontURL = Bundle.main.url(forResource: "MicrogrammaDExtendedBold", withExtension: "otf") else {
+            log.error("Font file not found in Bundle.main: MicrogrammaDExtendedBold.otf")
+            return
+        }
+
+        CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
+        log.info("Requested CoreText registration for: \(fontURL.lastPathComponent, privacy: .public)")
+    }
+
+    private static func logTechnicsFontDebugIfNeeded() {
+        guard !hasLoggedTechnicsFontDebug else {
+            return
+        }
+        hasLoggedTechnicsFontDebug = true
+
+        let microgrammaCandidates = UIFont.familyNames
+            .flatMap { UIFont.fontNames(forFamilyName: $0) }
+            .filter { $0.localizedCaseInsensitiveContains("microgramma") }
+
+        log.info("Technics candidates: \(technicsLogoFontCandidates.joined(separator: ", "), privacy: .public)")
+        if microgrammaCandidates.isEmpty {
+            log.error("No runtime fonts containing 'microgramma' found.")
+        } else {
+            log.info("Runtime Microgramma fonts: \(microgrammaCandidates.joined(separator: ", "), privacy: .public)")
         }
     }
 
