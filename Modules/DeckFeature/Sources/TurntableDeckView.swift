@@ -40,8 +40,7 @@ public struct TurntableDeckView: View {
                 let size = min(turntableSize, geometry.size.height)
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(uiColor: .tertiarySystemBackground))
+                        turntableMetalPlateBackground
 
                         TurntableView(
                             isPlaying: viewModel.isPlaybackActive,
@@ -128,6 +127,56 @@ public struct TurntableDeckView: View {
                 viewModel.selectTrack(url: selectedURL)
             }
         }
+    }
+
+    private var turntableMetalPlateBackground: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.83, green: 0.85, blue: 0.87),
+                        Color(red: 0.73, green: 0.76, blue: 0.79),
+                        Color(red: 0.66, green: 0.69, blue: 0.72)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.35),
+                                .clear,
+                                Color.black.opacity(0.08)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.softLight)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.65),
+                                Color.black.opacity(0.25)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.0
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(Color.black.opacity(0.15), lineWidth: 0.6)
+                    .padding(1)
+            }
+            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
     }
 
     private var waveformCard: some View {
