@@ -184,7 +184,6 @@ public struct TurntableView: View {
         Self.logTechnicsFontDebugIfNeeded()
         for name in Self.technicsLogoFontCandidates {
             if UIFont(name: name, size: size) != nil {
-                Self.log.info("Technics font selected: \(name, privacy: .public)")
                 return .custom(name, size: size)
             }
         }

@@ -50,11 +50,11 @@ public struct TurntableDeckView: View {
                         .frame(width: size, height: size)
                         .overlay {
                             TurntableTouchSurface(
-                                onTouchBegan: { location, pressure in
-                                    handlePlatterTouchBegan(at: location, pressure: pressure, platterSize: size)
+                                onTouchBegan: { location, pressure, boundsSize in
+                                    handlePlatterTouchBegan(at: location, pressure: pressure, touchBoundsSize: boundsSize)
                                 },
-                                onTouchMoved: { location, pressure in
-                                    handlePlatterTouchMoved(at: location, pressure: pressure, platterSize: size)
+                                onTouchMoved: { location, pressure, boundsSize in
+                                    handlePlatterTouchMoved(at: location, pressure: pressure, touchBoundsSize: boundsSize)
                                 },
                                 onTouchEnded: {
                                     handlePlatterTouchEnded()
@@ -98,6 +98,7 @@ public struct TurntableDeckView: View {
                             Spacer()
                         }
                         .padding(10)
+                        .allowsHitTesting(false)
 
                         VStack {
                             Spacer()
@@ -302,12 +303,12 @@ public struct TurntableDeckView: View {
             } else {
                 HStack {
                     Text(viewModel.bpmText)
-                        .font(.system(size: 10, weight: .regular))
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(.black)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(viewModel.bpmDetectionStatusText ?? "")
-                        .font(.system(size: 10, weight: .regular))
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(.black)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -496,45 +497,69 @@ public struct TurntableDeckView: View {
         viewModel.selectTrack(url: sampleURL)
     }
 
-    private func handlePlatterTouchBegan(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
-        guard platterAngle(for: location, size: platterSize) != nil else {
+    private func handlePlatterTouchBegan(at location: CGPoint, pressure: CGFloat, touchBoundsSize: CGSize) {
+        guard let normalized = normalizedPlatterPoint(from: location, in: touchBoundsSize) else {
+            Self.log.debug(
+                "pressure begin ignored by touch square bounds | x=\(location.x, format: .fixed(precision: 2)) y=\(location.y, format: .fixed(precision: 2)) w=\(touchBoundsSize.width, format: .fixed(precision: 2)) h=\(touchBoundsSize.height, format: .fixed(precision: 2))"
+            )
             platterLastAngle = nil
             return
         }
 
-        if !viewModel.isTurntableScrubbing {
+        let platterSize = min(touchBoundsSize.width, touchBoundsSize.height)
+        guard let angle = platterAngle(for: normalized, size: platterSize) else {
+            Self.log.debug(
+                "pressure begin ignored by platter bounds | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2)) size=\(platterSize, format: .fixed(precision: 2))"
+            )
+            platterLastAngle = nil
+            return
+        }
+
+        if !viewModel.isTurntableScrubbing, isAbovePressureBottomThreshold(normalized, size: platterSize) {
             viewModel.beginTurntablePressureTouch(
                 pressure: normalizedPressure(pressure),
-                direction: pressureDirection(for: location, platterSize: platterSize)
+                direction: pressureDirection(for: normalized, platterSize: platterSize)
             )
-        }
-
-        guard let angle = platterAngle(for: location, size: platterSize) else {
-            platterLastAngle = nil
-            return
+        } else if viewModel.isPressureTouchActive {
+            Self.log.debug(
+                "pressure begin blocked by bottom threshold | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2))"
+            )
+            viewModel.endTurntablePressureTouch()
         }
 
         platterLastAngle = angle
     }
 
-    private func handlePlatterTouchMoved(at location: CGPoint, pressure: CGFloat, platterSize: CGFloat) {
-        guard platterAngle(for: location, size: platterSize) != nil else {
+    private func handlePlatterTouchMoved(at location: CGPoint, pressure: CGFloat, touchBoundsSize: CGSize) {
+        guard let normalized = normalizedPlatterPoint(from: location, in: touchBoundsSize) else {
+            Self.log.debug(
+                "pressure move ignored by touch square bounds | x=\(location.x, format: .fixed(precision: 2)) y=\(location.y, format: .fixed(precision: 2)) w=\(touchBoundsSize.width, format: .fixed(precision: 2)) h=\(touchBoundsSize.height, format: .fixed(precision: 2))"
+            )
             platterLastAngle = nil
             return
         }
 
-        if !viewModel.isTurntableScrubbing {
+        let platterSize = min(touchBoundsSize.width, touchBoundsSize.height)
+        guard let angle = platterAngle(for: normalized, size: platterSize) else {
+            Self.log.debug(
+                "pressure move ignored by platter bounds | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2))"
+            )
+            platterLastAngle = nil
+            return
+        }
+
+        if !viewModel.isTurntableScrubbing, isAbovePressureBottomThreshold(normalized, size: platterSize) {
             viewModel.updateTurntablePressureTouch(
                 pressure: normalizedPressure(pressure),
-                direction: pressureDirection(for: location, platterSize: platterSize)
+                direction: pressureDirection(for: normalized, platterSize: platterSize)
             )
+        } else if viewModel.isPressureTouchActive {
+            Self.log.debug(
+                "pressure move blocked by bottom threshold | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2))"
+            )
+            viewModel.endTurntablePressureTouch()
         }
-
-        guard let angle = platterAngle(for: location, size: platterSize) else {
-            platterLastAngle = nil
-            return
-        }
-
+        
         if let previousAngle = platterLastAngle {
             let delta = normalizedAngleDelta(from: previousAngle, to: angle)
             if !viewModel.isTurntableScrubbing, abs(delta) >= Self.platterScratchActivationAngleThreshold {
@@ -562,6 +587,22 @@ public struct TurntableDeckView: View {
 
     private func pressureDirection(for location: CGPoint, platterSize: CGFloat) -> Double {
         location.x < (platterSize * 0.5) ? -1 : 1
+    }
+
+    private func normalizedPlatterPoint(from point: CGPoint, in boundsSize: CGSize) -> CGPoint? {
+        let side = min(boundsSize.width, boundsSize.height)
+        guard side > 0 else {
+            return nil
+        }
+
+        let xOffset = (boundsSize.width - side) * 0.5
+        let yOffset = (boundsSize.height - side) * 0.5
+        let normalized = CGPoint(x: point.x - xOffset, y: point.y - yOffset)
+
+        guard normalized.x >= 0, normalized.y >= 0, normalized.x <= side, normalized.y <= side else {
+            return nil
+        }
+        return normalized
     }
 
     private func waveformScratchGesture(width: CGFloat) -> some Gesture {
@@ -623,6 +664,12 @@ public struct TurntableDeckView: View {
         return atan2(dy, dx)
     }
 
+    private func isAbovePressureBottomThreshold(_ point: CGPoint, size: CGFloat) -> Bool {
+        let visiblePlatterBottomY = size - Self.turntableVisualOuterInset
+        let threshold = visiblePlatterBottomY - (size * Self.pressureBottomBlockedZoneRatio)
+        return point.y <= threshold
+    }
+
     private func normalizedAngleDelta(from previous: Double, to current: Double) -> Double {
         var delta = current - previous
         if delta > .pi {
@@ -639,6 +686,7 @@ public struct TurntableDeckView: View {
     private static let waveformTapSeekHorizontalMargin: CGFloat = 40.0
     private static let platterScratchActivationAngleThreshold: Double = 0.002
     private static let turntableVisualOuterInset: CGFloat = 10.0
+    private static let pressureBottomBlockedZoneRatio: CGFloat = 0.18
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
@@ -676,8 +724,8 @@ private struct TrackDocumentPicker: UIViewControllerRepresentable {
 }
 
 private struct TurntableTouchSurface: UIViewRepresentable {
-    let onTouchBegan: (CGPoint, CGFloat) -> Void
-    let onTouchMoved: (CGPoint, CGFloat) -> Void
+    let onTouchBegan: (CGPoint, CGFloat, CGSize) -> Void
+    let onTouchMoved: (CGPoint, CGFloat, CGSize) -> Void
     let onTouchEnded: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -700,13 +748,13 @@ private struct TurntableTouchSurface: UIViewRepresentable {
     }
 
     final class Coordinator {
-        let onTouchBegan: (CGPoint, CGFloat) -> Void
-        let onTouchMoved: (CGPoint, CGFloat) -> Void
+        let onTouchBegan: (CGPoint, CGFloat, CGSize) -> Void
+        let onTouchMoved: (CGPoint, CGFloat, CGSize) -> Void
         let onTouchEnded: () -> Void
 
         init(
-            onTouchBegan: @escaping (CGPoint, CGFloat) -> Void,
-            onTouchMoved: @escaping (CGPoint, CGFloat) -> Void,
+            onTouchBegan: @escaping (CGPoint, CGFloat, CGSize) -> Void,
+            onTouchMoved: @escaping (CGPoint, CGFloat, CGSize) -> Void,
             onTouchEnded: @escaping () -> Void
         ) {
             self.onTouchBegan = onTouchBegan
@@ -751,10 +799,10 @@ private final class TouchSurfaceView: UIView {
         )
         if maxForce > 0 {
             stopFallbackPressureUpdates()
-            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, pressure)
+            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, pressure, bounds.size)
         } else {
             fallbackPressureStartTime = CACurrentMediaTime()
-            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, 0)
+            coordinator?.onTouchBegan(activeTouchLocation ?? .zero, 0, bounds.size)
             startFallbackPressureUpdates()
         }
     }
@@ -774,7 +822,7 @@ private final class TouchSurfaceView: UIView {
         }
         if touch.maximumPossibleForce > 0 {
             stopFallbackPressureUpdates()
-            coordinator?.onTouchMoved(activeTouchLocation ?? .zero, pressure)
+            coordinator?.onTouchMoved(activeTouchLocation ?? .zero, pressure, bounds.size)
         }
     }
 
@@ -828,7 +876,7 @@ private final class TouchSurfaceView: UIView {
 
         let elapsed = CACurrentMediaTime() - startTime
         let normalized = min(max(elapsed / Self.fallbackPressureRampDuration, 0), 1)
-        coordinator?.onTouchMoved(location, normalized)
+        coordinator?.onTouchMoved(location, normalized, bounds.size)
     }
 
     private static let fallbackPressureRampDuration: TimeInterval = 1.2
