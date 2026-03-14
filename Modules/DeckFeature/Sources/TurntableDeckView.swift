@@ -98,6 +98,16 @@ public struct TurntableDeckView: View {
                             Spacer()
                         }
                         .padding(10)
+
+                        VStack {
+                            Spacer()
+                            HStack {
+                                technicsStartPauseButton
+                                Spacer()
+                                technicsStopButton
+                            }
+                            .padding(12)
+                        }
                     }
                     .frame(width: turntableSize)
 
@@ -130,36 +140,6 @@ public struct TurntableDeckView: View {
                 Text(viewModel.playbackTimeText)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
-            }
-
-            if !areControlsVisible {
-                HStack(spacing: 8) {
-                    Button {
-                        if viewModel.isPlaybackActive {
-                            viewModel.pause()
-                        } else {
-                            viewModel.play()
-                        }
-                    } label: {
-                        Image(systemName: viewModel.isPlaybackActive ? "pause.fill" : "play.fill")
-                            .frame(maxWidth: 14)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!viewModel.hasSelectedTrack)
-                    .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Play")
-
-                    Button {
-                        viewModel.stop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .frame(maxWidth: 14)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!viewModel.hasSelectedTrack)
-                    .accessibilityLabel("Stop")
-
-                    Spacer()
-                }
             }
 
             HStack(spacing: 8) {
@@ -285,6 +265,79 @@ public struct TurntableDeckView: View {
         .padding(10)
         .background(Color(uiColor: .tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var technicsStartPauseButton: some View {
+        Button {
+            if viewModel.isPlaybackActive {
+                viewModel.pause()
+            } else {
+                viewModel.play()
+            }
+        } label: {
+            TimelineView(.animation) { context in
+                let isLoaded = viewModel.hasSelectedTrack
+                let isPlaying = viewModel.isPlaybackActive
+                let glowOpacity = !isLoaded
+                    ? 0.0
+                    : (isPlaying ? 0.90 : flashingGlowOpacity(at: context.date))
+
+                technicsRectangleLabel(text: isPlaying ? "PAUSE" : "START")
+                    .shadow(color: Color.yellow.opacity(glowOpacity), radius: 8, x: 0, y: 0)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.hasSelectedTrack)
+        .opacity(viewModel.hasSelectedTrack ? 1 : 0.55)
+        .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Start")
+    }
+
+    private var technicsStopButton: some View {
+        Button {
+            viewModel.stop()
+        } label: {
+            technicsRectangleLabel(text: "STOP")
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.hasSelectedTrack)
+        .opacity(viewModel.hasSelectedTrack ? 1 : 0.55)
+        .accessibilityLabel("Stop")
+    }
+
+    private func technicsRectangleLabel(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold, design: .default))
+            .tracking(0.6)
+            .foregroundStyle(.black.opacity(0.92))
+            .frame(minWidth: 78, minHeight: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.98),
+                                Color(white: 0.90)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .stroke(Color.black.opacity(0.92), lineWidth: 1.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .stroke(Color.black.opacity(0.28), lineWidth: 0.6)
+                    .padding(2)
+            )
+    }
+
+    private func flashingGlowOpacity(at date: Date) -> Double {
+        let time = date.timeIntervalSinceReferenceDate
+        let normalized = (sin(time * (2.0 * .pi * 1.35)) + 1.0) * 0.5
+        return 0.22 + (normalized * 0.78)
     }
 
     private var bpmPitchCard: some View {
