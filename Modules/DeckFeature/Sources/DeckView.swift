@@ -46,7 +46,6 @@ public struct DeckView: View {
                 }
             }
             .padding(12)
-            .animation(.easeInOut(duration: 0.22), value: areControlsVisible)
             .background(Color(uiColor: .systemBackground))
         }
     }
@@ -54,7 +53,9 @@ public struct DeckView: View {
     private var controlsVisibilityButton: some View {
         VStack {
             Button {
-                areControlsVisible.toggle()
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    areControlsVisible.toggle()
+                }
             } label: {
                 Image(systemName: areControlsVisible ? "xmark" : "line.3.horizontal")
                     .font(.caption.weight(.bold))

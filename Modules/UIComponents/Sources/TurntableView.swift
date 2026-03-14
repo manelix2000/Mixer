@@ -51,6 +51,9 @@ public struct TurntableView: View {
                     relativeOffset: .zero,
                     armRotationDegrees: tonearmAngleDegrees
                 )
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
             }
             .padding(10)
             .frame(width: size, height: size)
