@@ -4,6 +4,7 @@ import SwiftUI
 public struct DeckView: View {
     @StateObject private var viewModel: DeckViewModel
     @State private var areControlsVisible = false
+    @State private var isRightDeckVisible = false
 
     public init() {
         _viewModel = StateObject(wrappedValue: DeckViewModel())
@@ -24,7 +25,7 @@ public struct DeckView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    HStack {
+                    HStack(alignment: .top, spacing: 12) {
                         TurntableDeckView(
                             viewModel: viewModel.leftTurntableDeckViewModel,
                             isPitchLockedToExternalBPM: Binding(
@@ -33,6 +34,14 @@ public struct DeckView: View {
                             ),
                             areControlsVisible: $areControlsVisible
                         )
+
+                        if isRightDeckVisible {
+                            TurntableDeckView(
+                                viewModel: viewModel.rightTurntableDeckViewModel,
+                                isPitchLockedToExternalBPM: .constant(false),
+                                areControlsVisible: $areControlsVisible
+                            )
+                        }
                     }
                 }
             }
@@ -57,6 +66,16 @@ public struct DeckView: View {
             
             if areControlsVisible {
                 VStack {
+                    Button {
+                        isRightDeckVisible.toggle()
+                    } label: {
+                        TurntableToggleIcon(isActive: isRightDeckVisible, foregroundColor: .white)
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundColor(.accentColor)
+                    .accessibilityLabel(isRightDeckVisible ? "Hide right deck" : "Show right deck")
+
                     Button {
                         if viewModel.isMicrophoneBPMDetectionActive {
                             viewModel.stopMicrophoneBPMDetection()
@@ -178,4 +197,41 @@ public struct DeckView: View {
 
 #Preview("Landscape View", traits: .landscapeLeft) {
     DeckView()
+}
+
+private struct TurntableToggleIcon: View {
+    let isActive: Bool
+    let foregroundColor: Color
+
+    init(isActive: Bool, foregroundColor: Color = .primary) {
+        self.isActive = isActive
+        self.foregroundColor = foregroundColor
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Circle()
+                    .strokeBorder(foregroundColor, lineWidth: 1.4)
+
+                Circle()
+                    .strokeBorder(foregroundColor.opacity(0.65), lineWidth: 1)
+                    .padding(2.2)
+
+                Circle()
+                    .fill(foregroundColor)
+                    .frame(width: 2.2, height: 2.2)
+            }
+
+            Circle()
+                .fill(Color(uiColor: .systemBackground))
+                .overlay(
+                    Image(systemName: isActive ? "minus" : "plus")
+                        .font(.system(size: 5.8, weight: .bold))
+                        .foregroundStyle(Color.accentColor)
+                )
+                .frame(width: 7.2, height: 7.2)
+                .offset(x: 1.8, y: 1.8)
+        }
+    }
 }

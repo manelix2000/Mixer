@@ -16,7 +16,7 @@ public final class DeckViewModel: ObservableObject {
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
 
     public let leftTurntableDeckViewModel: TurntableDeckViewModel
-    public let turntableRightDeckViewModel: TurntableDeckViewModel
+    public let rightTurntableDeckViewModel: TurntableDeckViewModel
 
     private let audioEngine: AudioEngineControlling
     private let microphoneBPMPipeline = MicrophoneBPMPipeline()
@@ -42,10 +42,10 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: audioEngine,
             waveformAnalyzer: waveformAnalyzer
         )
-        
-        self.turntableRightDeckViewModel = TurntableDeckViewModel(
-            audioEngine: audioEngine,
-            waveformAnalyzer: waveformAnalyzer
+
+        self.rightTurntableDeckViewModel = TurntableDeckViewModel(
+            audioEngine: AudioEngineManager(),
+            waveformAnalyzer: WaveformAnalyzer()
         )
 
         microphoneBPMPipeline.setResultHandler { [weak self] result in
