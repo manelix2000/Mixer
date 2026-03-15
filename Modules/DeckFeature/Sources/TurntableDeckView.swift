@@ -21,6 +21,8 @@ public struct TurntableDeckView: View {
     @State private var platterTouchStartPoint: CGPoint?
     @State private var platterTouchStartTimestamp: TimeInterval?
     @State private var waveformLastDragX: CGFloat?
+    @State private var armVisible = true
+    @State private var armVisibilityTask: Task<Void, Never>?
 
     public init(
         viewModel: TurntableDeckViewModel,
@@ -48,7 +50,7 @@ public struct TurntableDeckView: View {
                             isPlaying: viewModel.isPlaybackActive,
                             platterAngleDegrees: viewModel.platterRotationDegrees,
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
-                            showDecorativeArm: true
+                            showDecorativeArm: armVisible
                         )
                         .padding(10)
                         .frame(width: size, height: size)
@@ -130,6 +132,24 @@ public struct TurntableDeckView: View {
                     isPitchLockedToExternalBPM = false
                 }
                 viewModel.selectTrack(url: selectedURL)
+            }
+        }
+        .onChange(of: areControlsVisible) { _ in
+            scheduleArmVisibilityAfterControlsResize()
+        }
+        .onDisappear {
+            armVisibilityTask?.cancel()
+            armVisibilityTask = nil
+        }
+    }
+
+    private func scheduleArmVisibilityAfterControlsResize() {
+        armVisibilityTask?.cancel()
+        armVisible = false
+        armVisibilityTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: Self.controlsResizeAnimationDurationNanoseconds)
+            withAnimation(.easeInOut(duration: Self.armFadeInAnimationDuration)) {
+                armVisible = true
             }
         }
     }
@@ -712,6 +732,8 @@ public struct TurntableDeckView: View {
     private static let scratchStartMovementThresholdRatio: CGFloat = 0.035
     private static let pressureStartMinPressure: Double = 0.10
     private static let pressureStartHoldDelay: TimeInterval = 0.0
+    private static let armFadeInAnimationDuration: TimeInterval = 0.18
+    private static let controlsResizeAnimationDurationNanoseconds: UInt64 = 220_000_000
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
