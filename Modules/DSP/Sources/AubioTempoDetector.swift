@@ -160,6 +160,8 @@ private final class NativeContext {
 
     func process(samples: [Float]) throws -> (bpm: Double, confidence: Double) {
         var offset = 0
+        var observedBPM = [Double]()
+        var observedConfidence = [Double]()
 
         while offset < samples.count {
             let remaining = samples.count - offset
@@ -171,17 +173,71 @@ private final class NativeContext {
             }
 
             aubio_tempo_do(tempo, UnsafePointer(inputVector), outputVector)
+
+            let hopBPM = Double(aubio_tempo_get_bpm(tempo))
+            let hopConfidence = Double(aubio_tempo_get_confidence(tempo))
+            if hopBPM.isFinite, hopBPM > 0 {
+                observedBPM.append(hopBPM)
+            }
+            if hopConfidence.isFinite {
+                observedConfidence.append(Self.clamp01(hopConfidence))
+            }
             offset += count
         }
 
-        let bpm = Double(aubio_tempo_get_bpm(tempo))
-        let confidence = Double(aubio_tempo_get_confidence(tempo))
+        let rawBPM = Double(aubio_tempo_get_bpm(tempo))
+        let rawConfidence = Double(aubio_tempo_get_confidence(tempo))
 
-        if bpm.isNaN || bpm.isInfinite || confidence.isNaN || confidence.isInfinite {
+        if rawBPM.isNaN || rawBPM.isInfinite || rawConfidence.isNaN || rawConfidence.isInfinite {
             throw TempoDetectionError.nativeProcessingFailed
         }
 
+        let bpm = rawBPM > 0 ? rawBPM : (Self.median(of: observedBPM) ?? 0)
+        let confidence = Self.robustConfidence(
+            rawConfidence: rawConfidence,
+            history: observedConfidence
+        )
+
         return (bpm: bpm, confidence: confidence)
+    }
+
+    private static func robustConfidence(rawConfidence: Double, history: [Double]) -> Double {
+        let clampedRaw = clamp01(rawConfidence)
+        guard !history.isEmpty else {
+            return clampedRaw
+        }
+
+        let trailingLength = min(32, history.count)
+        let trailingSlice = Array(history.suffix(trailingLength))
+        let trailingMean = trailingSlice.reduce(0, +) / Double(trailingSlice.count)
+        let upperQuartile = quantile(history, q: 0.75)
+
+        // Blend short-term stability with historical strength to avoid
+        // collapsing to zero after a temporary lock drop near the end.
+        let blended = max(clampedRaw, trailingMean, upperQuartile * 0.9)
+        return clamp01(blended)
+    }
+
+    private static func quantile(_ values: [Double], q: Double) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let clampedQ = min(max(q, 0), 1)
+        let sorted = values.sorted()
+        let index = Int((Double(sorted.count - 1) * clampedQ).rounded(.toNearestOrAwayFromZero))
+        return sorted[index]
+    }
+
+    private static func median(of values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[mid - 1] + sorted[mid]) / 2
+        }
+        return sorted[mid]
+    }
+
+    private static func clamp01(_ value: Double) -> Double {
+        min(max(value, 0), 1)
     }
 }
 
