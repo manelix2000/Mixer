@@ -27,9 +27,7 @@ public struct DeckView: View {
     public var body: some View {
         GeometryReader { _ in
             HStack(alignment: .top, spacing: 12) {
-                if !isIPad {
-                    controlsVisibilityButton
-                }
+                controlsVisibilityButton
 
                 VStack(alignment: .leading, spacing: 12) {
                     if areControlsVisible {
@@ -86,15 +84,17 @@ public struct DeckView: View {
             
             if areControlsVisible {
                 VStack {
-                    Button {
-                        isRightDeckVisible.toggle()
-                    } label: {
-                        TurntableToggleIcon(isActive: isRightDeckVisible, foregroundColor: .white)
-                            .frame(width: 16, height: 16)
+                    if !isIPad {
+                        Button {
+                            isRightDeckVisible.toggle()
+                        } label: {
+                            TurntableToggleIcon(isActive: isRightDeckVisible, foregroundColor: .white)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .foregroundColor(.accentColor)
+                        .accessibilityLabel(isRightDeckVisible ? "Hide right deck" : "Show right deck")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .foregroundColor(.accentColor)
-                    .accessibilityLabel(isRightDeckVisible ? "Hide right deck" : "Show right deck")
 
                     Button {
                         if viewModel.isMicrophoneBPMDetectionActive {

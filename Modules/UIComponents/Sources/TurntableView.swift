@@ -183,13 +183,13 @@ public struct TurntableView: View {
 
         return ZStack {
             VStack(spacing: size * 0.25) {
-                Text("Technics")
+                Text("Techniks")
                     .font(technicsLogoFont(size: logoFontSize))
                     .tracking(-0.5)
                     .foregroundStyle(Color(red: 0.50, green: 0.58, blue: 0.68).opacity(0.78))
                     .shadow(color: Color.black.opacity(0.30), radius: size * 0.003, x: 0, y: size * 0.0015)
                     .frame(width: logoWidth)
-                Text("\nTechnics")
+                Text("\nTechniks")
                     .font(technicsLogoFont(size: logoFontSize))
                     .tracking(-0.5)
                     .foregroundStyle(Color(red: 0.50, green: 0.58, blue: 0.68).opacity(0.60))
