@@ -50,7 +50,7 @@ public struct TurntableDeckView: View {
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
                             showDecorativeArm: true
                         )
-                        .padding(5)
+                        .padding(10)
                         .frame(width: size, height: size)
                         .overlay {
                             TurntableTouchSurface(
