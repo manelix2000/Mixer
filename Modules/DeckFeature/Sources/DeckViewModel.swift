@@ -47,6 +47,8 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: AudioEngineManager(),
             waveformAnalyzer: WaveformAnalyzer()
         )
+        self.leftTurntableDeckViewModel.setPan(Double(self.audioEngine.pan))
+        self.rightTurntableDeckViewModel.setPan(Double(self.audioEngine.pan))
         self.leftTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
         self.rightTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
 
@@ -79,6 +81,8 @@ public final class DeckViewModel: ObservableObject {
     public func setPan(_ value: Double) {
         audioEngine.setPan(Float(value))
         pan = Double(audioEngine.pan)
+        leftTurntableDeckViewModel.setPan(pan)
+        rightTurntableDeckViewModel.setPan(pan)
     }
 
     public var canLockPitchToExternalBPM: Bool {

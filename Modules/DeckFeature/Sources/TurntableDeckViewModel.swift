@@ -300,6 +300,10 @@ public final class TurntableDeckViewModel: ObservableObject {
         applyEffectiveOutputVolume()
     }
 
+    public func setPan(_ value: Double) {
+        audioEngine.setPan(Float(min(max(value, -1.0), 1.0)))
+    }
+
     public func incrementBPM() {
         guard !isPitchLockedToExternalBPM else {
             return
