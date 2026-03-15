@@ -1,6 +1,9 @@
 import SwiftUI
 
 public struct WaveformView: View {
+    public static let minZoom: Double = 0.20
+    public static let maxZoom: Double = 8.0
+
     public let samples: [Float]
     public let progress: Double
     public let isLoading: Bool
@@ -18,7 +21,7 @@ public struct WaveformView: View {
         self.samples = samples
         self.progress = min(max(progress, 0), 1)
         self.isLoading = isLoading
-        self.zoom = min(max(zoom, 0.5), 8.0)
+        self.zoom = min(max(zoom, Self.minZoom), Self.maxZoom)
     }
 
     public var body: some View {

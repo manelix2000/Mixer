@@ -3,6 +3,7 @@ import AVFoundation
 import DSP
 import Foundation
 import QuartzCore
+import UIComponents
 import Waveform
 import os
 
@@ -1017,8 +1018,8 @@ public final class TurntableDeckViewModel: ObservableObject {
     public static let minPlaybackRate: Double = 0.5
     public static let maxPlaybackRate: Double = 2.0
     nonisolated public static let maxBPMAnalysisFrames: AVAudioFrameCount = 44_100 * 45
-    public static let minWaveformZoom: Double = 0.5
-    public static let maxWaveformZoom: Double = 8.0
+    public static let minWaveformZoom: Double = WaveformView.minZoom
+    public static let maxWaveformZoom: Double = WaveformView.maxZoom
     public static let allowedPitchSensitivityPercents: [Int] = [2, 4, 8, 16]
     public static let scrubSecondsPerRevolution: Double = 1.8
     public static let scrubSecondsPerRadian: Double = scrubSecondsPerRevolution / (2.0 * .pi)
