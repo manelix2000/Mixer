@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct WaveformView: View {
     public struct WaveformStyle: Sendable {
+        public let horizontalSpacingMultiplier: CGFloat
         public let amplitudeExponent: Double
         public let smoothingFactor: CGFloat
         public let minimumHalfHeight: CGFloat
@@ -14,6 +15,7 @@ public struct WaveformView: View {
         public let edgeOpacity: Double
 
         public init(
+            horizontalSpacingMultiplier: CGFloat = 1.45,
             amplitudeExponent: Double = 1.35,
             smoothingFactor: CGFloat = 1.0,
             minimumHalfHeight: CGFloat = 0.0,
@@ -25,6 +27,7 @@ public struct WaveformView: View {
             innerPlayedOpacity: Double = 0.18,
             edgeOpacity: Double = 0.22
         ) {
+            self.horizontalSpacingMultiplier = horizontalSpacingMultiplier
             self.amplitudeExponent = amplitudeExponent
             self.smoothingFactor = smoothingFactor
             self.minimumHalfHeight = minimumHalfHeight
@@ -39,6 +42,7 @@ public struct WaveformView: View {
 
         public static let professional = WaveformStyle()
         public static let energetic = WaveformStyle(
+            horizontalSpacingMultiplier: 1.0,
             amplitudeExponent: 1.0,
             smoothingFactor: 0.22,
             minimumHalfHeight: 0.15,
@@ -119,7 +123,8 @@ public struct WaveformView: View {
         }
 
         let centerX = size.width / 2
-        let sampleSpacing = baseSampleSpacing * CGFloat(pow(zoom, 1.35))
+        let spacingMultiplier = max(style.horizontalSpacingMultiplier, 0.1)
+        let sampleSpacing = baseSampleSpacing * spacingMultiplier * CGFloat(pow(zoom, 1.35))
         let middleSample = progress * Double(max(samples.count - 1, 0))
         let maxHalfHeight = size.height * min(max(style.maxWaveHeightRatio, 0), 0.48)
         let columns = max(Int(size.width.rounded(.up)), 2)
@@ -153,16 +158,16 @@ public struct WaveformView: View {
         let midY = size.height / 2
         var body = Path()
         body.move(to: CGPoint(x: points[0].x, y: midY - points[0].y))
-        addSmoothedUpperContour(to: &body, points: points, midY: midY)
-        addSmoothedLowerContour(to: &body, points: points, midY: midY)
+        addLinearUpperContour(to: &body, points: points, midY: midY)
+        addLinearLowerContour(to: &body, points: points, midY: midY)
         body.closeSubpath()
 
         let innerScale = min(max(style.innerLayerScale, 0), 1)
         let innerPoints = points.map { CGPoint(x: $0.x, y: $0.y * innerScale) }
         var innerBody = Path()
         innerBody.move(to: CGPoint(x: innerPoints[0].x, y: midY - innerPoints[0].y))
-        addSmoothedUpperContour(to: &innerBody, points: innerPoints, midY: midY)
-        addSmoothedLowerContour(to: &innerBody, points: innerPoints, midY: midY)
+        addLinearUpperContour(to: &innerBody, points: innerPoints, midY: midY)
+        addLinearLowerContour(to: &innerBody, points: innerPoints, midY: midY)
         innerBody.closeSubpath()
 
         // Outer layer (base body).
@@ -180,7 +185,7 @@ public struct WaveformView: View {
 
         var upperEdge = Path()
         upperEdge.move(to: CGPoint(x: points[0].x, y: midY - points[0].y))
-        addSmoothedUpperContour(to: &upperEdge, points: points, midY: midY)
+        addLinearUpperContour(to: &upperEdge, points: points, midY: midY)
         context.stroke(upperEdge, with: .color(.white.opacity(style.edgeOpacity)), lineWidth: 1)
     }
 
@@ -196,39 +201,18 @@ public struct WaveformView: View {
         return lower + ((upper - lower) * fraction)
     }
 
-    private func addSmoothedUpperContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
+    private func addLinearUpperContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
         guard points.count > 1 else { return }
-        for index in 1..<points.count {
-            let previous = points[index - 1]
-            let current = points[index]
-            let control = CGPoint(
-                x: (previous.x + current.x) * 0.5,
-                y: midY - ((previous.y + current.y) * 0.5)
-            )
-            path.addQuadCurve(
-                to: CGPoint(x: current.x, y: midY - current.y),
-                control: control
-            )
+        for point in points.dropFirst() {
+            path.addLine(to: CGPoint(x: point.x, y: midY - point.y))
         }
     }
 
-    private func addSmoothedLowerContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
+    private func addLinearLowerContour(to path: inout Path, points: [CGPoint], midY: CGFloat) {
         guard points.count > 1 else { return }
         for index in stride(from: points.count - 1, through: 0, by: -1) {
-            let current = points[index]
-            if index == points.count - 1 {
-                path.addLine(to: CGPoint(x: current.x, y: midY + current.y))
-                continue
-            }
-            let next = points[index + 1]
-            let control = CGPoint(
-                x: (current.x + next.x) * 0.5,
-                y: midY + ((current.y + next.y) * 0.5)
-            )
-            path.addQuadCurve(
-                to: CGPoint(x: current.x, y: midY + current.y),
-                control: control
-            )
+            let point = points[index]
+            path.addLine(to: CGPoint(x: point.x, y: midY + point.y))
         }
     }
 }
