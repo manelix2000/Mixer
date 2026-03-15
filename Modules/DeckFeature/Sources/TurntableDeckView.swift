@@ -49,6 +49,7 @@ public struct TurntableDeckView: View {
                         TurntableView(
                             isPlaying: viewModel.isPlaybackActive,
                             platterAngleDegrees: viewModel.platterRotationDegrees,
+                            coverImage: viewModel.trackArtwork,
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
                             showDecorativeArm: armVisible
                         )

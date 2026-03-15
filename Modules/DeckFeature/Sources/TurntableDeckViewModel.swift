@@ -4,6 +4,7 @@ import DSP
 import Foundation
 import QuartzCore
 import UIComponents
+import UIKit
 import Waveform
 import os
 
@@ -31,6 +32,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     @Published public var platterText: String
     @Published public private(set) var selectedTrackURL: URL?
     @Published public private(set) var selectedTrackName: String?
+    @Published public private(set) var trackArtwork: UIImage?
     @Published public private(set) var playbackStatusText: String
     @Published public private(set) var playbackState: AudioPlaybackState
     @Published public private(set) var playbackTimeText: String
@@ -55,6 +57,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     private var waveformLoadTask: Task<Void, Never>?
     private var waveformLoadID = UUID()
     private var bpmLoadTask: Task<Void, Never>?
+    private var artworkLoadTask: Task<Void, Never>?
     private var isPlatterScrubbing = false
     private var wasPlayingBeforePlatterScrub = false
     private var scratchCurrentTime: TimeInterval = 0
@@ -72,6 +75,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     private var lastPressureDebugLogTimestamp: TimeInterval = 0
     private var lastLoggedPressureIntensity: Double = -1
     private var turntablePhysics = TurntablePhysics()
+    private var lastWrappedPlatterDegrees: Double?
     private var masterVolume: Double = 1.0
 
     public init(
@@ -95,6 +99,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.playbackStatusText = ""
         self.playbackTimeText = "00:00 / 00:00"
         self.playbackProgress = 0
+        self.trackArtwork = nil
         self.waveformZoom = 1.0
         self.waveformData = []
         self.isWaveformLoading = false
@@ -117,6 +122,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         turntableTimer?.invalidate()
         waveformLoadTask?.cancel()
         bpmLoadTask?.cancel()
+        artworkLoadTask?.cancel()
     }
 
     public func selectTrack(url: URL) {
@@ -134,8 +140,11 @@ public final class TurntableDeckViewModel: ObservableObject {
         waveformLoadTask = nil
         bpmLoadTask?.cancel()
         bpmLoadTask = nil
+        artworkLoadTask?.cancel()
+        artworkLoadTask = nil
         isWaveformLoading = false
         isBPMLoading = false
+        trackArtwork = nil
         bpmDetectionStatusText = nil
         isPlatterScrubbing = false
         wasPlayingBeforePlatterScrub = false
@@ -151,9 +160,11 @@ public final class TurntableDeckViewModel: ObservableObject {
         lastLoggedPressureIntensity = -1
         scratchInteractionState = .idle
         turntablePhysics.reset()
+        lastWrappedPlatterDegrees = nil
         publishTurntableState()
         selectedTrackURL = resolvedURL
         selectedTrackName = url.lastPathComponent
+        loadTrackArtwork(url: resolvedURL)
 
         do {
             try audioEngine.loadFile(url: resolvedURL)
@@ -173,6 +184,47 @@ public final class TurntableDeckViewModel: ObservableObject {
             isBPMLoading = false
             bpmDetectionStatusText = "BPM detection skipped: track failed to load."
         }
+    }
+
+    private func loadTrackArtwork(url: URL) {
+        artworkLoadTask?.cancel()
+        artworkLoadTask = Task { [weak self] in
+            let artworkData = await Task.detached(priority: .utility) {
+                await Self.extractArtworkData(from: url)
+            }.value
+
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            if let artworkData, let image = UIImage(data: artworkData) {
+                self.trackArtwork = image
+            } else {
+                self.trackArtwork = nil
+            }
+            self.artworkLoadTask = nil
+        }
+    }
+
+    nonisolated private static func extractArtworkData(from url: URL) async -> Data? {
+        let asset = AVURLAsset(url: url)
+        guard let metadata = try? await asset.load(.commonMetadata) else {
+            return nil
+        }
+
+        for item in metadata {
+            if item.commonKey == .commonKeyArtwork {
+                if let data = item.dataValue {
+                    return data
+                }
+                if let value = item.value as? Data {
+                    return value
+                }
+                if let value = item.value as? NSDictionary,
+                   let data = value["data"] as? Data {
+                    return data
+                }
+            }
+        }
+        return nil
     }
 
     public func play() {
@@ -742,9 +794,26 @@ public final class TurntableDeckViewModel: ObservableObject {
     }
 
     private func publishTurntableState() {
-        let degrees = turntablePhysics.platterPosition * 180.0 / .pi
-        if abs(platterRotationDegrees - degrees) > 0.01 {
-            platterRotationDegrees = degrees
+        let wrappedDegrees = turntablePhysics.platterPosition * 180.0 / .pi
+        guard let lastWrappedPlatterDegrees else {
+            self.lastWrappedPlatterDegrees = wrappedDegrees
+            if abs(platterRotationDegrees - wrappedDegrees) > 0.01 {
+                platterRotationDegrees = wrappedDegrees
+            }
+            return
+        }
+
+        var delta = wrappedDegrees - lastWrappedPlatterDegrees
+        if delta > 180 {
+            delta -= 360
+        } else if delta < -180 {
+            delta += 360
+        }
+
+        self.lastWrappedPlatterDegrees = wrappedDegrees
+        let unwrappedDegrees = platterRotationDegrees + delta
+        if abs(delta) > 0.01 {
+            platterRotationDegrees = unwrappedDegrees
         }
     }
 

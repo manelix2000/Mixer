@@ -11,6 +11,7 @@ public struct TurntableView: View {
 
     public let isPlaying: Bool
     public let platterAngleDegrees: Double
+    public let coverImage: UIImage?
     public let tonearmAngleDegrees: Double
     public let showDecorativeArm: Bool
     public let decorativeArmScale: CGFloat
@@ -18,12 +19,14 @@ public struct TurntableView: View {
     public init(
         isPlaying: Bool,
         platterAngleDegrees: Double = 0,
+        coverImage: UIImage? = nil,
         tonearmAngleDegrees: Double = 0,
         showDecorativeArm: Bool = true,
         decorativeArmScale: CGFloat = 1.0
     ) {
         self.isPlaying = isPlaying
         self.platterAngleDegrees = platterAngleDegrees
+        self.coverImage = coverImage
         self.tonearmAngleDegrees = tonearmAngleDegrees
         self.showDecorativeArm = showDecorativeArm
         self.decorativeArmScale = decorativeArmScale
@@ -146,14 +149,30 @@ public struct TurntableView: View {
     }
 
     private func labelDisc(size: CGFloat) -> some View {
-        ZStack {
-            Circle()
-                .fill(Color(red: 0.12, green: 0.16, blue: 0.2))
-                .padding(size * 0.34)
-
-            Circle()
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                .padding(size * 0.36)
+        let croppedCover = coverImage?.centerSquareCropped()
+        return ZStack {
+            if let croppedCover {
+                Image(uiImage: croppedCover)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size * 0.78, height: size * 0.78)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.22), lineWidth: max(size * 0.004, 1))
+                    )
+                    .shadow(color: Color.black.opacity(0.25), radius: size * 0.01, x: 0, y: size * 0.003)
+                Circle()
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1.2)
+                    .padding(size * 0.115)
+            } else {
+                Circle()
+                    .fill(Color(red: 0.12, green: 0.16, blue: 0.2))
+                    .padding(size * 0.34)
+                Circle()
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1.0)
+                    .padding(size * 0.36)
+            }
         }
     }
 
@@ -274,6 +293,27 @@ public struct TurntableView: View {
             .blendMode(.screen)
             .opacity(isPlaying ? 1.0 : 0.6)
             .animation(.easeInOut(duration: 0.25), value: isPlaying)
+    }
+}
+
+private extension UIImage {
+    func centerSquareCropped() -> UIImage {
+        guard let cgImage else {
+            return self
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        let side = min(width, height)
+        let x = (width - side) / 2
+        let y = (height - side) / 2
+        let rect = CGRect(x: x, y: y, width: side, height: side)
+
+        guard let cropped = cgImage.cropping(to: rect) else {
+            return self
+        }
+
+        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }
 
