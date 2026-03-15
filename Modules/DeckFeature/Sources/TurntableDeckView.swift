@@ -40,7 +40,7 @@ public struct TurntableDeckView: View {
 
             GeometryReader { geometry in
                 let pitchSize = 60.0
-                let turntableSize = geometry.size.width - pitchSize - 12
+                let turntableSize = geometry.size.width
                 let size = min(turntableSize, geometry.size.height)
                 HStack(spacing: 12) {
                     ZStack {
@@ -108,18 +108,22 @@ public struct TurntableDeckView: View {
 
                         VStack {
                             Spacer()
-                            HStack {
+                            HStack(alignment: .bottom) {
                                 technicsStartPauseButton(containerWidth: turntableSize)
                                 Spacer()
-                                technicsStopButton(containerWidth: turntableSize)
+                                VStack(alignment: .trailing) {
+                                    bpmPitchCard
+                                        .frame(width: pitchSize)
+                                        .offset(x: 5)
+                                    technicsStopButton(containerWidth: turntableSize)
+                                }
                             }
                             .padding(max(size * 0.035, 8))
                         }
                     }
                     .frame(width: turntableSize)
 
-                    bpmPitchCard
-                        .frame(width: pitchSize)
+                    
                 }
             }
         }
@@ -435,7 +439,7 @@ public struct TurntableDeckView: View {
             let safeOriginalBPM = max(viewModel.originalBPM, TurntableDeckViewModel.minBPM)
             let sensitivityFraction = viewModel.pitchSensitivityFraction
 
-            VStack(spacing: 5) {
+            VStack(alignment: .trailing, spacing: 5) {
                 VStack(alignment: .center, spacing: 0) {
                     VerticalPitchFader(
                         value: Binding(
@@ -468,7 +472,7 @@ public struct TurntableDeckView: View {
                 }
 
                 VStack(spacing: 0) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 0) {
                         Button {
                             viewModel.increasePitchSensitivity()
                         } label: {
@@ -497,9 +501,9 @@ public struct TurntableDeckView: View {
                         .foregroundStyle(.black)
                 }
             }
-            .padding(5)
+            .padding(0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(metalPlateBackground(cornerRadius: 10))
+            .background(.clear)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
