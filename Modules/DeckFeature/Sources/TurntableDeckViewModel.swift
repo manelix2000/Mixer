@@ -90,7 +90,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         let clampedOriginalBPM = min(max(originalBPM, Self.minBPM), Self.maxBPM)
         self.originalBPM = clampedOriginalBPM
         self.targetBPM = clampedOriginalBPM
-        self.pitchSensitivityPercent = 2
+        self.pitchSensitivityPercent = 8
         self.bpmText = bpmText
         self.waveformText = waveformText
         self.platterText = platterText
