@@ -514,6 +514,7 @@ public struct TurntableDeckView: View {
                             }
                         ),
                         range: -sensitivityFraction...sensitivityFraction,
+                        isInverted: true,
                         text: String(
                             format: "%+.1f%%",
                             ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
@@ -999,6 +1000,7 @@ private struct VerticalPitchFader: View {
     @Binding var value: Double
     var border: Color = .black
     let range: ClosedRange<Double>
+    var isInverted: Bool = false
     var text: String? = nil
     var textColor: Color = .primary
     var thumbBackgroundColor: Color = Color(uiColor: .systemBackground)
@@ -1006,11 +1008,12 @@ private struct VerticalPitchFader: View {
     var body: some View {
         GeometryReader { geometry in
             let height = max(geometry.size.height, 1)
-            let progress = normalizedProgress(for: value)
+            let valueProgress = normalizedProgress(for: value)
+            let progress = displayProgress(fromValueProgress: valueProgress)
             let thumbSize: CGFloat = 26
             let usableHeight = max(height - thumbSize, 1)
             let thumbY = (1.0 - progress) * usableHeight
-            let baselineProgress = baselineProgressForRange()
+            let baselineProgress = displayProgress(fromValueProgress: baselineProgressForRange())
             let selectedHeight = max(abs(progress - baselineProgress) * height, 2)
             let selectedMidpoint = (progress + baselineProgress) * 0.5
 
@@ -1056,8 +1059,9 @@ private struct VerticalPitchFader: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         let y = min(max(gesture.location.y, 0), height)
-                        let mappedProgress = 1.0 - (y / height)
-                        value = mappedValue(forNormalizedProgress: mappedProgress)
+                        let mappedDisplayProgress = 1.0 - (y / height)
+                        let mappedValueProgress = valueProgressFromDisplayProgress(mappedDisplayProgress)
+                        value = mappedValue(forNormalizedProgress: mappedValueProgress)
                     }
             )
             .simultaneousGesture(
@@ -1068,8 +1072,9 @@ private struct VerticalPitchFader: View {
             )
             .onTapGesture { location in
                 let y = min(max(location.y, 0), height)
-                let mappedProgress = 1.0 - (y / height)
-                value = mappedValue(forNormalizedProgress: mappedProgress)
+                let mappedDisplayProgress = 1.0 - (y / height)
+                let mappedValueProgress = valueProgressFromDisplayProgress(mappedDisplayProgress)
+                value = mappedValue(forNormalizedProgress: mappedValueProgress)
             }
         }
     }
@@ -1095,6 +1100,20 @@ private struct VerticalPitchFader: View {
             return 0
         }
         return 1
+    }
+
+    private func displayProgress(fromValueProgress valueProgress: Double) -> Double {
+        if isInverted {
+            return 1.0 - valueProgress
+        }
+        return valueProgress
+    }
+
+    private func valueProgressFromDisplayProgress(_ displayProgress: Double) -> Double {
+        if isInverted {
+            return 1.0 - displayProgress
+        }
+        return displayProgress
     }
 }
 
