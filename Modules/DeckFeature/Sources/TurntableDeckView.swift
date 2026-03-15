@@ -37,7 +37,7 @@ public struct TurntableDeckView: View {
             waveformCard
 
             GeometryReader { geometry in
-                let pitchSize = 70.0
+                let pitchSize = 60.0
                 let turntableSize = geometry.size.width - pitchSize - 12
                 let size = min(turntableSize, geometry.size.height)
                 HStack(spacing: 12) {
@@ -50,6 +50,7 @@ public struct TurntableDeckView: View {
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
                             showDecorativeArm: true
                         )
+                        .padding(5)
                         .frame(width: size, height: size)
                         .overlay {
                             TurntableTouchSurface(
