@@ -103,6 +103,7 @@ public struct TurntableDeckView: View {
                             }
                             Spacer()
                         }
+                        .zIndex(5)
                         .padding(10)
                         .allowsHitTesting(false)
 
@@ -935,6 +936,7 @@ private final class TouchSurfaceView: UIView {
 
 private struct VerticalPitchFader: View {
     @Binding var value: Double
+    var border: Color = .black
     let range: ClosedRange<Double>
 
     var body: some View {
@@ -952,7 +954,7 @@ private struct VerticalPitchFader: View {
                     .frame(maxHeight: .infinity)
                     .overlay(
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                            .stroke(border.opacity(0.25), lineWidth: 1)
                     )
 
                 Capsule()
@@ -968,7 +970,7 @@ private struct VerticalPitchFader: View {
                     .fill(Color(uiColor: .systemBackground))
                     .overlay(
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                            .stroke(border.opacity(0.25), lineWidth: 1)
                     )
                     .frame(width: 34, height: thumbSize)
                     .offset(y: thumbY - (usableHeight * 0.5))
