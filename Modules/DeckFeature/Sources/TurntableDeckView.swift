@@ -19,6 +19,7 @@ public struct TurntableDeckView: View {
     @State private var pinchStartZoom: Double?
     @State private var platterLastAngle: Double?
     @State private var platterTouchStartPoint: CGPoint?
+    @State private var platterTouchStartTimestamp: TimeInterval?
     @State private var waveformLastDragX: CGFloat?
 
     public init(
@@ -517,19 +518,8 @@ public struct TurntableDeckView: View {
             return
         }
 
-        if !viewModel.isTurntableScrubbing, isAbovePressureBottomThreshold(normalized, size: platterSize) {
-            viewModel.beginTurntablePressureTouch(
-                pressure: normalizedPressure(pressure),
-                direction: pressureDirection(for: normalized, platterSize: platterSize)
-            )
-        } else if viewModel.isPressureTouchActive {
-            Self.log.debug(
-                "pressure begin blocked by bottom threshold | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2))"
-            )
-            viewModel.endTurntablePressureTouch()
-        }
-
         platterTouchStartPoint = normalized
+        platterTouchStartTimestamp = CACurrentMediaTime()
         platterLastAngle = angle
     }
 
@@ -551,31 +541,47 @@ public struct TurntableDeckView: View {
             return
         }
 
-        if !viewModel.isTurntableScrubbing, isAbovePressureBottomThreshold(normalized, size: platterSize) {
-            viewModel.updateTurntablePressureTouch(
-                pressure: normalizedPressure(pressure),
-                direction: pressureDirection(for: normalized, platterSize: platterSize)
-            )
-        } else if viewModel.isPressureTouchActive {
-            Self.log.debug(
-                "pressure move blocked by bottom threshold | x=\(normalized.x, format: .fixed(precision: 2)) y=\(normalized.y, format: .fixed(precision: 2))"
-            )
-            viewModel.endTurntablePressureTouch()
+        let currentPressure = normalizedPressure(pressure)
+        let movement = if let touchStart = platterTouchStartPoint {
+            hypot(normalized.x - touchStart.x, normalized.y - touchStart.y)
+        } else {
+            0.0
+        }
+        let movedEnoughForScratch = movement >= (platterSize * Self.scratchStartMovementThresholdRatio)
+
+        if viewModel.isPressureTouchActive {
+            if isAbovePressureBottomThreshold(normalized, size: platterSize) {
+                viewModel.updateTurntablePressureTouch(
+                    pressure: currentPressure,
+                    direction: pressureDirection(for: normalized, platterSize: platterSize)
+                )
+            } else {
+                viewModel.endTurntablePressureTouch()
+            }
+            platterLastAngle = angle
+            return
         }
 
-        if !viewModel.isTurntableScrubbing, viewModel.isPressureTouchActive, let touchStart = platterTouchStartPoint {
-            let movement = hypot(normalized.x - touchStart.x, normalized.y - touchStart.y)
-            let movementThreshold = platterSize * Self.pressureToScratchMovementThresholdRatio
-            if movement < movementThreshold {
+        if !viewModel.isTurntableScrubbing,
+           isAbovePressureBottomThreshold(normalized, size: platterSize),
+           !movedEnoughForScratch,
+           let touchStartTimestamp = platterTouchStartTimestamp {
+            let holdElapsed = CACurrentMediaTime() - touchStartTimestamp
+            if holdElapsed >= Self.pressureStartHoldDelay,
+               currentPressure >= Self.pressureStartMinPressure {
+                viewModel.beginTurntablePressureTouch(
+                    pressure: currentPressure,
+                    direction: pressureDirection(for: normalized, platterSize: platterSize)
+                )
                 platterLastAngle = angle
                 return
             }
-            viewModel.endTurntablePressureTouch()
         }
 
         if let previousAngle = platterLastAngle {
             let delta = normalizedAngleDelta(from: previousAngle, to: angle)
-            if !viewModel.isTurntableScrubbing, abs(delta) >= Self.platterScratchActivationAngleThreshold {
+            if !viewModel.isTurntableScrubbing,
+               (abs(delta) >= Self.platterScratchActivationAngleThreshold || movedEnoughForScratch) {
                 viewModel.beginTurntableScrub()
             }
             if viewModel.isTurntableScrubbing {
@@ -589,6 +595,7 @@ public struct TurntableDeckView: View {
     private func handlePlatterTouchEnded() {
         platterLastAngle = nil
         platterTouchStartPoint = nil
+        platterTouchStartTimestamp = nil
         viewModel.endTurntablePressureTouch()
         if viewModel.isTurntableScrubbing {
             viewModel.endTurntableScrub()
@@ -701,7 +708,9 @@ public struct TurntableDeckView: View {
     private static let platterScratchActivationAngleThreshold: Double = 0.002
     private static let turntableVisualOuterInset: CGFloat = 10.0
     private static let pressureBottomBlockedZoneRatio: CGFloat = 0.18
-    private static let pressureToScratchMovementThresholdRatio: CGFloat = 0.07
+    private static let scratchStartMovementThresholdRatio: CGFloat = 0.035
+    private static let pressureStartMinPressure: Double = 0.16
+    private static let pressureStartHoldDelay: TimeInterval = 0.0
 }
 
 private struct TrackDocumentPicker: UIViewControllerRepresentable {
