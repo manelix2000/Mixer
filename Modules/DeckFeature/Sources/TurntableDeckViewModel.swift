@@ -58,6 +58,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     private var waveformLoadID = UUID()
     private var bpmLoadTask: Task<Void, Never>?
     private var artworkLoadTask: Task<Void, Never>?
+    private var stoppedStatusClearTask: Task<Void, Never>?
     private var isPlatterScrubbing = false
     private var wasPlayingBeforePlatterScrub = false
     private var scratchCurrentTime: TimeInterval = 0
@@ -123,6 +124,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         waveformLoadTask?.cancel()
         bpmLoadTask?.cancel()
         artworkLoadTask?.cancel()
+        stoppedStatusClearTask?.cancel()
     }
 
     public func selectTrack(url: URL) {
@@ -267,6 +269,7 @@ public final class TurntableDeckViewModel: ObservableObject {
             try audioEngine.seek(to: 0)
             playbackState = audioEngine.playbackState
             playbackStatusText = "Stopped"
+            scheduleStoppedStatusAutoClear()
             stopPlaybackTimer()
             refreshPlaybackTimeText()
         } catch {
@@ -452,7 +455,7 @@ public final class TurntableDeckViewModel: ObservableObject {
             try audioEngine.seek(to: targetTime)
             playbackState = audioEngine.playbackState
             if playbackState == .playing {
-                playbackStatusText = ""
+                clearPlaybackStatusIfTransient()
                 startPlaybackTimer()
             } else {
                 stopPlaybackTimer()
@@ -572,7 +575,7 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         if shouldResumePlaybackAfterScratch {
             playbackState = audioEngine.playbackState
-            playbackStatusText = ""
+            clearPlaybackStatusIfTransient()
             startPlaybackTimer()
         } else {
             if isAtTrackEnd {
@@ -580,7 +583,7 @@ public final class TurntableDeckViewModel: ObservableObject {
             } else {
                 audioEngine.pause()
                 playbackState = audioEngine.playbackState
-                playbackStatusText = ""
+                clearPlaybackStatusIfTransient()
                 stopPlaybackTimer()
             }
         }
@@ -834,9 +837,29 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         playbackState = audioEngine.playbackState
         playbackStatusText = "Stopped"
+        scheduleStoppedStatusAutoClear()
         stopPlaybackTimer()
         playbackProgress = total > 0 ? 1.0 : 0
         playbackTimeText = "\(format(time: total)) / \(format(time: total))"
+    }
+
+    private func clearPlaybackStatusIfTransient() {
+        guard playbackStatusText != "Stopped" else {
+            return
+        }
+        playbackStatusText = ""
+    }
+
+    private func scheduleStoppedStatusAutoClear() {
+        stoppedStatusClearTask?.cancel()
+        stoppedStatusClearTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard self.playbackStatusText == "Stopped" else { return }
+            self.playbackStatusText = ""
+            self.stoppedStatusClearTask = nil
+        }
     }
 
     private func loadWaveform(url: URL) {
@@ -899,7 +922,7 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         if sourceURL.isFileURL {
             let didAccess = sourceURL.startAccessingSecurityScopedResource()
-            defer {
+            do {
                 if didAccess {
                     sourceURL.stopAccessingSecurityScopedResource()
                 }
