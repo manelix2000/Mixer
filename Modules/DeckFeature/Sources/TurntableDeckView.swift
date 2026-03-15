@@ -53,7 +53,7 @@ public struct TurntableDeckView: View {
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
                             showDecorativeArm: armVisible
                         )
-                        .padding(10)
+                        .padding(UIDevice.current.userInterfaceIdiom == .pad ? 80 : 10)
                         .frame(width: size, height: size)
                         .overlay {
                             TurntableTouchSurface(
@@ -115,7 +115,7 @@ public struct TurntableDeckView: View {
                                 VStack(alignment: .leading, spacing: 15) {
                                     deckVolumeFader(
                                         containerWidth: turntableSize,
-                                        availableHeight: max(size - (controlsPadding * 2.0), 0)
+                                        availableHeight: max((UIDevice.current.userInterfaceIdiom == .pad ? geometry.size.height : size) - (controlsPadding * 2.0), 0)
                                     )
                                     technicsStartPauseButton(containerWidth: turntableSize)
                                 }
