@@ -32,7 +32,7 @@ public struct DeckView: View {
                                 get: { viewModel.isPitchLockedToExternalBPM },
                                 set: { viewModel.setPitchLockEnabled($0) }
                             ),
-                            areControlsVisible: $areControlsVisible
+                            areControlsVisible: $areControlsVisible 
                         )
 
                         if isRightDeckVisible {

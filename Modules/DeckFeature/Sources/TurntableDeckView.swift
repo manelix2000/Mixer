@@ -47,7 +47,7 @@ public struct TurntableDeckView: View {
                             isPlaying: viewModel.isPlaybackActive,
                             platterAngleDegrees: viewModel.platterRotationDegrees,
                             tonearmAngleDegrees: viewModel.tonearmRotationDegrees - TurntableDeckViewModel.tonearmStartRotationDegrees,
-                            showDecorativeArm: !areControlsVisible
+                            showDecorativeArm: true
                         )
                         .frame(width: size, height: size)
                         .overlay {

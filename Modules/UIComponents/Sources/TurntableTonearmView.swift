@@ -22,8 +22,9 @@ public struct TurntableTonearmView: View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
             let clampedScale = max(relativeScale, 0.1)
-            // 1.0 maps to the historical visual size used before this remapping.
-            let armSize = size * Self.referenceScaleFactor * clampedScale
+            // Base arm size remains constant; scaling is applied as a view transform so
+            // the drawing can extend beyond local bounds without canvas clipping.
+            let armSize = size * Self.referenceScaleFactor
             let anchoredBaseCenter = CGPoint(
                 x: geometry.size.width * anchor.x + (relativeOffset.width * size),
                 y: geometry.size.height * anchor.y + (relativeOffset.height * size)
@@ -44,6 +45,7 @@ public struct TurntableTonearmView: View {
                 drawTonearm(in: &context, frame: frame)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .scaleEffect(clampedScale, anchor: UnitPoint(x: anchor.x, y: anchor.y))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
