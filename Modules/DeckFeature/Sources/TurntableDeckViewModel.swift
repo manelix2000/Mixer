@@ -71,6 +71,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     private var lastPressureDebugLogTimestamp: TimeInterval = 0
     private var lastLoggedPressureIntensity: Double = -1
     private var turntablePhysics = TurntablePhysics()
+    private var masterVolume: Double = 1.0
 
     public init(
         bpmText: String = "-- BPM",
@@ -102,7 +103,9 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.platterRotationDegrees = 0
         self.scratchInteractionState = .idle
         self.volume = Double(min(max(audioEngine.volume, 0), 1))
+        self.masterVolume = 1.0
 
+        applyEffectiveOutputVolume()
         applyTargetBPM()
         refreshBPMText()
         startTurntableTimer()
@@ -232,8 +235,13 @@ public final class TurntableDeckViewModel: ObservableObject {
 
     public func setVolume(_ value: Double) {
         let clamped = min(max(value, 0.0), 1.0)
-        audioEngine.setVolume(Float(clamped))
-        volume = Double(audioEngine.volume)
+        volume = clamped
+        applyEffectiveOutputVolume()
+    }
+
+    public func setMasterVolume(_ value: Double) {
+        masterVolume = min(max(value, 0.0), 1.0)
+        applyEffectiveOutputVolume()
     }
 
     public func incrementBPM() {
@@ -969,6 +977,11 @@ public final class TurntableDeckViewModel: ObservableObject {
         let ratio = effectiveTargetBPM / safeOriginal
         let clampedRatio = min(max(ratio, Self.minPlaybackRate), Self.maxPlaybackRate)
         audioEngine.setPlaybackRate(Float(clampedRatio))
+    }
+
+    private func applyEffectiveOutputVolume() {
+        let combined = min(max(volume * masterVolume, 0.0), 1.0)
+        audioEngine.setVolume(Float(combined))
     }
 
     private func effectiveTargetBPMForCurrentState() -> Double {

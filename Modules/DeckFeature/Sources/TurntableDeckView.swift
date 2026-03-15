@@ -109,9 +109,13 @@ public struct TurntableDeckView: View {
 
                         VStack {
                             Spacer()
+                            let controlsPadding = max(size * 0.035, 8)
                             HStack(alignment: .bottom) {
                                 VStack(alignment: .leading, spacing: 15) {
-                                    deckVolumeFader(containerWidth: turntableSize)
+                                    deckVolumeFader(
+                                        containerWidth: turntableSize,
+                                        availableHeight: max(size - (controlsPadding * 2.0), 0)
+                                    )
                                     technicsStartPauseButton(containerWidth: turntableSize)
                                 }
                                 Spacer()
@@ -122,7 +126,7 @@ public struct TurntableDeckView: View {
                                     technicsStopButton(containerWidth: turntableSize)
                                 }
                             }
-                            .padding(max(size * 0.035, 8))
+                            .padding(controlsPadding)
                         }
                     }
                     .frame(width: turntableSize)
@@ -382,10 +386,15 @@ public struct TurntableDeckView: View {
         .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Start")
     }
 
-    private func deckVolumeFader(containerWidth: CGFloat) -> some View {
-        let width = max(containerWidth * 0.07, 18)
+    private func deckVolumeFader(containerWidth: CGFloat, availableHeight: CGFloat) -> some View {
+        let buttonBaseRatio = max(min(containerWidth / 340.0, 1.0), 0.5)
+        let startButtonHeight = CGFloat(40.0) * buttonBaseRatio
+        let safeAvailableHeight = availableHeight.isFinite ? max(availableHeight, 0) : 0
+        let textHeight: CGFloat = 24
+        let stackSpacing: CGFloat = 2
+        let faderHeight = max(safeAvailableHeight - startButtonHeight - textHeight - stackSpacing, 44)
 
-        return VStack(spacing: 2) {
+        return VStack(spacing: stackSpacing) {
             VerticalPitchFader(
                 value: Binding(
                     get: { viewModel.volume },
@@ -393,7 +402,7 @@ public struct TurntableDeckView: View {
                 ),
                 range: 0...1
             )
-            .frame(width: 40, height: .infinity)
+            .frame(width: 40, height: faderHeight)
             .accessibilityLabel("Deck volume")
 
             Text(String(format: "%.0f%%", viewModel.volume * 100.0))
@@ -996,6 +1005,9 @@ private struct VerticalPitchFader: View {
             let thumbSize: CGFloat = 26
             let usableHeight = max(height - thumbSize, 1)
             let thumbY = (1.0 - progress) * usableHeight
+            let baselineProgress = baselineProgressForRange()
+            let selectedHeight = max(abs(progress - baselineProgress) * height, 2)
+            let selectedMidpoint = (progress + baselineProgress) * 0.5
 
             ZStack(alignment: .center) {
                 Capsule()
@@ -1009,8 +1021,8 @@ private struct VerticalPitchFader: View {
 
                 Capsule()
                     .fill(Color.accentColor.opacity(0.25))
-                    .frame(width: 10, height: max(abs(progress - 0.5) * usableHeight, 2))
-                    .offset(y: (0.5 - progress) * usableHeight * 0.5)
+                    .frame(width: 10, height: selectedHeight)
+                    .offset(y: (0.5 - selectedMidpoint) * height)
 
                 Rectangle()
                     .fill(Color.primary.opacity(0.35))
@@ -1061,6 +1073,16 @@ private struct VerticalPitchFader: View {
         let clamped = min(max(progress, 0), 1)
         let span = range.upperBound - range.lowerBound
         return range.lowerBound + (clamped * span)
+    }
+
+    private func baselineProgressForRange() -> Double {
+        if range.lowerBound <= 0, range.upperBound >= 0 {
+            return normalizedProgress(for: 0)
+        }
+        if range.lowerBound >= 0 {
+            return 0
+        }
+        return 1
     }
 }
 

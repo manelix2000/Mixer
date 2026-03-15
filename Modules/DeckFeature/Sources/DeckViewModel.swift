@@ -29,9 +29,9 @@ public final class DeckViewModel: ObservableObject {
         waveformAnalyzer: WaveformAnalyzing = WaveformAnalyzer()
     ) {
         self.audioEngine = audioEngine
-        self.audioEngine.setVolume(Float(min(max(volume, 0), 1)))
+        let clampedMasterVolume = min(max(volume, 0), 1)
         self.audioEngine.setPan(Float(min(max(pan, -1), 1)))
-        self.volume = Double(self.audioEngine.volume)
+        self.volume = clampedMasterVolume
         self.pan = Double(self.audioEngine.pan)
         self.externalBPMText = "-- BPM"
         self.externalBPMStatusText = "Mic BPM stopped"
@@ -47,6 +47,8 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: AudioEngineManager(),
             waveformAnalyzer: WaveformAnalyzer()
         )
+        self.leftTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
+        self.rightTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
 
         microphoneBPMPipeline.setResultHandler { [weak self] result in
             self?.handleMicrophoneBPMResult(result)
@@ -69,8 +71,9 @@ public final class DeckViewModel: ObservableObject {
 
     public func setVolume(_ value: Double) {
         let clamped = min(max(value, 0.0), 1.0)
-        audioEngine.setVolume(Float(clamped))
-        volume = Double(audioEngine.volume)
+        volume = clamped
+        leftTurntableDeckViewModel.setMasterVolume(clamped)
+        rightTurntableDeckViewModel.setMasterVolume(clamped)
     }
 
     public func setPan(_ value: Double) {
