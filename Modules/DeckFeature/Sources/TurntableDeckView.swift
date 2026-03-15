@@ -709,7 +709,7 @@ public struct TurntableDeckView: View {
     private static let turntableVisualOuterInset: CGFloat = 10.0
     private static let pressureBottomBlockedZoneRatio: CGFloat = 0.18
     private static let scratchStartMovementThresholdRatio: CGFloat = 0.035
-    private static let pressureStartMinPressure: Double = 0.16
+    private static let pressureStartMinPressure: Double = 0.10
     private static let pressureStartHoldDelay: TimeInterval = 0.0
 }
 
