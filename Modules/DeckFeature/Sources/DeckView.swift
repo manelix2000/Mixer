@@ -1,23 +1,35 @@
 import SwiftUI
+import UIKit
 
 @MainActor
 public struct DeckView: View {
     @StateObject private var viewModel: DeckViewModel
-    @State private var areControlsVisible = false
-    @State private var isRightDeckVisible = false
+    @State private var areControlsVisible: Bool
+    @State private var isRightDeckVisible: Bool
+    private let isIPad: Bool
 
     public init() {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        self.isIPad = isIPad
+        _areControlsVisible = State(initialValue: isIPad)
+        _isRightDeckVisible = State(initialValue: isIPad)
         _viewModel = StateObject(wrappedValue: DeckViewModel())
     }
 
     public init(viewModel: DeckViewModel) {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        self.isIPad = isIPad
+        _areControlsVisible = State(initialValue: isIPad)
+        _isRightDeckVisible = State(initialValue: isIPad)
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
     public var body: some View {
         GeometryReader { _ in
             HStack(alignment: .top, spacing: 12) {
-                controlsVisibilityButton
+                if !isIPad {
+                    controlsVisibilityButton
+                }
 
                 VStack(alignment: .leading, spacing: 12) {
                     if areControlsVisible {
@@ -32,10 +44,10 @@ public struct DeckView: View {
                                 get: { viewModel.isPitchLockedToExternalBPM },
                                 set: { viewModel.setPitchLockEnabled($0) }
                             ),
-                            areControlsVisible: $areControlsVisible 
+                            areControlsVisible: $areControlsVisible
                         )
 
-                        if isRightDeckVisible {
+                        if isIPad || isRightDeckVisible {
                             TurntableDeckView(
                                 viewModel: viewModel.rightTurntableDeckViewModel,
                                 isPitchLockedToExternalBPM: .constant(false),
@@ -47,6 +59,13 @@ public struct DeckView: View {
             }
             .padding(12)
             .background(.black)
+            .onAppear {
+                guard isIPad else {
+                    return
+                }
+                areControlsVisible = true
+                isRightDeckVisible = true
+            }
         }
     }
 
