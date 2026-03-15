@@ -59,7 +59,7 @@ public struct TurntableView: View {
                 spindle(size: size)
 
                 TurntableTonearmView(
-                    relativeScale: 0.46,
+                    relativeScale: 1.0,
                     relativeOffset: .zero,
                     armRotationDegrees: tonearmAngleDegrees
                 )

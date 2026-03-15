@@ -7,8 +7,8 @@ public struct TurntableTonearmView: View {
     public let armRotationDegrees: Double
 
     public init(
-        anchor: CGPoint = CGPoint(x: 0.99, y: 0.16),
-        relativeScale: CGFloat = 0.46,
+        anchor: CGPoint = CGPoint(x: 0.898, y: 0.096),
+        relativeScale: CGFloat = 1.0,
         relativeOffset: CGSize = .zero,
         armRotationDegrees: Double = 0
     ) {
@@ -22,17 +22,21 @@ public struct TurntableTonearmView: View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
             let clampedScale = max(relativeScale, 0.1)
-            let armSize = size * clampedScale
-            let center = CGPoint(
+            // 1.0 maps to the historical visual size used before this remapping.
+            let armSize = size * Self.referenceScaleFactor * clampedScale
+            let anchoredBaseCenter = CGPoint(
                 x: geometry.size.width * anchor.x + (relativeOffset.width * size),
                 y: geometry.size.height * anchor.y + (relativeOffset.height * size)
             )
+            let frameOrigin = CGPoint(
+                x: anchoredBaseCenter.x - (armSize * 0.30),
+                y: anchoredBaseCenter.y - (armSize * 0.36)
+            )
 
             Canvas { context, canvasSize in
-                let half = armSize * 0.5
                 let frame = CGRect(
-                    x: center.x - half,
-                    y: center.y - half,
+                    x: frameOrigin.x,
+                    y: frameOrigin.y,
                     width: armSize,
                     height: armSize
                 )
@@ -197,13 +201,14 @@ public struct TurntableTonearmView: View {
 
 extension TurntableTonearmView {
     private static let zeroDownRotationOffsetDegrees: Double = 48
+    private static let referenceScaleFactor: CGFloat = 0.46
 }
 
 #Preview {
     TurntableTonearmView(
-        anchor: CGPoint(x: 0.82, y: 0.30),
-        relativeScale: 0.46,
+        anchor: CGPoint(x: 0.99, y: 0.16),
+        relativeScale: 1.0,
         relativeOffset: .zero,
-        armRotationDegrees: 28
+        armRotationDegrees: 0
     )
 }
