@@ -76,6 +76,9 @@ public final class AudioEngineManager: AudioEngineControlling {
         subsystem: "dev.manelix.Mixer",
         category: "AudioEngineManager"
     )
+    private static let sharedSessionLock = NSLock()
+    private static var hasConfiguredSharedPlaybackSession = false
+    private static var isSharedPlaybackSessionActive = false
 
     private let engine: AVAudioEngine
     private let playerNode: AVAudioPlayerNode
@@ -95,7 +98,6 @@ public final class AudioEngineManager: AudioEngineControlling {
     private var microphoneCaptureRunning = false
     private var isMicrophoneSessionActive = false
     private var microphoneCaptureEngine: AVAudioEngine?
-    private var hasConfiguredSharedSession = false
     private let microphoneDispatchQueue = DispatchQueue(
         label: "dev.manelix.Mixer.AudioEngine.microphone",
         qos: .userInitiated
@@ -600,18 +602,30 @@ public final class AudioEngineManager: AudioEngineControlling {
     private func configurePlaybackSessionLocked() throws {
         let session = AVAudioSession.sharedInstance()
         do {
-            // Keep session changes minimal to reduce interruptions of external/background audio.
-            if !hasConfiguredSharedSession {
-                try session.setCategory(
-                    .playAndRecord,
-                    mode: .default,
-                    options: [.mixWithOthers, .defaultToSpeaker]
-                )
-                hasConfiguredSharedSession = true
-            }
-            try session.setActive(true)
+            try Self.configureSharedPlaybackSessionIfNeeded(session: session)
         } catch {
             throw AudioEngineManagerError.sessionConfigurationFailed(error)
+        }
+    }
+
+    private static func configureSharedPlaybackSessionIfNeeded(session: AVAudioSession) throws {
+        sharedSessionLock.lock()
+        defer { sharedSessionLock.unlock() }
+
+        // AVAudioSession is process-wide. Reapplying category/activation from every deck can
+        // stall UI/audio and cause audible state shifts when a second deck starts.
+        if !hasConfiguredSharedPlaybackSession {
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.mixWithOthers, .defaultToSpeaker]
+            )
+            hasConfiguredSharedPlaybackSession = true
+        }
+
+        if !isSharedPlaybackSessionActive {
+            try session.setActive(true)
+            isSharedPlaybackSessionActive = true
         }
     }
 
