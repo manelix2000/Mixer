@@ -69,7 +69,8 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
         buckets.reserveCapacity(sampleCount)
         var runningMax: Float = 0
 
-        var currentBucketMax: Float = 0
+        var currentBucketPeak: Float = 0
+        var currentBucketSquareSum: Float = 0
         var framesInBucket = 0
         var shouldStop = false
 
@@ -93,13 +94,20 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
                 }
 
                 let averagedAmplitude = sum / Float(channelCount)
-                currentBucketMax = max(currentBucketMax, averagedAmplitude)
+                currentBucketPeak = max(currentBucketPeak, averagedAmplitude)
+                currentBucketSquareSum += averagedAmplitude * averagedAmplitude
                 framesInBucket += 1
 
                 if framesInBucket >= framesPerBucket {
-                    buckets.append(currentBucketMax)
-                    runningMax = max(runningMax, currentBucketMax)
-                    currentBucketMax = 0
+                    let bucketValue = finalizeBucketValue(
+                        peak: currentBucketPeak,
+                        squareSum: currentBucketSquareSum,
+                        frameCount: framesInBucket
+                    )
+                    buckets.append(bucketValue)
+                    runningMax = max(runningMax, bucketValue)
+                    currentBucketPeak = 0
+                    currentBucketSquareSum = 0
                     framesInBucket = 0
 
                     if buckets.count % 64 == 0 || buckets.count == sampleCount {
@@ -125,8 +133,13 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
         }
 
         if framesInBucket > 0 && buckets.count < sampleCount {
-            buckets.append(currentBucketMax)
-            runningMax = max(runningMax, currentBucketMax)
+            let bucketValue = finalizeBucketValue(
+                peak: currentBucketPeak,
+                squareSum: currentBucketSquareSum,
+                frameCount: framesInBucket
+            )
+            buckets.append(bucketValue)
+            runningMax = max(runningMax, bucketValue)
         }
 
         if buckets.count > sampleCount {
@@ -135,8 +148,12 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
             buckets.append(contentsOf: repeatElement(0, count: sampleCount - buckets.count))
         }
 
-        if let maxAmplitude = buckets.max(), maxAmplitude > 0 {
-            buckets = buckets.map { $0 / maxAmplitude }
+        let normalization = normalizationWindow(for: buckets)
+        if normalization.scale > 0 {
+            buckets = buckets.map { sample in
+                let normalized = (sample - normalization.floor) / normalization.scale
+                return min(max(normalized, 0), 1)
+            }
         }
 
         onProgress(
@@ -161,5 +178,25 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
             snapshot.append(contentsOf: repeatElement(0, count: sampleCount - snapshot.count))
         }
         return snapshot
+    }
+
+    private func finalizeBucketValue(peak: Float, squareSum: Float, frameCount: Int) -> Float {
+        guard frameCount > 0 else { return 0 }
+        let rms = sqrt(squareSum / Float(frameCount))
+        // RMS provides body; a smaller peak contribution preserves transients.
+        let blended = (rms * 0.82) + (peak * 0.18)
+        return pow(max(blended, 0), 0.95)
+    }
+
+    private func normalizationWindow(for buckets: [Float]) -> (floor: Float, scale: Float) {
+        guard !buckets.isEmpty else { return (0, 0) }
+        let sorted = buckets.sorted()
+        let floorIndex = Int((Double(sorted.count - 1) * 0.10).rounded(.down))
+        let ceilingIndex = Int((Double(sorted.count - 1) * 0.985).rounded(.down))
+        let safeFloorIndex = min(max(floorIndex, 0), sorted.count - 1)
+        let safeCeilingIndex = min(max(ceilingIndex, safeFloorIndex), sorted.count - 1)
+        let floor = sorted[safeFloorIndex]
+        let ceiling = sorted[safeCeilingIndex]
+        return (floor, max(ceiling - floor, 0.000001))
     }
 }

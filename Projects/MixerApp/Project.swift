@@ -25,7 +25,7 @@ let project = Project(
                         "UIInterfaceOrientationLandscapeLeft",
                         "UIInterfaceOrientationLandscapeRight"
                     ],
-                    "UIRequiresFullScreen": false
+                    "UIRequiresFullScreen": true
                 ]
             ),
             sources: ["Sources/**"],

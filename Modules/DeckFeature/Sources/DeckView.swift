@@ -46,7 +46,7 @@ public struct DeckView: View {
                 }
             }
             .padding(12)
-            .background(Color(uiColor: .systemBackground))
+            .background(.black)
         }
     }
 

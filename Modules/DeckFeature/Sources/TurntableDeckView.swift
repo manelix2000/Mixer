@@ -261,7 +261,8 @@ public struct TurntableDeckView: View {
                                 samples: viewModel.waveformData,
                                 progress: viewModel.playbackProgress,
                                 isLoading: viewModel.isWaveformLoading,
-                                zoom: viewModel.waveformZoom
+                                zoom: viewModel.waveformZoom,
+                                style: .professional
                             )
                             HStack {
                                 Button {
