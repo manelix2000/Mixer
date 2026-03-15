@@ -1016,8 +1016,8 @@ public final class TurntableDeckViewModel: ObservableObject {
     public static let normalProgressEpsilon: Double = 0.0005
     public static let scratchProgressEpsilon: Double = 0.00002
     public static let basePlatterAngularVelocity: Double = (33.33 / 60.0) * (2.0 * .pi)
-    public static let tonearmStartRotationDegrees: Double = 48
-    public static let tonearmEndRotationDegrees: Double = 75
+    public static let tonearmStartRotationDegrees: Double = 0
+    public static let tonearmEndRotationDegrees: Double = 27
     public static let trackEndTolerance: TimeInterval = 0.01
     public static let maxPressureSlowdownFraction: Double = 0.9
     public static let minPressureSlowdownMultiplier: Double = 0.08

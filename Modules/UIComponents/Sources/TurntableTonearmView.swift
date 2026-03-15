@@ -7,10 +7,10 @@ public struct TurntableTonearmView: View {
     public let armRotationDegrees: Double
 
     public init(
-        anchor: CGPoint = CGPoint(x: 0.82, y: 0.30),
+        anchor: CGPoint = CGPoint(x: 0.99, y: 0.16),
         relativeScale: CGFloat = 0.46,
         relativeOffset: CGSize = .zero,
-        armRotationDegrees: Double = 28
+        armRotationDegrees: Double = 0
     ) {
         self.anchor = anchor
         self.relativeScale = relativeScale
@@ -83,7 +83,7 @@ public struct TurntableTonearmView: View {
 
         var armContext = context
         armContext.translateBy(x: baseCenter.x, y: baseCenter.y)
-        armContext.rotate(by: .degrees(armRotationDegrees))
+        armContext.rotate(by: .degrees(Self.zeroDownRotationOffsetDegrees + armRotationDegrees))
         armContext.translateBy(x: -baseCenter.x, y: -baseCenter.y)
 
         let armPath: Path = {
@@ -193,6 +193,10 @@ public struct TurntableTonearmView: View {
         ))
         context.fill(pivotCap, with: .color(Color.black.opacity(0.72)))
     }
+}
+
+extension TurntableTonearmView {
+    private static let zeroDownRotationOffsetDegrees: Double = 48
 }
 
 #Preview {

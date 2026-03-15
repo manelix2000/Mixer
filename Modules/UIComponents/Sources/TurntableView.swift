@@ -12,15 +12,18 @@ public struct TurntableView: View {
     public let isPlaying: Bool
     public let platterAngleDegrees: Double
     public let tonearmAngleDegrees: Double
+    public let showDecorativeArm: Bool
 
     public init(
         isPlaying: Bool,
         platterAngleDegrees: Double = 0,
-        tonearmAngleDegrees: Double = 48
+        tonearmAngleDegrees: Double = 0,
+        showDecorativeArm: Bool = true
     ) {
         self.isPlaying = isPlaying
         self.platterAngleDegrees = platterAngleDegrees
         self.tonearmAngleDegrees = tonearmAngleDegrees
+        self.showDecorativeArm = showDecorativeArm
     }
 
     public var body: some View {
@@ -56,14 +59,12 @@ public struct TurntableView: View {
                 spindle(size: size)
 
                 TurntableTonearmView(
-                    anchor: CGPoint(x: 0.99, y: 0.16),
                     relativeScale: 0.46,
                     relativeOffset: .zero,
                     armRotationDegrees: tonearmAngleDegrees
                 )
-                .transaction { transaction in
-                    transaction.animation = nil
-                }
+                .opacity(showDecorativeArm ? 1.0 : 0.0)
+                .animation(.easeInOut(duration: 0.22), value: showDecorativeArm)
             }
             .padding(10)
             .frame(width: size, height: size)
