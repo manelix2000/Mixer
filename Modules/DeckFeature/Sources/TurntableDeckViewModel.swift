@@ -45,6 +45,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
     @Published public private(set) var platterRotationDegrees: Double
     @Published public private(set) var scratchInteractionState: ScratchInteractionState
+    @Published public private(set) var volume: Double
 
     private let audioEngine: AudioEngineControlling
     private let waveformAnalyzer: WaveformAnalyzing
@@ -100,6 +101,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.isPitchLockedToExternalBPM = false
         self.platterRotationDegrees = 0
         self.scratchInteractionState = .idle
+        self.volume = Double(min(max(audioEngine.volume, 0), 1))
 
         applyTargetBPM()
         refreshBPMText()
@@ -226,6 +228,12 @@ public final class TurntableDeckViewModel: ObservableObject {
 
     public var playbackRate: Double {
         Double(audioEngine.playbackRate)
+    }
+
+    public func setVolume(_ value: Double) {
+        let clamped = min(max(value, 0.0), 1.0)
+        audioEngine.setVolume(Float(clamped))
+        volume = Double(audioEngine.volume)
     }
 
     public func incrementBPM() {

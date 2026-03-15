@@ -110,12 +110,15 @@ public struct TurntableDeckView: View {
                         VStack {
                             Spacer()
                             HStack(alignment: .bottom) {
-                                technicsStartPauseButton(containerWidth: turntableSize)
+                                VStack(alignment: .leading, spacing: 15) {
+                                    deckVolumeFader(containerWidth: turntableSize)
+                                    technicsStartPauseButton(containerWidth: turntableSize)
+                                }
                                 Spacer()
                                 VStack(alignment: .trailing) {
                                     bpmPitchCard
                                         .frame(width: pitchSize)
-                                        .offset(x: 5)
+                                        .offset(x: 3)
                                     technicsStopButton(containerWidth: turntableSize)
                                 }
                             }
@@ -379,6 +382,26 @@ public struct TurntableDeckView: View {
         .accessibilityLabel(viewModel.isPlaybackActive ? "Pause" : "Start")
     }
 
+    private func deckVolumeFader(containerWidth: CGFloat) -> some View {
+        let width = max(containerWidth * 0.07, 18)
+
+        return VStack(spacing: 2) {
+            VerticalPitchFader(
+                value: Binding(
+                    get: { viewModel.volume },
+                    set: { viewModel.setVolume($0) }
+                ),
+                range: 0...1
+            )
+            .frame(width: 40, height: .infinity)
+            .accessibilityLabel("Deck volume")
+
+            Text(String(format: "%.0f%%", viewModel.volume * 100.0))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.black)
+        }
+    }
+
     private func technicsStopButton(containerWidth: CGFloat) -> some View {
         Button {
             viewModel.stop()
@@ -429,6 +452,35 @@ public struct TurntableDeckView: View {
             )
     }
 
+    private func technicsPitchSensitivityButtonLabel(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.black.opacity(0.92))
+            .frame(width: 25, height: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.98),
+                                Color(white: 0.90)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .stroke(Color.black.opacity(0.92), lineWidth: 0.9)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .stroke(Color.black.opacity(0.28), lineWidth: 0.55)
+                    .padding(1.2)
+            )
+    }
+
     private func flashingGlowOpacity(at date: Date) -> Double {
         let time = date.timeIntervalSinceReferenceDate
         let normalized = (sin(time * (2.0 * .pi * 1.35)) + 1.0) * 0.5
@@ -472,15 +524,14 @@ public struct TurntableDeckView: View {
                         .padding(.top, 2)
                 }
 
-                VStack(spacing: 0) {
+                VStack(spacing: 2) {
                     HStack(spacing: 0) {
                         Button {
                             viewModel.increasePitchSensitivity()
                         } label: {
-                            Image(systemName: "plus.circle.fill")
+                            technicsPitchSensitivityButtonLabel(text: "+")
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.black)
                         .disabled(!viewModel.canIncreasePitchSensitivity)
                         .accessibilityLabel("Increase pitch sensitivity")
                         .frame(maxWidth: 40)
@@ -488,10 +539,9 @@ public struct TurntableDeckView: View {
                         Button {
                             viewModel.decreasePitchSensitivity()
                         } label: {
-                            Image(systemName: "minus.circle.fill")
+                            technicsPitchSensitivityButtonLabel(text: "-")
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.black)
                         .disabled(!viewModel.canDecreasePitchSensitivity)
                         .accessibilityLabel("Decrease pitch sensitivity")
                         .frame(maxWidth: 40)
