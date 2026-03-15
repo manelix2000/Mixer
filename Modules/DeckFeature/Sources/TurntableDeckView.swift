@@ -390,7 +390,7 @@ public struct TurntableDeckView: View {
         let buttonBaseRatio = max(min(containerWidth / 340.0, 1.0), 0.5)
         let startButtonHeight = CGFloat(40.0) * buttonBaseRatio
         let safeAvailableHeight = availableHeight.isFinite ? max(availableHeight, 0) : 0
-        let textHeight: CGFloat = 24
+        let textHeight: CGFloat = 12
         let stackSpacing: CGFloat = 2
         let faderHeight = max(safeAvailableHeight - startButtonHeight - textHeight - stackSpacing, 44)
 
@@ -400,14 +400,13 @@ public struct TurntableDeckView: View {
                     get: { viewModel.volume },
                     set: { viewModel.setVolume($0) }
                 ),
-                range: 0...1
+                range: 0...1,
+                text: String(format: "%.0f%%", viewModel.volume * 100.0),
+                textColor: .black,
+                thumbBackgroundColor: Color(white: 0.95)
             )
             .frame(width: 40, height: faderHeight)
             .accessibilityLabel("Deck volume")
-
-            Text(String(format: "%.0f%%", viewModel.volume * 100.0))
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.black)
         }
     }
 
@@ -512,7 +511,13 @@ public struct TurntableDeckView: View {
                                 viewModel.setPitchOffset(newPitch)
                             }
                         ),
-                        range: -sensitivityFraction...sensitivityFraction
+                        range: -sensitivityFraction...sensitivityFraction,
+                        text: String(
+                            format: "%+.1f%%",
+                            ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
+                        ),
+                        textColor: .black,
+                        thumbBackgroundColor: Color(white: 0.95)
                     )
                     .frame(maxHeight: .infinity)
                     .disabled(
@@ -526,11 +531,6 @@ public struct TurntableDeckView: View {
                          viewModel.isPressureTouchActive) ? 0.45 : 1
                     )
                     .accessibilityLabel("Pitch fader")
-
-                    Text(String(format: "%+.1f%%", ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.black)
-                        .padding(.top, 2)
                 }
 
                 VStack(spacing: 2) {
@@ -997,6 +997,9 @@ private struct VerticalPitchFader: View {
     @Binding var value: Double
     var border: Color = .black
     let range: ClosedRange<Double>
+    var text: String? = nil
+    var textColor: Color = .primary
+    var thumbBackgroundColor: Color = Color(uiColor: .systemBackground)
 
     var body: some View {
         GeometryReader { geometry in
@@ -1029,11 +1032,18 @@ private struct VerticalPitchFader: View {
                     .frame(width: 20, height: 1)
 
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(uiColor: .systemBackground))
+                    .fill(thumbBackgroundColor)
                     .overlay(
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .stroke(border.opacity(0.25), lineWidth: 1)
                     )
+                    .overlay {
+                        if let text {
+                            Text(text)
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(textColor)
+                        }
+                    }
                     .frame(width: 34, height: thumbSize)
                     .offset(y: thumbY - (usableHeight * 0.5))
                     .shadow(color: .black.opacity(0.16), radius: 2, x: 0, y: 1)
