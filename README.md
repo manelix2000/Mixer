@@ -1,0 +1,60 @@
+# Mixer
+
+## Description
+Mixer (`dev.manelix.Mixer`) is an **amateur DJ companion app** for iOS focused on training your ear, practicing timing, and learning BPM matching basics.
+
+It is intentionally **not a professional mixer app** and should be used for learning and practice, not for live/club performance workflows.
+
+Screenshots: [Screenshot 1](Projects/MixerApp/Resources/Screenshot1.png), [Screenshot 2](Projects/MixerApp/Resources/Screenshot2.png), [Screenshot 3](Projects/MixerApp/Resources/Screenshot3.png), [Screenshot 4](Projects/MixerApp/Resources/Screenshot4.png)
+
+## Functionalities
+- Controls column toggle: show/hide the top controls panel.
+- Right deck toggle (phone layout): show/hide the second deck.
+- Mic BPM button: start/stop microphone tempo detection.
+- Pitch lock button: lock/unlock left deck pitch to detected external BPM.
+- Master volume slider and pan slider (L/C/R routing display).
+- Load track button: import an audio file (`mp3`, `wav`, `aiff`, `m4a`).
+- Start/Pause and Stop transport buttons.
+- Deck volume fader.
+- Pitch fader for BPM offset with sensitivity range buttons (`+` / `-`).
+- Waveform zoom buttons (`+` / `-`) and pinch-to-zoom gesture.
+- Waveform tap-to-seek gesture (tap in waveform area to seek position).
+- Waveform horizontal drag gesture for scrub/scratch interaction.
+- Turntable touch gestures:
+  - circular drag to scrub/scratch audio
+  - pressure/press-hold interaction to momentarily modulate playback rate
+- Fader gestures: drag or tap to set value, double-tap to reset to center/default.
+
+## Limitations
+- Not intended as a pro DJ platform.
+- Feature scope prioritizes training over advanced performance tooling.
+- Workflow and controls are simplified compared to commercial mixer software/hardware.
+- Availability and behavior can vary as development phases continue.
+
+## License
+MIT License - Free to use
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Credits
+
+**Author**: manelix  
+**GitHub**: [github.com/manelix2000](https://github.com/manelix2000)
+
+Copyright (c) 2026 manelix
