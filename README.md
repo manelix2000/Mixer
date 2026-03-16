@@ -1,11 +1,23 @@
-# Mixer
+# Amateur Deejay Companion
 
 ## Description
 Mixer (`dev.manelix.Mixer`) is an **amateur DJ companion app** for iOS focused on training your ear, practicing timing, and learning BPM matching basics.
 
 It is intentionally **not a professional mixer app** and should be used for learning and practice, not for live/club performance workflows.
 
-Screenshots: [Screenshot 1](Projects/MixerApp/Resources/Screenshot1.png), [Screenshot 2](Projects/MixerApp/Resources/Screenshot2.png), [Screenshot 3](Projects/MixerApp/Resources/Screenshot3.png), [Screenshot 4](Projects/MixerApp/Resources/Screenshot4.png)
+## Screenshots
+
+**Single deck**
+![Single deck](Projects/MixerApp/Resources/Screenshot1.png)
+
+**Two decks**
+![Two decks](Projects/MixerApp/Resources/Screenshot2.png) 
+
+**Loading tracks**
+![Loading track](Projects/MixerApp/Resources/Screenshot3.png) 
+
+**Master buttons**
+![Master buttons](Projects/MixerApp/Resources/Screenshot4.png)
 
 ## Functionalities
 - Controls column toggle: show/hide the top controls panel.
@@ -30,6 +42,7 @@ Screenshots: [Screenshot 1](Projects/MixerApp/Resources/Screenshot1.png), [Scree
 - Feature scope prioritizes training over advanced performance tooling.
 - Workflow and controls are simplified compared to commercial mixer software/hardware.
 - Availability and behavior can vary as development phases continue.
+- **This projects has been entirely built using OpenAI-Codex AI**
 
 ## License
 MIT License - Free to use
