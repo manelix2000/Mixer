@@ -3,27 +3,31 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 55;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		1534B02D87528BCD6E2D68DD /* TuistFonts+MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2A66BD8554617F9F0C899E /* TuistFonts+MixerApp.swift */; };
+		1B30961F0DBE2204F778B333 /* Screenshot2.png in Resources */ = {isa = PBXBuildFile; fileRef = 0CB9E04498E423AC0F5BCF37 /* Screenshot2.png */; };
 		2509C41B302CB4E97032909E /* AudioEngine.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94EB9D16108EAA3B5E3BE1D6 /* AudioEngine.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		261E41A0142206421218BF53 /* MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A196EBB221D0D75884D07C1E /* MixerApp.swift */; };
 		2E99908A5B1CEB0B0D77BBAC /* TuistBundle+MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */; };
 		34E48199C6F3564AEAA8FC3E /* Sample.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1E90FFC3EFA41B3F3C0DEFD2 /* Sample.mp3 */; };
 		354A926A5F631311A841EB18 /* launch.png in Resources */ = {isa = PBXBuildFile; fileRef = AC4F4395F855DFE11102D7CC /* launch.png */; };
+		3DBE89DE07E63DA99C0FD075 /* Screenshot4.png in Resources */ = {isa = PBXBuildFile; fileRef = 8E271A62BEDCF222996CE4FC /* Screenshot4.png */; };
+		4013C49B9B282E35A3ACF6AF /* Screenshot3.png in Resources */ = {isa = PBXBuildFile; fileRef = 86ED43620C432A52AA9C44DB /* Screenshot3.png */; };
 		438656BED1CF59F9D4965B29 /* DSP.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 23004629BECBC75B92307B6E /* DSP.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		46AA0AC19C467FFB855AE23F /* MicrogrammaDExtendedBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C313388CE1035576F99E3750 /* MicrogrammaDExtendedBold.ttf */; };
-		4FD5AFFAB591F98954AE8B0F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */; };
 		53D650C1F6E80F848D04BFB7 /* playstore.png in Resources */ = {isa = PBXBuildFile; fileRef = 1AF076ED1BB7E2CA015EAEAF /* playstore.png */; };
 		5CBE00E54CAF1D374C9294DA /* MicrogrammaDExtendedBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 236FFF1B32B4B69D0BE686BD /* MicrogrammaDExtendedBold.otf */; };
 		68F6C6F91C554B12F1E6C7B1 /* DeckFeature.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 346C498AC1CFCBF80413CE25 /* DeckFeature.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8C37E48BAAAAB9FB139ED678 /* LaunchScreenMixer.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F6AC95646212D100F8D1A2B7 /* LaunchScreenMixer.storyboard */; };
 		A7AEE252AF202CDB75AD1C2B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4563DDE5895DE0E2050589E0 /* Assets.xcassets */; };
 		C9D7BBA6EA24CBC9B2E98E99 /* appstore.png in Resources */ = {isa = PBXBuildFile; fileRef = 53CFA362A154719A524F1994 /* appstore.png */; };
 		CDA2C06AA0F08726B5931BF6 /* DeckFeature.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 346C498AC1CFCBF80413CE25 /* DeckFeature.framework */; };
 		CF2CEE63808D417DD6CCBDDD /* Waveform.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F20A18C847ECC5083DB98E0D /* Waveform.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DBDBE31571AD9DB73DA18CD9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 595C42B0619A046E4AF515C3 /* ContentView.swift */; };
+		E955522E27E17A7B5801D469 /* Screenshot1.png in Resources */ = {isa = PBXBuildFile; fileRef = 40AC5FFAEABBAF7DA92866C2 /* Screenshot1.png */; };
 		EB3BB116449B2276FA03D313 /* UIComponents.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		FC81BB52F2C6D0576E58AF27 /* TuistAssets+MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E0D04DC606728236C29233 /* TuistAssets+MixerApp.swift */; };
 /* End PBXBuildFile section */
@@ -47,17 +51,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0CB9E04498E423AC0F5BCF37 /* Screenshot2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Screenshot2.png; sourceTree = "<group>"; };
 		1AF076ED1BB7E2CA015EAEAF /* playstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = playstore.png; sourceTree = "<group>"; };
 		1E90FFC3EFA41B3F3C0DEFD2 /* Sample.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Sample.mp3; sourceTree = "<group>"; };
 		23004629BECBC75B92307B6E /* DSP.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DSP.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		236FFF1B32B4B69D0BE686BD /* MicrogrammaDExtendedBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = MicrogrammaDExtendedBold.otf; sourceTree = "<group>"; };
 		346C498AC1CFCBF80413CE25 /* DeckFeature.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DeckFeature.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E2A66BD8554617F9F0C899E /* TuistFonts+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistFonts+MixerApp.swift"; sourceTree = "<group>"; };
+		40AC5FFAEABBAF7DA92866C2 /* Screenshot1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Screenshot1.png; sourceTree = "<group>"; };
 		4563DDE5895DE0E2050589E0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		53CFA362A154719A524F1994 /* appstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = appstore.png; sourceTree = "<group>"; };
 		595C42B0619A046E4AF515C3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		6955E5813FC3FBF99FA3E9AF /* MixerApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "MixerApp-Info.plist"; sourceTree = "<group>"; };
 		79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = UIComponents.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		86ED43620C432A52AA9C44DB /* Screenshot3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Screenshot3.png; sourceTree = "<group>"; };
+		8E271A62BEDCF222996CE4FC /* Screenshot4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Screenshot4.png; sourceTree = "<group>"; };
 		94EB9D16108EAA3B5E3BE1D6 /* AudioEngine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AudioEngine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A196EBB221D0D75884D07C1E /* MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerApp.swift; sourceTree = "<group>"; };
 		AC4F4395F855DFE11102D7CC /* launch.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = launch.png; sourceTree = "<group>"; };
@@ -66,7 +74,7 @@
 		D2E0D04DC606728236C29233 /* TuistAssets+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+MixerApp.swift"; sourceTree = "<group>"; };
 		F20A18C847ECC5083DB98E0D /* Waveform.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Waveform.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+MixerApp.swift"; sourceTree = "<group>"; };
-		FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		F6AC95646212D100F8D1A2B7 /* LaunchScreenMixer.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreenMixer.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -106,10 +114,14 @@
 				53CFA362A154719A524F1994 /* appstore.png */,
 				4563DDE5895DE0E2050589E0 /* Assets.xcassets */,
 				AC4F4395F855DFE11102D7CC /* launch.png */,
-				FCCE5209A1A1C48E0596945A /* LaunchScreen.storyboard */,
+				F6AC95646212D100F8D1A2B7 /* LaunchScreenMixer.storyboard */,
 				236FFF1B32B4B69D0BE686BD /* MicrogrammaDExtendedBold.otf */,
 				C313388CE1035576F99E3750 /* MicrogrammaDExtendedBold.ttf */,
 				1AF076ED1BB7E2CA015EAEAF /* playstore.png */,
+				40AC5FFAEABBAF7DA92866C2 /* Screenshot1.png */,
+				0CB9E04498E423AC0F5BCF37 /* Screenshot2.png */,
+				86ED43620C432A52AA9C44DB /* Screenshot3.png */,
+				8E271A62BEDCF222996CE4FC /* Screenshot4.png */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -193,6 +205,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = D4A9ED3EA158DED02F712F5C /* Build configuration list for PBXProject "MixerApp" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -218,9 +232,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A7AEE252AF202CDB75AD1C2B /* Assets.xcassets in Resources */,
-				4FD5AFFAB591F98954AE8B0F /* LaunchScreen.storyboard in Resources */,
+				8C37E48BAAAAB9FB139ED678 /* LaunchScreenMixer.storyboard in Resources */,
 				5CBE00E54CAF1D374C9294DA /* MicrogrammaDExtendedBold.otf in Resources */,
 				46AA0AC19C467FFB855AE23F /* MicrogrammaDExtendedBold.ttf in Resources */,
+				E955522E27E17A7B5801D469 /* Screenshot1.png in Resources */,
+				1B30961F0DBE2204F778B333 /* Screenshot2.png in Resources */,
+				4013C49B9B282E35A3ACF6AF /* Screenshot3.png in Resources */,
+				3DBE89DE07E63DA99C0FD075 /* Screenshot4.png in Resources */,
 				C9D7BBA6EA24CBC9B2E98E99 /* appstore.png in Resources */,
 				354A926A5F631311A841EB18 /* launch.png in Resources */,
 				53D650C1F6E80F848D04BFB7 /* playstore.png in Resources */,
@@ -334,7 +352,10 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;

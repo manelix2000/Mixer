@@ -11,7 +11,8 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(
                 with: [
-                    "UILaunchStoryboardName": "LaunchScreen",
+                    "CFBundleDisplayName": "DJ companion",
+                    "UILaunchStoryboardName": "LaunchScreenMixer",
                     "UIAppFonts": [
                         "MicrogrammaDExtendedBold.otf",
                         "MicrogrammaDExtendedBold.ttf"
