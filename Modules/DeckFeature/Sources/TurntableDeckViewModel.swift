@@ -14,6 +14,10 @@ public final class TurntableDeckViewModel: ObservableObject {
         subsystem: "dev.manelix.Mixer",
         category: "TurntableDeckViewModel.PressureTouch"
     )
+    private static let trackLog = Logger(
+        subsystem: "dev.manelix.Mixer",
+        category: "TurntableDeckViewModel.TrackImport"
+    )
 
     public enum ScratchInteractionState: Equatable {
         case idle
@@ -128,12 +132,21 @@ public final class TurntableDeckViewModel: ObservableObject {
     }
 
     public func selectTrack(url: URL) {
+        print("[Mixer][Import] selectTrack called with URL: \(url)")
+        Self.trackLog.info("selectTrack called with URL: \(url.path(percentEncoded: false), privacy: .public)")
+        playbackStatusText = "Importing..."
+        selectedTrackName = url.lastPathComponent
+
         let resolvedURL: URL
         do {
             resolvedURL = try importedTrackURL(from: url)
+            print("[Mixer][Import] imported URL: \(resolvedURL)")
+            Self.trackLog.info("Resolved imported URL: \(resolvedURL.path(percentEncoded: false), privacy: .public)")
         } catch {
+            print("[Mixer][Import] import failed: \(error.localizedDescription)")
+            Self.trackLog.error("Track import failed: \(error.localizedDescription, privacy: .public)")
             playbackState = .idle
-            playbackStatusText = "Failed to import selected track"
+            playbackStatusText = "Failed to import track (\(error.localizedDescription))"
             return
         }
 
@@ -170,12 +183,16 @@ public final class TurntableDeckViewModel: ObservableObject {
 
         do {
             try audioEngine.loadFile(url: resolvedURL)
+            print("[Mixer][Import] audioEngine.loadFile succeeded")
+            Self.trackLog.info("audioEngine.loadFile succeeded.")
             playbackState = audioEngine.playbackState
             playbackStatusText = ""
             refreshPlaybackTimeText()
             loadWaveform(url: resolvedURL)
             detectBPM(url: resolvedURL)
         } catch {
+            print("[Mixer][Import] audioEngine.loadFile failed: \(error.localizedDescription)")
+            Self.trackLog.error("audioEngine.loadFile failed: \(error.localizedDescription, privacy: .public)")
             playbackState = .idle
             playbackStatusText = "Failed to load selected track"
             playbackTimeText = "00:00 / 00:00"
@@ -913,23 +930,28 @@ public final class TurntableDeckViewModel: ObservableObject {
     }
 
     private func importedTrackURL(from sourceURL: URL) throws -> URL {
+        print("[Mixer][Import] importing source URL: \(sourceURL)")
+        Self.trackLog.info("Importing track from source: \(sourceURL.path(percentEncoded: false), privacy: .public)")
         let fileManager = FileManager.default
         let importsDirectory = fileManager.urls(
             for: .cachesDirectory,
             in: .userDomainMask
         )[0].appendingPathComponent("ImportedTracks", isDirectory: true)
         try fileManager.createDirectory(at: importsDirectory, withIntermediateDirectories: true)
+        Self.trackLog.info("Import destination directory: \(importsDirectory.path(percentEncoded: false), privacy: .public)")
 
         let destinationURL = importsDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension(sourceURL.pathExtension)
 
-        if sourceURL.isFileURL {
-            let didAccess = sourceURL.startAccessingSecurityScopedResource()
-            do {
-                if didAccess {
-                    sourceURL.stopAccessingSecurityScopedResource()
-                }
+        let didAccessSecurityScopedResource = sourceURL.isFileURL && sourceURL.startAccessingSecurityScopedResource()
+        print("[Mixer][Import] security scope started: \(didAccessSecurityScopedResource)")
+        Self.trackLog.info("Security-scoped access started: \(didAccessSecurityScopedResource, privacy: .public)")
+        defer {
+            if didAccessSecurityScopedResource {
+                sourceURL.stopAccessingSecurityScopedResource()
+                print("[Mixer][Import] security scope stopped")
+                Self.trackLog.info("Security-scoped access stopped.")
             }
         }
 
@@ -938,20 +960,32 @@ public final class TurntableDeckViewModel: ObservableObject {
         NSFileCoordinator().coordinate(readingItemAt: sourceURL, options: [], error: &coordinationError) { coordinatedURL in
             do {
                 try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
+                print("[Mixer][Import] coordinated copy succeeded -> \(destinationURL)")
+                Self.trackLog.info(
+                    "Coordinated copy succeeded: \(destinationURL.path(percentEncoded: false), privacy: .public)"
+                )
             } catch {
+                print("[Mixer][Import] coordinated copy failed: \(error.localizedDescription)")
+                Self.trackLog.error("Coordinated copy failed: \(error.localizedDescription, privacy: .public)")
                 copyError = error
             }
         }
 
         if fileManager.fileExists(atPath: destinationURL.path) {
+            print("[Mixer][Import] destination exists after coordinated copy")
+            Self.trackLog.info("Imported file exists after coordinated copy.")
             return destinationURL
         }
 
         if let copyError {
             do {
                 try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                print("[Mixer][Import] fallback direct copy succeeded after copy error")
+                Self.trackLog.info("Fallback direct copy succeeded after coordinated copy error.")
                 return destinationURL
             } catch {
+                print("[Mixer][Import] fallback direct copy failed: \(error.localizedDescription)")
+                Self.trackLog.error("Fallback direct copy failed: \(error.localizedDescription, privacy: .public)")
                 throw copyError
             }
         }
@@ -959,12 +993,25 @@ public final class TurntableDeckViewModel: ObservableObject {
         if let coordinationError {
             do {
                 try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                print("[Mixer][Import] fallback direct copy succeeded after coordination error")
+                Self.trackLog.info("Fallback direct copy succeeded after coordination error.")
                 return destinationURL
             } catch {
+                print("[Mixer][Import] fallback direct copy failed: \(error.localizedDescription)")
+                Self.trackLog.error("Fallback direct copy failed: \(error.localizedDescription, privacy: .public)")
                 throw coordinationError
             }
         }
-        return destinationURL
+
+        print("[Mixer][Import] import failed with unknown file read error")
+        Self.trackLog.error("Import failed with unknown file read error.")
+        throw NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileReadUnknownError,
+            userInfo: [
+                NSURLErrorKey: sourceURL
+            ]
+        )
     }
 
     private func detectBPM(url: URL) {

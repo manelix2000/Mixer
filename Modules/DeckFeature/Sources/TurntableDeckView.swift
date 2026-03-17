@@ -139,12 +139,29 @@ public struct TurntableDeckView: View {
         .padding(12)
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .sheet(isPresented: $isImportingTrack) {
-            TrackDocumentPicker(contentTypes: Self.supportedAudioTypes) { selectedURL in
+        .fileImporter(
+            isPresented: $isImportingTrack,
+            allowedContentTypes: Self.supportedAudioTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case let .success(urls):
+                guard let selectedURL = urls.first else {
+                    print("[Mixer][Import] fileImporter success but no URL returned")
+                    Self.log.info("fileImporter returned no URLs.")
+                    return
+                }
+                print("[Mixer][Import] selected URL: \(selectedURL)")
+                Self.log.info(
+                    "fileImporter selected URL: \(selectedURL.path(percentEncoded: false), privacy: .public)"
+                )
                 if isPitchLockedToExternalBPM {
                     isPitchLockedToExternalBPM = false
                 }
                 viewModel.selectTrack(url: selectedURL)
+            case let .failure(error):
+                print("[Mixer][Import] fileImporter failed: \(error.localizedDescription)")
+                Self.log.error("fileImporter failed: \(error.localizedDescription, privacy: .public)")
             }
         }
         .onChange(of: areControlsVisible) { _ in
@@ -571,12 +588,7 @@ public struct TurntableDeckView: View {
         }
     }
 
-    private static let supportedAudioTypes: [UTType] = [
-        "mp3",
-        "wav",
-        "aiff",
-        "m4a"
-    ].compactMap { UTType(filenameExtension: $0, conformingTo: .audio) }
+    private static let supportedAudioTypes: [UTType] = [.audio]
 
     private func loadSampleTrack() {
         guard let sampleURL = Bundle.main.url(forResource: "Sample", withExtension: "mp3") else {
@@ -801,40 +813,6 @@ public struct TurntableDeckView: View {
     private static let pressureStartHoldDelay: TimeInterval = 0.0
     private static let armFadeInAnimationDuration: TimeInterval = 0.18
     private static let controlsResizeAnimationDurationNanoseconds: UInt64 = 220_000_000
-}
-
-private struct TrackDocumentPicker: UIViewControllerRepresentable {
-    let contentTypes: [UTType]
-    let onPick: (URL) -> Void
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: contentTypes,
-            asCopy: true
-        )
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: (URL) -> Void
-
-        init(onPick: @escaping (URL) -> Void) {
-            self.onPick = onPick
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let first = urls.first else { return }
-            onPick(first)
-        }
-    }
 }
 
 private struct TurntableTouchSurface: UIViewRepresentable {

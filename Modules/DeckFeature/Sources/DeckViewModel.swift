@@ -177,6 +177,36 @@ public final class DeckViewModel: ObservableObject {
     }
 
     private func requestMicrophonePermissionAndStart() {
+        if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                startMicrophoneCapturePipeline()
+            case .denied:
+                isMicrophoneBPMDetectionActive = false
+                isExternalBPMLoading = false
+                externalBPMStatusText = "Mic BPM unavailable: microphone permission denied."
+            case .undetermined:
+                externalBPMStatusText = "Requesting microphone permission..."
+                AVAudioApplication.requestRecordPermission { [weak self] granted in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        guard granted else {
+                            self.isMicrophoneBPMDetectionActive = false
+                            self.isExternalBPMLoading = false
+                            self.externalBPMStatusText = "Mic BPM unavailable: microphone permission denied."
+                            return
+                        }
+                        self.startMicrophoneCapturePipeline()
+                    }
+                }
+            @unknown default:
+                isMicrophoneBPMDetectionActive = false
+                isExternalBPMLoading = false
+                externalBPMStatusText = "Mic BPM unavailable: unknown microphone permission state."
+            }
+            return
+        }
+
         let session = AVAudioSession.sharedInstance()
         switch session.recordPermission {
         case .granted:

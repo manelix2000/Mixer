@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import DSP
 import Foundation
 import os
@@ -98,6 +99,13 @@ public final class AudioEngineManager: AudioEngineControlling {
     private var microphoneCaptureRunning = false
     private var isMicrophoneSessionActive = false
     private var microphoneCaptureEngine: AVAudioEngine?
+    private var microphoneCaptureSession: AVCaptureSession?
+    private var microphoneCaptureDelegate: MacAudioCaptureDelegate?
+    private var microphoneCaptureOutputQueue: DispatchQueue?
+    private let microphoneCaptureSessionControlQueue = DispatchQueue(
+        label: "dev.manelix.Mixer.AudioEngine.mic-capture-session-control",
+        qos: .userInitiated
+    )
     private let microphoneDispatchQueue = DispatchQueue(
         label: "dev.manelix.Mixer.AudioEngine.microphone",
         qos: .userInitiated
@@ -403,6 +411,11 @@ public final class AudioEngineManager: AudioEngineControlling {
         throw AudioEngineManagerError.microphoneUnsupportedInCurrentEnvironment
 #else
         try withStateLock {
+            if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+                try startMicrophoneCaptureOnMacDesignedForiOSLocked(onBuffer: onBuffer)
+                return
+            }
+
             guard !microphoneCaptureRunning else {
                 Self.log.info("Mic capture start ignored: already running.")
                 return
@@ -525,6 +538,14 @@ public final class AudioEngineManager: AudioEngineControlling {
                 captureEngine.inputNode.removeTap(onBus: 0)
                 captureEngine.stop()
                 microphoneCaptureEngine = nil
+            } else if let captureSession = microphoneCaptureSession {
+                let controlQueue = microphoneCaptureSessionControlQueue
+                controlQueue.async {
+                    captureSession.stopRunning()
+                }
+                microphoneCaptureSession = nil
+                microphoneCaptureDelegate = nil
+                microphoneCaptureOutputQueue = nil
             } else {
                 engine.inputNode.removeTap(onBus: 0)
             }
@@ -799,6 +820,158 @@ public final class AudioEngineManager: AudioEngineControlling {
         }.joined(separator: ", ")
     }
 
+    private func startMicrophoneCaptureOnMacDesignedForiOSLocked(
+        onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
+    ) throws {
+        guard !microphoneCaptureRunning else {
+            Self.log.info("Mic capture start ignored on My Mac: already running.")
+            return
+        }
+
+        if AVAudioApplication.shared.recordPermission == .denied {
+            Self.log.error("Mic capture denied on My Mac: record permission is denied.")
+            throw AudioEngineManagerError.microphonePermissionDenied
+        }
+
+        do {
+            let captureEngine = AVAudioEngine()
+            let selectedFormat = try installMicrophoneTapWithoutSessionLocked(
+                on: captureEngine,
+                onBuffer: onBuffer
+            )
+            if !captureEngine.isRunning {
+                try captureEngine.start()
+            }
+            microphoneCaptureEngine = captureEngine
+            microphoneCaptureRunning = true
+            isMicrophoneSessionActive = true
+            Self.log.info(
+                "Mic capture started on My Mac. format=\(Self.formatSummary(selectedFormat), privacy: .public)"
+            )
+        } catch {
+            Self.log.error(
+                "Mic capture via AVAudioEngine failed on My Mac: \(error.localizedDescription, privacy: .public). Falling back to AVCaptureSession."
+            )
+            microphoneCaptureEngine?.inputNode.removeTap(onBus: 0)
+            microphoneCaptureEngine?.stop()
+            microphoneCaptureEngine = nil
+            microphoneCaptureRunning = false
+            isMicrophoneSessionActive = false
+            try startMicrophoneCaptureViaAVCaptureLocked(onBuffer: onBuffer)
+        }
+    }
+
+    private func resolveMicrophoneTapFormatWithoutSessionLocked(
+        on audioEngine: AVAudioEngine
+    ) throws -> AVAudioFormat {
+        let inputNode = audioEngine.inputNode
+        let preferred = inputNode.outputFormat(forBus: 0)
+        let fallback = inputNode.inputFormat(forBus: 0)
+        Self.log.info(
+            """
+            My Mac mic formats. preferred=\(Self.formatSummary(preferred), privacy: .public) \
+            fallback=\(Self.formatSummary(fallback), privacy: .public)
+            """
+        )
+
+        if Self.isValidMicrophoneFormat(preferred) {
+            return preferred
+        }
+        if Self.isValidMicrophoneFormat(fallback) {
+            return fallback
+        }
+
+        try refreshInputNodeHardwareFormatLocked(on: audioEngine)
+        let retriedPreferred = inputNode.outputFormat(forBus: 0)
+        let retriedFallback = inputNode.inputFormat(forBus: 0)
+        Self.log.info(
+            """
+            My Mac mic formats after refresh. preferred=\(Self.formatSummary(retriedPreferred), privacy: .public) \
+            fallback=\(Self.formatSummary(retriedFallback), privacy: .public)
+            """
+        )
+        if Self.isValidMicrophoneFormat(retriedPreferred) {
+            return retriedPreferred
+        }
+        if Self.isValidMicrophoneFormat(retriedFallback) {
+            return retriedFallback
+        }
+
+        throw AudioEngineManagerError.microphoneUnavailable
+    }
+
+    private func installMicrophoneTapWithoutSessionLocked(
+        on audioEngine: AVAudioEngine,
+        onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
+    ) throws -> AVAudioFormat {
+        let inputNode = audioEngine.inputNode
+        let selectedFormat = try resolveMicrophoneTapFormatWithoutSessionLocked(on: audioEngine)
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(
+            onBus: 0,
+            bufferSize: 1_024,
+            format: selectedFormat
+        ) { [weak self] buffer, _ in
+            self?.handleMicrophoneBuffer(buffer, format: selectedFormat, onBuffer: onBuffer)
+        }
+        return selectedFormat
+    }
+
+    private func startMicrophoneCaptureViaAVCaptureLocked(
+        onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
+    ) throws {
+        let captureSession = AVCaptureSession()
+        captureSession.beginConfiguration()
+
+        guard let audioDevice = AVCaptureDevice.default(for: .audio) else {
+            captureSession.commitConfiguration()
+            throw AudioEngineManagerError.microphoneUnavailable
+        }
+
+        let deviceInput: AVCaptureDeviceInput
+        do {
+            deviceInput = try AVCaptureDeviceInput(device: audioDevice)
+        } catch {
+            captureSession.commitConfiguration()
+            throw AudioEngineManagerError.microphoneUnavailable
+        }
+
+        guard captureSession.canAddInput(deviceInput) else {
+            captureSession.commitConfiguration()
+            throw AudioEngineManagerError.microphoneUnavailable
+        }
+        captureSession.addInput(deviceInput)
+
+        let audioOutput = AVCaptureAudioDataOutput()
+        let outputQueue = DispatchQueue(
+            label: "dev.manelix.Mixer.AudioEngine.mic-capture-output",
+            qos: .userInitiated
+        )
+        let delegate = MacAudioCaptureDelegate(
+            processingQueue: microphoneDispatchQueue,
+            onBuffer: onBuffer
+        )
+        audioOutput.setSampleBufferDelegate(delegate, queue: outputQueue)
+
+        guard captureSession.canAddOutput(audioOutput) else {
+            captureSession.commitConfiguration()
+            throw AudioEngineManagerError.microphoneUnavailable
+        }
+        captureSession.addOutput(audioOutput)
+        captureSession.commitConfiguration()
+
+        let controlQueue = microphoneCaptureSessionControlQueue
+        controlQueue.async {
+            captureSession.startRunning()
+        }
+        microphoneCaptureSession = captureSession
+        microphoneCaptureDelegate = delegate
+        microphoneCaptureOutputQueue = outputQueue
+        microphoneCaptureRunning = true
+        isMicrophoneSessionActive = true
+        Self.log.info("Mic capture started on My Mac via AVCaptureSession.")
+    }
+
     private func totalDurationLocked() -> TimeInterval {
         guard let file = loadedFile else {
             return 0
@@ -959,5 +1132,108 @@ public final class AudioEngineManager: AudioEngineControlling {
         microphoneDispatchQueue.async {
             onBuffer(input)
         }
+    }
+}
+
+private final class MacAudioCaptureDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
+    private let processingQueue: DispatchQueue
+    private let onBuffer: @Sendable (TempoInputBuffer) -> Void
+
+    init(
+        processingQueue: DispatchQueue,
+        onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
+    ) {
+        self.processingQueue = processingQueue
+        self.onBuffer = onBuffer
+    }
+
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard let tempoInputBuffer = Self.makeTempoInputBuffer(from: sampleBuffer) else {
+            return
+        }
+
+        processingQueue.async {
+            self.onBuffer(tempoInputBuffer)
+        }
+    }
+
+    private static func makeTempoInputBuffer(from sampleBuffer: CMSampleBuffer) -> TempoInputBuffer? {
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+            return nil
+        }
+
+        let asbd = asbdPointer.pointee
+        guard asbd.mFormatID == kAudioFormatLinearPCM else {
+            return nil
+        }
+
+        let channelCount = Int(asbd.mChannelsPerFrame)
+        guard channelCount > 0, asbd.mSampleRate > 0 else {
+            return nil
+        }
+
+        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+        let isSignedInteger = (asbd.mFormatFlags & kAudioFormatFlagIsSignedInteger) != 0
+        let isNonInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+        guard !isNonInterleaved else {
+            return nil
+        }
+
+        guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
+            return nil
+        }
+
+        var totalLength = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        let status = CMBlockBufferGetDataPointer(
+            dataBuffer,
+            atOffset: 0,
+            lengthAtOffsetOut: nil,
+            totalLengthOut: &totalLength,
+            dataPointerOut: &dataPointer
+        )
+        guard status == kCMBlockBufferNoErr,
+              let dataPointer,
+              asbd.mBytesPerFrame > 0 else {
+            return nil
+        }
+
+        let frameCount = totalLength / Int(asbd.mBytesPerFrame)
+        guard frameCount > 0 else {
+            return nil
+        }
+
+        let sampleCount = frameCount * channelCount
+        let samples: [Float]
+
+        if isFloat, asbd.mBitsPerChannel == 32 {
+            samples = dataPointer.withMemoryRebound(to: Float.self, capacity: sampleCount) { ptr in
+                Array(UnsafeBufferPointer(start: ptr, count: sampleCount))
+            }
+        } else if isSignedInteger, asbd.mBitsPerChannel == 16 {
+            let scale = 1.0 / Float(Int16.max)
+            samples = dataPointer.withMemoryRebound(to: Int16.self, capacity: sampleCount) { ptr in
+                Array(UnsafeBufferPointer(start: ptr, count: sampleCount)).map { Float($0) * scale }
+            }
+        } else if isSignedInteger, asbd.mBitsPerChannel == 32 {
+            let scale = 1.0 / Float(Int32.max)
+            samples = dataPointer.withMemoryRebound(to: Int32.self, capacity: sampleCount) { ptr in
+                Array(UnsafeBufferPointer(start: ptr, count: sampleCount)).map { Float($0) * scale }
+            }
+        } else {
+            return nil
+        }
+
+        return TempoInputBuffer(
+            samples: samples,
+            sampleRate: asbd.mSampleRate,
+            channelCount: channelCount,
+            isInterleaved: true
+        )
     }
 }
