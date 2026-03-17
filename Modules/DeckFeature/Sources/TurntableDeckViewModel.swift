@@ -53,6 +53,7 @@ public final class TurntableDeckViewModel: ObservableObject {
     @Published public private(set) var platterRotationDegrees: Double
     @Published public private(set) var scratchInteractionState: ScratchInteractionState
     @Published public private(set) var volume: Double
+    @Published public private(set) var pan: Double
 
     private let audioEngine: AudioEngineControlling
     private let waveformAnalyzer: WaveformAnalyzing
@@ -114,6 +115,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.platterRotationDegrees = 0
         self.scratchInteractionState = .idle
         self.volume = Double(min(max(audioEngine.volume, 0), 1))
+        self.pan = Double(min(max(audioEngine.pan, -1), 1))
         self.masterVolume = 1.0
 
         applyEffectiveOutputVolume()
@@ -319,6 +321,7 @@ public final class TurntableDeckViewModel: ObservableObject {
 
     public func setPan(_ value: Double) {
         audioEngine.setPan(Float(min(max(value, -1.0), 1.0)))
+        pan = Double(audioEngine.pan)
     }
 
     public func incrementBPM() {

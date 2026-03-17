@@ -134,57 +134,15 @@ public struct DeckView: View {
     private var controlsColumn: some View {
         HStack(alignment: .top, spacing: 12) {
             externalBPMControls
-            volumeControls
-            panControls
-        }
-    }
-
-    private var volumeControls: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "speaker.fill")
-                .foregroundStyle(.secondary)
-
-            Slider(
-                value: Binding(
-                    get: { viewModel.volume },
-                    set: { viewModel.setVolume($0) }
-                ),
-                in: 0...1
+            DeckPanControls(
+                deckViewModel: viewModel.leftTurntableDeckViewModel
             )
-            .accessibilityLabel("Volume")
-
-            Text(String(format: "%.2f", viewModel.volume))
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 42, alignment: .trailing)
+            if isIPad || isRightDeckVisible {
+                DeckPanControls(
+                    deckViewModel: viewModel.rightTurntableDeckViewModel
+                )
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private var panControls: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.left.and.right")
-                .foregroundStyle(.secondary)
-            Slider(
-                value: Binding(
-                    get: { viewModel.pan },
-                    set: { viewModel.setPan($0) }
-                ),
-                in: -1...1
-            )
-
-            Text("\(String(format: "%.2f", viewModel.pan)) \(viewModel.panRoutingText)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 60, alignment: .trailing)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var externalBPMControls: some View {
@@ -213,10 +171,194 @@ public struct DeckView: View {
         .background(Color(uiColor: .tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
+
 }
 
 #Preview("Landscape View", traits: .landscapeLeft) {
     DeckView()
+}
+
+private struct HorizontalFader: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let thumbText: String
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = max(geometry.size.width, 1)
+            let height = max(geometry.size.height, 1)
+            let thumbWidth: CGFloat = 34
+            let thumbHeight: CGFloat = max(height - 2, 22)
+            let usableWidth = max(width - thumbWidth, 1)
+            let progress = normalizedProgress(for: value)
+            let thumbX = progress * usableWidth
+            let baselineProgress = baselineProgressForRange()
+            let selectedWidth = max(abs(progress - baselineProgress) * width, 2)
+            let selectedMidpoint = (progress + baselineProgress) * 0.5
+
+            ZStack {
+                ZStack {
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.89),
+                                    Color(white: 0.81)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.black.opacity(0.18), lineWidth: 0.8)
+                        )
+                        .frame(height: max(height * 0.38, 8))
+
+                    Capsule(style: .continuous)
+                        .fill(Color.accentColor.opacity(0.25))
+                        .frame(width: selectedWidth, height: max(height * 0.38, 8))
+                        .offset(x: (selectedMidpoint - 0.5) * width)
+
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.35))
+                        .frame(width: 1, height: 20)
+
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.98),
+                                    Color(white: 0.91)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(Color.black.opacity(0.3), lineWidth: 0.9)
+                        )
+                        .frame(width: thumbWidth, height: thumbHeight)
+                        .overlay(
+                            Text(thumbText)
+                                .font(.caption2.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(.black.opacity(0.82))
+                        )
+                        .offset(x: thumbX - (usableWidth * 0.5))
+                        .shadow(color: Color.black.opacity(0.12), radius: 1.2, x: 0, y: 0.6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        let x = min(max(gesture.location.x, 0), width)
+                        let mappedProgress = x / width
+                        value = mappedValue(forNormalizedProgress: mappedProgress)
+                    }
+            )
+            .simultaneousGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        value = 0
+                    }
+            )
+            .onTapGesture { location in
+                let x = min(max(location.x, 0), width)
+                let mappedProgress = x / width
+                value = mappedValue(forNormalizedProgress: mappedProgress)
+            }
+        }
+        .frame(minWidth: 130, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+    }
+
+    private func normalizedProgress(for value: Double) -> CGFloat {
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0.5 }
+        return CGFloat((clamped - range.lowerBound) / span)
+    }
+
+    private func mappedValue(forNormalizedProgress progress: CGFloat) -> Double {
+        let clamped = min(max(progress, 0), 1)
+        let span = range.upperBound - range.lowerBound
+        return range.lowerBound + (Double(clamped) * span)
+    }
+
+    private func baselineProgressForRange() -> CGFloat {
+        if range.lowerBound <= 0, range.upperBound >= 0 {
+            return normalizedProgress(for: 0)
+        }
+        if range.lowerBound >= 0 {
+            return 0
+        }
+        return 1
+    }
+}
+
+private struct DeckPanControls: View {
+    @ObservedObject var deckViewModel: TurntableDeckViewModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            artworkBadge
+
+            HorizontalFader(
+                value: Binding(
+                    get: { deckViewModel.pan },
+                    set: { deckViewModel.setPan($0) }
+                ),
+                range: -1...1,
+                thumbText: panRoutingText(deckViewModel.pan)
+            )
+            .frame(minWidth: 130, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .accessibilityLabel("Deck pan control")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color(uiColor: .tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var artworkBadge: some View {
+        if let artwork = deckViewModel.trackArtwork {
+            Image(uiImage: artwork)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 24, height: 24)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.black.opacity(0.25), lineWidth: 0.7)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Image(systemName: "music.note")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.black.opacity(0.18), lineWidth: 0.7)
+                )
+        }
+    }
+
+    private func panRoutingText(_ pan: Double) -> String {
+        if pan < -0.1 {
+            return "L"
+        }
+        if pan > 0.1 {
+            return "R"
+        }
+        return "C"
+    }
 }
 
 private struct TurntableToggleIcon: View {
