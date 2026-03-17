@@ -43,8 +43,10 @@ public struct DeckView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     if isIPad || areControlsVisible {
-                        controlsColumn
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                        if !isSettingsVisible {
+                            controlsColumn
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
 
                     ZStack(alignment: .topLeading) {
@@ -60,6 +62,7 @@ public struct DeckView: View {
                     }
                     .animation(.easeInOut(duration: 0.22), value: isSettingsVisible)
                 }
+                .animation(.easeInOut(duration: 0.22), value: isSettingsVisible)
             }
             .padding(12)
             .background(.black)
@@ -78,7 +81,12 @@ public struct DeckView: View {
             if !isIPad {
                 Button {
                     withAnimation(.easeInOut(duration: 0.22)) {
-                        areControlsVisible.toggle()
+                        if areControlsVisible {
+                            isSettingsVisible = false
+                            areControlsVisible = false
+                        } else {
+                            areControlsVisible = true
+                        }
                     }
                 } label: {
                     Image(systemName: areControlsVisible ? "xmark" : "line.3.horizontal")
