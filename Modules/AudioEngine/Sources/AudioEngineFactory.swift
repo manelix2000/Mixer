@@ -26,19 +26,18 @@ public final class DefaultAudioEngineFactory: AudioEngineBuilding {
 
     public func makeAudioEngine() -> any AudioEngineControlling {
         let selectedMode = modeStore.selectedMode
-        Self.log.info("Creating audio engine for mode: \(selectedMode.rawValue, privacy: .public)")
-        switch selectedMode {
-        case .standard:
-            return AudioEngineManager()
-        case .split:
-            let splitSlot = nextSplitSlot()
-            Self.log.info("Split mode selected; using split engine slot=\(splitSlot, privacy: .public).")
-            return SplitAudioEngineManager(
-                slotIndex: splitSlot,
-                modeStore: modeStore,
-                layoutStore: splitDeckLayoutStore
-            )
-        }
+        let splitSlot = nextSplitSlot()
+        Self.log.info(
+            """
+            Creating split-capable audio engine wrapper for mode=\(selectedMode.rawValue, privacy: .public) \
+            slot=\(splitSlot, privacy: .public)
+            """
+        )
+        return SplitAudioEngineManager(
+            slotIndex: splitSlot,
+            modeStore: modeStore,
+            layoutStore: splitDeckLayoutStore
+        )
     }
 
     private func nextSplitSlot() -> Int {

@@ -55,7 +55,7 @@ public final class DeckViewModel: ObservableObject {
         self.isPitchLockedToExternalBPM = false
         self.isLeftDeckCueEnabled = true
         self.isRightDeckCueEnabled = true
-        self.cueMixMode = .cue
+        self.cueMixMode = .blend
         self.cueLevelPercent = 80
         self.leftTurntableDeckViewModel = TurntableDeckViewModel(
             audioEngine: leftAudioEngine,
@@ -133,7 +133,7 @@ public final class DeckViewModel: ObservableObject {
             applySplitDefaultPanIfNeeded(on: rightTurntableDeckViewModel)
             isLeftDeckCueEnabled = true
             isRightDeckCueEnabled = true
-            cueMixMode = .cue
+            cueMixMode = .blend
         }
         updateCueRoutingMix()
     }
