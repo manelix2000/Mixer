@@ -30,7 +30,7 @@ public struct DeckView: View {
                 controlsVisibilityButton
 
                 VStack(alignment: .leading, spacing: 12) {
-                    if areControlsVisible {
+                    if isIPad || areControlsVisible {
                         controlsColumn
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -71,20 +71,22 @@ public struct DeckView: View {
 
     private var controlsVisibilityButton: some View {
         VStack {
-            Button {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    areControlsVisible.toggle()
+            if !isIPad {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        areControlsVisible.toggle()
+                    }
+                } label: {
+                    Image(systemName: areControlsVisible ? "xmark" : "line.3.horizontal")
+                        .font(.caption.weight(.bold))
+                        .frame(maxWidth: 14)
+                        .frame(minHeight: 20)
                 }
-            } label: {
-                Image(systemName: areControlsVisible ? "xmark" : "line.3.horizontal")
-                    .font(.caption.weight(.bold))
-                    .frame(maxWidth: 14)
-                    .frame(minHeight: 20)
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
             }
-            .buttonStyle(.borderedProminent)
-            .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
-            
-            if areControlsVisible {
+
+            if isIPad || areControlsVisible {
                 VStack {
                     if !isIPad {
                         Button {
@@ -129,7 +131,7 @@ public struct DeckView: View {
             }
         }
         .frame(width: 44)
-        .accessibilityLabel(areControlsVisible ? "Hide controls" : "Show controls")
+        .accessibilityLabel((isIPad || areControlsVisible) ? "Hide controls" : "Show controls")
         .accessibilityHint("Toggles the controls column visibility")
     }
 
@@ -152,7 +154,7 @@ public struct DeckView: View {
         }
 
         if viewModel.externalBPMText == "-- BPM" {
-            return viewModel.externalBPMStatusText
+            return "\(viewModel.externalBPMStatusText)"
         }
         return "\(viewModel.externalBPMStatusText) \(viewModel.externalBPMText)"
     }

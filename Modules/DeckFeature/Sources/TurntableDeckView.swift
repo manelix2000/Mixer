@@ -94,6 +94,9 @@ public struct TurntableDeckView: View {
                                 }
                             }
                             Spacer()
+                            if let externalBPMBadgeText {
+                                topCenteredMicBadgeView(text: externalBPMBadgeText)
+                            }
                         }
                         .zIndex(5)
                         .padding(10)
@@ -172,12 +175,23 @@ public struct TurntableDeckView: View {
                 ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
             )
         }
-        return externalBPMBadgeText
+        return nil
     }
 
     @ViewBuilder
     private func topLeftBadgeView(text: String) -> some View {
-        if !isPitchLockedToExternalBPM && isExternalBPMListening {
+        Text(text)
+            .font(.caption2.monospacedDigit().weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private func topCenteredMicBadgeView(text: String) -> some View {
+        if isExternalBPMListening {
             TimelineView(.animation) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
                 let pulse = (sin(t * (2.0 * .pi * 0.7)) + 1.0) * 0.5
