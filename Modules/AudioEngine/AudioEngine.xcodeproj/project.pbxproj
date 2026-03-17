@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		0F70D4B8258272B57A0CED76 /* DSP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C134C59C32E0006C934EFB5 /* DSP.framework */; };
+		23EA38F06CAB8FE9F302F61C /* AudioEngineFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35665BCA311AAA27E26317EC /* AudioEngineFactory.swift */; };
+		C16FC45779C38423059EF0D8 /* AudioEngineMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB61957C7D61D37DDA9E67E /* AudioEngineMode.swift */; };
+		DAA7B5CC4BC9AC171CE34AC5 /* SplitAudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE54BA5156AF07130C33B14C /* SplitAudioEngineManager.swift */; };
 		F8E5001DADDD684E367F2C94 /* AudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59F2C056ED87019C5EB5D27 /* AudioEngineManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -26,9 +29,12 @@
 
 /* Begin PBXFileReference section */
 		140EBB85A98032E408DB6673 /* AudioEngine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AudioEngine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		2FB61957C7D61D37DDA9E67E /* AudioEngineMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineMode.swift; sourceTree = "<group>"; };
+		35665BCA311AAA27E26317EC /* AudioEngineFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineFactory.swift; sourceTree = "<group>"; };
 		80C5A152211BA0C68CCFDFD8 /* AudioEngine-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AudioEngine-Info.plist"; sourceTree = "<group>"; };
 		9C134C59C32E0006C934EFB5 /* DSP.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DSP.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C59F2C056ED87019C5EB5D27 /* AudioEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineManager.swift; sourceTree = "<group>"; };
+		CE54BA5156AF07130C33B14C /* SplitAudioEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitAudioEngineManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,7 +52,10 @@
 		327A0A6AF441F2B6BC4E9AB6 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				35665BCA311AAA27E26317EC /* AudioEngineFactory.swift */,
 				C59F2C056ED87019C5EB5D27 /* AudioEngineManager.swift */,
+				2FB61957C7D61D37DDA9E67E /* AudioEngineMode.swift */,
+				CE54BA5156AF07130C33B14C /* SplitAudioEngineManager.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -159,7 +168,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23EA38F06CAB8FE9F302F61C /* AudioEngineFactory.swift in Sources */,
 				F8E5001DADDD684E367F2C94 /* AudioEngineManager.swift in Sources */,
+				C16FC45779C38423059EF0D8 /* AudioEngineMode.swift in Sources */,
+				DAA7B5CC4BC9AC171CE34AC5 /* SplitAudioEngineManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

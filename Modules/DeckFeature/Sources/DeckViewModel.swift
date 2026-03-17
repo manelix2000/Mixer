@@ -25,10 +25,12 @@ public final class DeckViewModel: ObservableObject {
     public init(
         volume: Double = 0.8,
         pan: Double = 0.0,
-        audioEngine: AudioEngineControlling = AudioEngineManager(),
+        audioEngineFactory: any AudioEngineBuilding = DefaultAudioEngineFactory(),
         waveformAnalyzer: WaveformAnalyzing = WaveformAnalyzer()
     ) {
-        self.audioEngine = audioEngine
+        let leftAudioEngine = audioEngineFactory.makeAudioEngine()
+        let rightAudioEngine = audioEngineFactory.makeAudioEngine()
+        self.audioEngine = leftAudioEngine
         let clampedMasterVolume = min(max(volume, 0), 1)
         self.audioEngine.setPan(Float(min(max(pan, -1), 1)))
         self.volume = clampedMasterVolume
@@ -39,12 +41,12 @@ public final class DeckViewModel: ObservableObject {
         self.isMicrophoneBPMDetectionActive = false
         self.isPitchLockedToExternalBPM = false
         self.leftTurntableDeckViewModel = TurntableDeckViewModel(
-            audioEngine: audioEngine,
+            audioEngine: leftAudioEngine,
             waveformAnalyzer: waveformAnalyzer
         )
 
         self.rightTurntableDeckViewModel = TurntableDeckViewModel(
-            audioEngine: AudioEngineManager(),
+            audioEngine: rightAudioEngine,
             waveformAnalyzer: WaveformAnalyzer()
         )
         self.leftTurntableDeckViewModel.setPan(Double(self.audioEngine.pan))

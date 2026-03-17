@@ -1,3 +1,4 @@
+import AudioEngine
 import SwiftUI
 import UIKit
 
@@ -6,21 +7,32 @@ public struct DeckView: View {
     @StateObject private var viewModel: DeckViewModel
     @State private var areControlsVisible: Bool
     @State private var isRightDeckVisible: Bool
+    @State private var isSettingsVisible: Bool
+    @State private var selectedAudioEngineMode: AudioEngineMode
     private let isIPad: Bool
+    private let audioEngineModeStore: UserDefaultsAudioEngineModeStore
 
     public init() {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let modeStore = UserDefaultsAudioEngineModeStore()
         self.isIPad = isIPad
+        self.audioEngineModeStore = modeStore
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
+        _isSettingsVisible = State(initialValue: false)
+        _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
         _viewModel = StateObject(wrappedValue: DeckViewModel())
     }
 
     public init(viewModel: DeckViewModel) {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let modeStore = UserDefaultsAudioEngineModeStore()
         self.isIPad = isIPad
+        self.audioEngineModeStore = modeStore
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
+        _isSettingsVisible = State(initialValue: false)
+        _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
@@ -35,36 +47,28 @@ public struct DeckView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    HStack(alignment: .top, spacing: 12) {
-                        TurntableDeckView(
-                            viewModel: viewModel.leftTurntableDeckViewModel,
-                            isPitchLockedToExternalBPM: Binding(
-                                get: { viewModel.isPitchLockedToExternalBPM },
-                                set: { viewModel.setPitchLockEnabled($0) }
-                            ),
-                            areControlsVisible: $areControlsVisible,
-                            externalBPMBadgeText: leftDeckMicBPMBadgeText,
-                            isExternalBPMListening: viewModel.isMicrophoneBPMDetectionActive || viewModel.isExternalBPMLoading
-                        )
+                    ZStack(alignment: .topLeading) {
+                        decksRow
+                            .offset(y: isSettingsVisible ? 36 : 0)
+                            .opacity(isSettingsVisible ? 0 : 1)
+                            .allowsHitTesting(!isSettingsVisible)
 
-                        if isIPad || isRightDeckVisible {
-                            TurntableDeckView(
-                                viewModel: viewModel.rightTurntableDeckViewModel,
-                                isPitchLockedToExternalBPM: .constant(false),
-                                areControlsVisible: $areControlsVisible
-                            )
+                        if isSettingsVisible {
+                            settingsCard
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
+                    .animation(.easeInOut(duration: 0.22), value: isSettingsVisible)
                 }
             }
             .padding(12)
             .background(.black)
             .onAppear {
-                guard isIPad else {
-                    return
+                if isIPad {
+                    areControlsVisible = true
+                    isRightDeckVisible = true
                 }
-                areControlsVisible = true
-                isRightDeckVisible = true
+                selectedAudioEngineMode = audioEngineModeStore.selectedMode
             }
         }
     }
@@ -88,6 +92,17 @@ public struct DeckView: View {
 
             if isIPad || areControlsVisible {
                 VStack {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            isSettingsVisible.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isSettingsVisible ? "gearshape.fill" : "gearshape")
+                            .frame(maxWidth: 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel(isSettingsVisible ? "Hide settings" : "Show settings")
+
                     if !isIPad {
                         Button {
                             isRightDeckVisible.toggle()
@@ -157,6 +172,61 @@ public struct DeckView: View {
             return "\(viewModel.externalBPMStatusText)"
         }
         return "\(viewModel.externalBPMStatusText) \(viewModel.externalBPMText)"
+    }
+
+    private var decksRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            TurntableDeckView(
+                viewModel: viewModel.leftTurntableDeckViewModel,
+                isPitchLockedToExternalBPM: Binding(
+                    get: { viewModel.isPitchLockedToExternalBPM },
+                    set: { viewModel.setPitchLockEnabled($0) }
+                ),
+                areControlsVisible: $areControlsVisible,
+                externalBPMBadgeText: leftDeckMicBPMBadgeText,
+                isExternalBPMListening: viewModel.isMicrophoneBPMDetectionActive || viewModel.isExternalBPMLoading
+            )
+
+            if isIPad || isRightDeckVisible {
+                TurntableDeckView(
+                    viewModel: viewModel.rightTurntableDeckViewModel,
+                    isPitchLockedToExternalBPM: .constant(false),
+                    areControlsVisible: $areControlsVisible
+                )
+            }
+        }
+    }
+
+    private var settingsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Settings")
+                .font(.subheadline.weight(.semibold))
+
+            Toggle("Split Audio Engine Mode", isOn: isSplitEngineEnabledBinding)
+                .toggleStyle(.switch)
+
+            Text("Current mode: \(selectedAudioEngineMode.rawValue)")
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+
+            Text("Mode applies to new engine instances.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(uiColor: .tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var isSplitEngineEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { selectedAudioEngineMode == .split },
+            set: { isEnabled in
+                selectedAudioEngineMode = isEnabled ? .split : .standard
+                audioEngineModeStore.selectedMode = selectedAudioEngineMode
+            }
+        )
     }
 
 }
