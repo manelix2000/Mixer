@@ -54,6 +54,8 @@ public final class TurntableDeckViewModel: ObservableObject {
     @Published public private(set) var scratchInteractionState: ScratchInteractionState
     @Published public private(set) var volume: Double
     @Published public private(set) var pan: Double
+    @Published public private(set) var panControlRange: ClosedRange<Double>
+    @Published public private(set) var splitDeckRole: SplitDeckRole?
 
     private let audioEngine: AudioEngineControlling
     private let waveformAnalyzer: WaveformAnalyzing
@@ -115,7 +117,18 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.platterRotationDegrees = 0
         self.scratchInteractionState = .idle
         self.volume = Double(min(max(audioEngine.volume, 0), 1))
-        self.pan = Double(min(max(audioEngine.pan, -1), 1))
+        let resolvedPanRange: ClosedRange<Double>
+        let resolvedSplitRole: SplitDeckRole?
+        if let routing = audioEngine as? AudioEngineRoutingProviding {
+            resolvedPanRange = routing.panControlRange
+            resolvedSplitRole = routing.splitDeckRole
+        } else {
+            resolvedPanRange = -1.0...1.0
+            resolvedSplitRole = nil
+        }
+        self.panControlRange = resolvedPanRange
+        self.splitDeckRole = resolvedSplitRole
+        self.pan = min(max(Double(audioEngine.pan), resolvedPanRange.lowerBound), resolvedPanRange.upperBound)
         self.masterVolume = 1.0
 
         applyEffectiveOutputVolume()
@@ -320,8 +333,31 @@ public final class TurntableDeckViewModel: ObservableObject {
     }
 
     public func setPan(_ value: Double) {
-        audioEngine.setPan(Float(min(max(value, -1.0), 1.0)))
-        pan = Double(audioEngine.pan)
+        let clamped = min(max(value, panControlRange.lowerBound), panControlRange.upperBound)
+        audioEngine.setPan(Float(clamped))
+        pan = min(max(Double(audioEngine.pan), panControlRange.lowerBound), panControlRange.upperBound)
+    }
+
+    public func refreshPanRouting(resetPanToCenter: Bool) {
+        let resolvedPanRange: ClosedRange<Double>
+        let resolvedSplitRole: SplitDeckRole?
+        if let routing = audioEngine as? AudioEngineRoutingProviding {
+            resolvedPanRange = routing.panControlRange
+            resolvedSplitRole = routing.splitDeckRole
+        } else {
+            resolvedPanRange = -1.0...1.0
+            resolvedSplitRole = nil
+        }
+
+        panControlRange = resolvedPanRange
+        splitDeckRole = resolvedSplitRole
+
+        if resetPanToCenter {
+            let center = min(max(0.0, resolvedPanRange.lowerBound), resolvedPanRange.upperBound)
+            setPan(center)
+        } else {
+            pan = min(max(Double(audioEngine.pan), resolvedPanRange.lowerBound), resolvedPanRange.upperBound)
+        }
     }
 
     public func incrementBPM() {

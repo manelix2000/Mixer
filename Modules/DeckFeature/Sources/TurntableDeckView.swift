@@ -1168,7 +1168,3 @@ private struct VerticalPitchFader: View {
         return displayProgress
     }
 }
-
-#Preview("Landscape View", traits: .landscapeLeft) {
-    TurntableDeckView(viewModel: TurntableDeckViewModel(), isPitchLockedToExternalBPM: .constant(false), areControlsVisible: .constant(false))
-}

@@ -233,14 +233,11 @@ public struct DeckView: View {
             set: { isEnabled in
                 selectedAudioEngineMode = isEnabled ? .split : .standard
                 audioEngineModeStore.selectedMode = selectedAudioEngineMode
+                viewModel.handleAudioEngineModeChanged(selectedAudioEngineMode)
             }
         )
     }
 
-}
-
-#Preview("Landscape View", traits: .landscapeLeft) {
-    DeckView()
 }
 
 private struct HorizontalFader: View {
@@ -375,7 +372,7 @@ private struct DeckPanControls: View {
                     get: { deckViewModel.pan },
                     set: { deckViewModel.setPan($0) }
                 ),
-                range: -1...1,
+                range: deckViewModel.panControlRange,
                 thumbText: panRoutingText(deckViewModel.pan)
             )
             .frame(minWidth: 130, maxWidth: .infinity, minHeight: 28, maxHeight: 28)

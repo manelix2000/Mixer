@@ -1,3 +1,4 @@
+import Foundation
 import os
 
 public protocol AudioEngineBuilding {
@@ -11,6 +12,8 @@ public final class DefaultAudioEngineFactory: AudioEngineBuilding {
     )
 
     private let modeStore: any AudioEngineModeStoring
+    private let splitRoleLock = NSLock()
+    private var splitEngineCreationCount = 0
 
     public init(modeStore: any AudioEngineModeStoring = UserDefaultsAudioEngineModeStore()) {
         self.modeStore = modeStore
@@ -23,8 +26,17 @@ public final class DefaultAudioEngineFactory: AudioEngineBuilding {
         case .standard:
             return AudioEngineManager()
         case .split:
-            Self.log.info("Split mode selected; using split engine.")
-            return SplitAudioEngineManager()
+            let role = nextSplitRole()
+            Self.log.info("Split mode selected; using split engine role=\(role.rawValue, privacy: .public).")
+            return SplitAudioEngineManager(role: role, modeStore: modeStore)
         }
+    }
+
+    private func nextSplitRole() -> SplitDeckRole {
+        splitRoleLock.lock()
+        defer { splitRoleLock.unlock() }
+        let role: SplitDeckRole = (splitEngineCreationCount % 2 == 0) ? .master : .cue
+        splitEngineCreationCount += 1
+        return role
     }
 }

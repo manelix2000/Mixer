@@ -49,8 +49,9 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: rightAudioEngine,
             waveformAnalyzer: WaveformAnalyzer()
         )
-        self.leftTurntableDeckViewModel.setPan(Double(self.audioEngine.pan))
-        self.rightTurntableDeckViewModel.setPan(Double(self.audioEngine.pan))
+        // Keep each deck pan initialized from its own engine instance.
+        self.leftTurntableDeckViewModel.setPan(Double(leftAudioEngine.pan))
+        self.rightTurntableDeckViewModel.setPan(Double(rightAudioEngine.pan))
         self.leftTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
         self.rightTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
 
@@ -85,6 +86,18 @@ public final class DeckViewModel: ObservableObject {
         pan = Double(audioEngine.pan)
         leftTurntableDeckViewModel.setPan(pan)
         rightTurntableDeckViewModel.setPan(pan)
+    }
+
+    public func handleAudioEngineModeChanged(_ mode: AudioEngineMode) {
+        switch mode {
+        case .standard:
+            // Reset to center when split mode is disabled.
+            leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: true)
+            rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: true)
+        case .split:
+            leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
+            rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
+        }
     }
 
     public var canLockPitchToExternalBPM: Bool {

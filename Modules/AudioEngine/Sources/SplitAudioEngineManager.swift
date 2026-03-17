@@ -2,19 +2,47 @@ import DSP
 import Foundation
 import os
 
-/// Placeholder split engine. This keeps a dedicated type for split mode while
-/// delegating behavior to the standard engine until split routing is implemented.
-public final class SplitAudioEngineManager: AudioEngineControlling {
+public enum SplitDeckRole: String {
+    case master
+    case cue
+}
+
+/// Split engine wrapper that enforces per-role stereo routing while reusing
+/// the existing playback engine implementation.
+public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineRoutingProviding {
     private static let log = Logger(
         subsystem: "dev.manelix.Mixer",
         category: "SplitAudioEngineManager"
     )
 
     private let standardEngine: any AudioEngineControlling
+    private let modeStore: any AudioEngineModeStoring
+    public let role: SplitDeckRole
+    public var splitDeckRole: SplitDeckRole? { isSplitModeEnabled ? role : nil }
+    public var panControlRange: ClosedRange<Double> {
+        guard isSplitModeEnabled else {
+            return -1.0...1.0
+        }
+        switch role {
+        case .master:
+            return -1.0...0.0
+        case .cue:
+            return 0.0...1.0
+        }
+    }
 
-    public init(standardEngine: any AudioEngineControlling = AudioEngineManager()) {
+    public init(
+        role: SplitDeckRole,
+        modeStore: any AudioEngineModeStoring = UserDefaultsAudioEngineModeStore(),
+        standardEngine: any AudioEngineControlling = AudioEngineManager()
+    ) {
+        self.role = role
+        self.modeStore = modeStore
         self.standardEngine = standardEngine
-        Self.log.info("Split engine initialized in compatibility mode (standard routing).")
+        if modeStore.selectedMode == .split {
+            standardEngine.setPan(Self.defaultPan(for: role))
+        }
+        Self.log.info("Split engine initialized for role=\(role.rawValue, privacy: .public).")
     }
 
     public var isRunning: Bool { standardEngine.isRunning }
@@ -67,7 +95,11 @@ public final class SplitAudioEngineManager: AudioEngineControlling {
     }
 
     public func setPan(_ value: Float) {
-        standardEngine.setPan(value)
+        if isSplitModeEnabled {
+            standardEngine.setPan(Self.routeSafePan(value, for: role))
+        } else {
+            standardEngine.setPan(value)
+        }
     }
 
     public func setPlaybackRate(_ value: Float) {
@@ -82,5 +114,30 @@ public final class SplitAudioEngineManager: AudioEngineControlling {
 
     public func stopMicrophoneCapture() {
         standardEngine.stopMicrophoneCapture()
+    }
+
+    private static func defaultPan(for role: SplitDeckRole) -> Float {
+        switch role {
+        case .master:
+            return -1.0
+        case .cue:
+            return 1.0
+        }
+    }
+
+    private static func routeSafePan(_ value: Float, for role: SplitDeckRole) -> Float {
+        let clamped = min(max(value, -1.0), 1.0)
+        switch role {
+        case .master:
+            // Keep master deck anchored to the left side for split monitoring.
+            return min(clamped, 0.0)
+        case .cue:
+            // Keep cue deck anchored to the right side for split monitoring.
+            return max(clamped, 0.0)
+        }
+    }
+
+    private var isSplitModeEnabled: Bool {
+        modeStore.selectedMode == .split
     }
 }
