@@ -7,6 +7,12 @@ import Waveform
 
 @MainActor
 public final class DeckViewModel: ObservableObject {
+    public enum CueMixMode: String, CaseIterable {
+        case cue = "C"
+        case blend = "B"
+        case master = "M"
+    }
+
     @Published public private(set) var volume: Double
     @Published public private(set) var pan: Double
     @Published public private(set) var externalBPMText: String
@@ -14,6 +20,10 @@ public final class DeckViewModel: ObservableObject {
     @Published public private(set) var isExternalBPMLoading: Bool
     @Published public private(set) var isMicrophoneBPMDetectionActive: Bool
     @Published public private(set) var isPitchLockedToExternalBPM: Bool
+    @Published public private(set) var isLeftDeckCueEnabled: Bool
+    @Published public private(set) var isRightDeckCueEnabled: Bool
+    @Published public private(set) var cueMixMode: CueMixMode
+    @Published public private(set) var cueLevelPercent: Int
 
     public let leftTurntableDeckViewModel: TurntableDeckViewModel
     public let rightTurntableDeckViewModel: TurntableDeckViewModel
@@ -32,7 +42,9 @@ public final class DeckViewModel: ObservableObject {
         let rightAudioEngine = audioEngineFactory.makeAudioEngine()
         self.audioEngine = leftAudioEngine
         let clampedMasterVolume = min(max(volume, 0), 1)
-        self.audioEngine.setPan(Float(min(max(pan, -1), 1)))
+        if (leftAudioEngine as? AudioEngineRoutingProviding)?.splitDeckRole == nil {
+            self.audioEngine.setPan(Float(min(max(pan, -1), 1)))
+        }
         self.volume = clampedMasterVolume
         self.pan = Double(self.audioEngine.pan)
         self.externalBPMText = "-- BPM"
@@ -40,6 +52,10 @@ public final class DeckViewModel: ObservableObject {
         self.isExternalBPMLoading = false
         self.isMicrophoneBPMDetectionActive = false
         self.isPitchLockedToExternalBPM = false
+        self.isLeftDeckCueEnabled = true
+        self.isRightDeckCueEnabled = true
+        self.cueMixMode = .cue
+        self.cueLevelPercent = 80
         self.leftTurntableDeckViewModel = TurntableDeckViewModel(
             audioEngine: leftAudioEngine,
             waveformAnalyzer: waveformAnalyzer
@@ -49,11 +65,21 @@ public final class DeckViewModel: ObservableObject {
             audioEngine: rightAudioEngine,
             waveformAnalyzer: WaveformAnalyzer()
         )
+
         // Keep each deck pan initialized from its own engine instance.
-        self.leftTurntableDeckViewModel.setPan(Double(leftAudioEngine.pan))
-        self.rightTurntableDeckViewModel.setPan(Double(rightAudioEngine.pan))
+        // In split mode this also snaps roles to L/R defaults at startup.
+        if self.leftTurntableDeckViewModel.splitDeckRole != nil ||
+            self.rightTurntableDeckViewModel.splitDeckRole != nil {
+            applySplitDefaultPanIfNeeded(on: self.leftTurntableDeckViewModel)
+            applySplitDefaultPanIfNeeded(on: self.rightTurntableDeckViewModel)
+            self.pan = Double(self.audioEngine.pan)
+        } else {
+            self.leftTurntableDeckViewModel.setPan(Double(leftAudioEngine.pan))
+            self.rightTurntableDeckViewModel.setPan(Double(rightAudioEngine.pan))
+        }
         self.leftTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
         self.rightTurntableDeckViewModel.setMasterVolume(clampedMasterVolume)
+        updateCueRoutingMix()
 
         microphoneBPMPipeline.setResultHandler { [weak self] result in
             self?.handleMicrophoneBPMResult(result)
@@ -77,8 +103,7 @@ public final class DeckViewModel: ObservableObject {
     public func setVolume(_ value: Double) {
         let clamped = min(max(value, 0.0), 1.0)
         volume = clamped
-        leftTurntableDeckViewModel.setMasterVolume(clamped)
-        rightTurntableDeckViewModel.setMasterVolume(clamped)
+        updateCueRoutingMix()
     }
 
     public func setPan(_ value: Double) {
@@ -94,12 +119,126 @@ public final class DeckViewModel: ObservableObject {
             // Reset to center when split mode is disabled.
             leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: true)
             rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: true)
+            isLeftDeckCueEnabled = false
+            isRightDeckCueEnabled = false
+            cueMixMode = .master
         case .split:
             leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
             rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
             applySplitDefaultPanIfNeeded(on: leftTurntableDeckViewModel)
             applySplitDefaultPanIfNeeded(on: rightTurntableDeckViewModel)
+            isLeftDeckCueEnabled = true
+            isRightDeckCueEnabled = true
+            cueMixMode = .cue
         }
+        updateCueRoutingMix()
+    }
+
+    public func handleSplitDeckLayoutChanged(isSplitEnabled: Bool) {
+        leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
+        rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
+
+        guard isSplitEnabled else {
+            updateCueRoutingMix()
+            return
+        }
+        applySplitDefaultPanIfNeeded(on: leftTurntableDeckViewModel)
+        applySplitDefaultPanIfNeeded(on: rightTurntableDeckViewModel)
+        isLeftDeckCueEnabled = true
+        isRightDeckCueEnabled = true
+        updateCueRoutingMix()
+    }
+
+    public func toggleCue(forLeftDeck: Bool) {
+        if forLeftDeck {
+            isLeftDeckCueEnabled.toggle()
+        } else {
+            isRightDeckCueEnabled.toggle()
+        }
+        updateCueRoutingMix()
+    }
+
+    public func setCueMixMode(_ mode: CueMixMode) {
+        cueMixMode = mode
+        updateCueRoutingMix()
+    }
+
+    public func increaseCueLevel() {
+        cueLevelPercent = min(cueLevelPercent + 5, 100)
+        updateCueRoutingMix()
+    }
+
+    public func decreaseCueLevel() {
+        cueLevelPercent = max(cueLevelPercent - 5, 0)
+        updateCueRoutingMix()
+    }
+
+    public func setCueLevelPercent(_ value: Double) {
+        let clamped = min(max(value, 0), 100)
+        cueLevelPercent = Int(clamped.rounded())
+        updateCueRoutingMix()
+    }
+
+    private func updateCueRoutingMix() {
+        let baseGain = min(max(volume, 0), 1)
+
+        // Standard mode: identical gain on both decks.
+        guard leftTurntableDeckViewModel.splitDeckRole != nil ||
+                rightTurntableDeckViewModel.splitDeckRole != nil else {
+            leftTurntableDeckViewModel.setMasterVolume(baseGain)
+            rightTurntableDeckViewModel.setMasterVolume(baseGain)
+            return
+        }
+
+        let cueLevel = Double(cueLevelPercent) / 100.0
+        let masterFactor: Double
+        let cueFactor: Double
+        switch cueMixMode {
+        case .cue:
+            masterFactor = 0.0
+            cueFactor = cueLevel
+        case .blend:
+            masterFactor = 1.0
+            cueFactor = cueLevel
+        case .master:
+            masterFactor = 1.0
+            cueFactor = 0.0
+        }
+
+        applyGain(
+            to: leftTurntableDeckViewModel,
+            isCueEnabled: isLeftDeckCueEnabled,
+            baseGain: baseGain,
+            masterFactor: masterFactor,
+            cueFactor: cueFactor
+        )
+        applyGain(
+            to: rightTurntableDeckViewModel,
+            isCueEnabled: isRightDeckCueEnabled,
+            baseGain: baseGain,
+            masterFactor: masterFactor,
+            cueFactor: cueFactor
+        )
+    }
+
+    private func applyGain(
+        to deck: TurntableDeckViewModel,
+        isCueEnabled: Bool,
+        baseGain: Double,
+        masterFactor: Double,
+        cueFactor: Double
+    ) {
+        let role = deck.splitDeckRole
+        let roleFactor: Double
+        switch role {
+        case .master:
+            roleFactor = isCueEnabled ? masterFactor : 0.0
+        case .cue:
+            roleFactor = isCueEnabled ? cueFactor : 0.0
+        case .none:
+            roleFactor = 1.0
+        }
+        deck.setMasterVolume(baseGain * roleFactor)
     }
 
     private func applySplitDefaultPanIfNeeded(on deck: TurntableDeckViewModel) {

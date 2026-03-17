@@ -9,30 +9,38 @@ public struct DeckView: View {
     @State private var isRightDeckVisible: Bool
     @State private var isSettingsVisible: Bool
     @State private var selectedAudioEngineMode: AudioEngineMode
+    @State private var selectedSplitDeckLayout: SplitDeckLayout
     private let isIPad: Bool
     private let audioEngineModeStore: UserDefaultsAudioEngineModeStore
+    private let splitDeckLayoutStore: UserDefaultsSplitDeckLayoutStore
 
     public init() {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let modeStore = UserDefaultsAudioEngineModeStore()
+        let layoutStore = UserDefaultsSplitDeckLayoutStore()
         self.isIPad = isIPad
         self.audioEngineModeStore = modeStore
+        self.splitDeckLayoutStore = layoutStore
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
         _isSettingsVisible = State(initialValue: false)
         _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
+        _selectedSplitDeckLayout = State(initialValue: layoutStore.selectedLayout)
         _viewModel = StateObject(wrappedValue: DeckViewModel())
     }
 
     public init(viewModel: DeckViewModel) {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let modeStore = UserDefaultsAudioEngineModeStore()
+        let layoutStore = UserDefaultsSplitDeckLayoutStore()
         self.isIPad = isIPad
         self.audioEngineModeStore = modeStore
+        self.splitDeckLayoutStore = layoutStore
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
         _isSettingsVisible = State(initialValue: false)
         _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
+        _selectedSplitDeckLayout = State(initialValue: layoutStore.selectedLayout)
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
@@ -72,6 +80,7 @@ public struct DeckView: View {
                     isRightDeckVisible = true
                 }
                 selectedAudioEngineMode = audioEngineModeStore.selectedMode
+                selectedSplitDeckLayout = splitDeckLayoutStore.selectedLayout
             }
         }
     }
@@ -159,14 +168,25 @@ public struct DeckView: View {
     }
 
     private var controlsColumn: some View {
-        HStack(alignment: .top, spacing: 12) {
-            DeckPanControls(
-                deckViewModel: viewModel.leftTurntableDeckViewModel
-            )
-            if isIPad || isRightDeckVisible {
-                DeckPanControls(
-                    deckViewModel: viewModel.rightTurntableDeckViewModel
+        Group {
+            if selectedAudioEngineMode == .split {
+                SplitCueControls(
+                    viewModel: viewModel,
+                    leftDeckViewModel: viewModel.leftTurntableDeckViewModel,
+                    rightDeckViewModel: viewModel.rightTurntableDeckViewModel,
+                    showsRightDeck: isIPad || isRightDeckVisible
                 )
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    DeckPanControls(
+                        deckViewModel: viewModel.leftTurntableDeckViewModel
+                    )
+                    if isIPad || isRightDeckVisible {
+                        DeckPanControls(
+                            deckViewModel: viewModel.rightTurntableDeckViewModel
+                        )
+                    }
+                }
             }
         }
     }
@@ -213,8 +233,20 @@ public struct DeckView: View {
             Toggle("Split Audio Engine Mode", isOn: isSplitEngineEnabledBinding)
                 .toggleStyle(.switch)
 
+            Picker("Split Deck Layout", selection: splitDeckLayoutBinding) {
+                Text("L:Master / R:Cue")
+                    .tag(SplitDeckLayout.leftMasterRightCue)
+                Text("L:Cue / R:Master")
+                    .tag(SplitDeckLayout.leftCueRightMaster)
+            }
+            .pickerStyle(.segmented)
+
             Text("Current mode: \(selectedAudioEngineMode.rawValue)")
                 .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+
+            Text("Deck routing: \(leftDeckRoleText) | \(rightDeckRoleText)")
+                .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
 
             Text("Mode applies immediately to current deck routing.")
@@ -236,6 +268,37 @@ public struct DeckView: View {
                 viewModel.handleAudioEngineModeChanged(selectedAudioEngineMode)
             }
         )
+    }
+
+    private var splitDeckLayoutBinding: Binding<SplitDeckLayout> {
+        Binding(
+            get: { selectedSplitDeckLayout },
+            set: { layout in
+                selectedSplitDeckLayout = layout
+                splitDeckLayoutStore.selectedLayout = layout
+                viewModel.handleSplitDeckLayoutChanged(isSplitEnabled: selectedAudioEngineMode == .split)
+            }
+        )
+    }
+
+    private var leftDeckRoleText: String {
+        "Left=\(splitRoleName(viewModel.leftTurntableDeckViewModel.splitDeckRole))"
+    }
+
+    private var rightDeckRoleText: String {
+        "Right=\(splitRoleName(viewModel.rightTurntableDeckViewModel.splitDeckRole))"
+    }
+
+    private func splitRoleName(_ role: SplitDeckRole?) -> String {
+        guard let role else {
+            return "Normal"
+        }
+        switch role {
+        case .master:
+            return "Master"
+        case .cue:
+            return "Cue"
+        }
     }
 
 }
@@ -357,6 +420,141 @@ private struct HorizontalFader: View {
             return 0
         }
         return 1
+    }
+}
+
+private struct SplitCueControls: View {
+    @ObservedObject var viewModel: DeckViewModel
+    @ObservedObject var leftDeckViewModel: TurntableDeckViewModel
+    @ObservedObject var rightDeckViewModel: TurntableDeckViewModel
+    let showsRightDeck: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                cueDeckButton(
+                    title: deckCueTitle(deckViewModel: leftDeckViewModel, fallback: "Deck A"),
+                    isEnabled: viewModel.isLeftDeckCueEnabled,
+                    action: { viewModel.toggleCue(forLeftDeck: true) },
+                    artwork: leftDeckViewModel.trackArtwork
+                )
+                .frame(maxWidth: .infinity)
+
+                if showsRightDeck {
+                    cueDeckButton(
+                        title: deckCueTitle(deckViewModel: rightDeckViewModel, fallback: "Deck B"),
+                        isEnabled: viewModel.isRightDeckCueEnabled,
+                        action: { viewModel.toggleCue(forLeftDeck: false) },
+                        artwork: rightDeckViewModel.trackArtwork
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+
+                cueMixButtons
+                    .frame(maxWidth: .infinity)
+
+                HStack(spacing: 6) {
+                    Text("Cue")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    HorizontalFader(
+                        value: Binding(
+                            get: { Double(viewModel.cueLevelPercent) },
+                            set: { viewModel.setCueLevelPercent($0) }
+                        ),
+                        range: 0...100,
+                        thumbText: "\(viewModel.cueLevelPercent)%"
+                    )
+                    .frame(minWidth: 110, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color(uiColor: .tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func cueDeckButton(
+        title: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void,
+        artwork: UIImage?
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                cueArtworkBadge(artwork: artwork)
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                Text("CUE")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(isEnabled ? Color.accentColor : Color.gray.opacity(0.35))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isEnabled ? Color.accentColor.opacity(0.14) : Color.black.opacity(0.08))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var cueMixButtons: some View {
+        HStack(spacing: 6) {
+            ForEach(DeckViewModel.CueMixMode.allCases, id: \.self) { mode in
+                Button {
+                    viewModel.setCueMixMode(mode)
+                } label: {
+                    Text(mode.rawValue)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 7)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(viewModel.cueMixMode == mode ? .accentColor : .gray.opacity(0.35))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cueArtworkBadge(artwork: UIImage?) -> some View {
+        if let artwork {
+            Image(uiImage: artwork)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Image(systemName: "music.note")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                )
+        }
+    }
+
+    private func deckCueTitle(deckViewModel: TurntableDeckViewModel, fallback: String) -> String {
+        if let role = deckViewModel.splitDeckRole {
+            switch role {
+            case .master:
+                return "Master"
+            case .cue:
+                return "Cue Deck"
+            }
+        }
+        return fallback
     }
 }
 

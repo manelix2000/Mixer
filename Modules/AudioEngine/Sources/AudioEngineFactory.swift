@@ -12,11 +12,16 @@ public final class DefaultAudioEngineFactory: AudioEngineBuilding {
     )
 
     private let modeStore: any AudioEngineModeStoring
+    private let splitDeckLayoutStore: any SplitDeckLayoutStoring
     private let splitRoleLock = NSLock()
     private var splitEngineCreationCount = 0
 
-    public init(modeStore: any AudioEngineModeStoring = UserDefaultsAudioEngineModeStore()) {
+    public init(
+        modeStore: any AudioEngineModeStoring = UserDefaultsAudioEngineModeStore(),
+        splitDeckLayoutStore: any SplitDeckLayoutStoring = UserDefaultsSplitDeckLayoutStore()
+    ) {
         self.modeStore = modeStore
+        self.splitDeckLayoutStore = splitDeckLayoutStore
     }
 
     public func makeAudioEngine() -> any AudioEngineControlling {
@@ -26,17 +31,21 @@ public final class DefaultAudioEngineFactory: AudioEngineBuilding {
         case .standard:
             return AudioEngineManager()
         case .split:
-            let role = nextSplitRole()
-            Self.log.info("Split mode selected; using split engine role=\(role.rawValue, privacy: .public).")
-            return SplitAudioEngineManager(role: role, modeStore: modeStore)
+            let splitSlot = nextSplitSlot()
+            Self.log.info("Split mode selected; using split engine slot=\(splitSlot, privacy: .public).")
+            return SplitAudioEngineManager(
+                slotIndex: splitSlot,
+                modeStore: modeStore,
+                layoutStore: splitDeckLayoutStore
+            )
         }
     }
 
-    private func nextSplitRole() -> SplitDeckRole {
+    private func nextSplitSlot() -> Int {
         splitRoleLock.lock()
         defer { splitRoleLock.unlock() }
-        let role: SplitDeckRole = (splitEngineCreationCount % 2 == 0) ? .master : .cue
+        let slot = splitEngineCreationCount
         splitEngineCreationCount += 1
-        return role
+        return slot
     }
 }

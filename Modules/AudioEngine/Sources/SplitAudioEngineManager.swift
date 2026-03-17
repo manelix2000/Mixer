@@ -17,13 +17,14 @@ public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineR
 
     private let standardEngine: any AudioEngineControlling
     private let modeStore: any AudioEngineModeStoring
-    public let role: SplitDeckRole
-    public var splitDeckRole: SplitDeckRole? { isSplitModeEnabled ? role : nil }
+    private let layoutStore: any SplitDeckLayoutStoring
+    private let slotIndex: Int
+    public var splitDeckRole: SplitDeckRole? { isSplitModeEnabled ? currentRole : nil }
     public var panControlRange: ClosedRange<Double> {
         guard isSplitModeEnabled else {
             return -1.0...1.0
         }
-        switch role {
+        switch currentRole {
         case .master:
             return -1.0...0.0
         case .cue:
@@ -32,17 +33,21 @@ public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineR
     }
 
     public init(
-        role: SplitDeckRole,
+        slotIndex: Int,
         modeStore: any AudioEngineModeStoring = UserDefaultsAudioEngineModeStore(),
+        layoutStore: any SplitDeckLayoutStoring = UserDefaultsSplitDeckLayoutStore(),
         standardEngine: any AudioEngineControlling = AudioEngineManager()
     ) {
-        self.role = role
+        self.slotIndex = slotIndex
         self.modeStore = modeStore
+        self.layoutStore = layoutStore
         self.standardEngine = standardEngine
         if modeStore.selectedMode == .split {
-            standardEngine.setPan(Self.defaultPan(for: role))
+            standardEngine.setPan(Self.defaultPan(for: currentRole))
         }
-        Self.log.info("Split engine initialized for role=\(role.rawValue, privacy: .public).")
+        Self.log.info(
+            "Split engine initialized for slot=\(slotIndex, privacy: .public) role=\(self.currentRole.rawValue, privacy: .public)."
+        )
     }
 
     public var isRunning: Bool { standardEngine.isRunning }
@@ -96,7 +101,7 @@ public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineR
 
     public func setPan(_ value: Float) {
         if isSplitModeEnabled {
-            standardEngine.setPan(Self.routeSafePan(value, for: role))
+            standardEngine.setPan(Self.routeSafePan(value, for: currentRole))
         } else {
             standardEngine.setPan(value)
         }
@@ -139,5 +144,15 @@ public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineR
 
     private var isSplitModeEnabled: Bool {
         modeStore.selectedMode == .split
+    }
+
+    private var currentRole: SplitDeckRole {
+        let isEvenSlot = slotIndex % 2 == 0
+        switch layoutStore.selectedLayout {
+        case .leftMasterRightCue:
+            return isEvenSlot ? .master : .cue
+        case .leftCueRightMaster:
+            return isEvenSlot ? .cue : .master
+        }
     }
 }
