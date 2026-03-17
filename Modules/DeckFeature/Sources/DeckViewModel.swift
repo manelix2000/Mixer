@@ -97,6 +97,20 @@ public final class DeckViewModel: ObservableObject {
         case .split:
             leftTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
             rightTurntableDeckViewModel.refreshPanRouting(resetPanToCenter: false)
+            applySplitDefaultPanIfNeeded(on: leftTurntableDeckViewModel)
+            applySplitDefaultPanIfNeeded(on: rightTurntableDeckViewModel)
+        }
+    }
+
+    private func applySplitDefaultPanIfNeeded(on deck: TurntableDeckViewModel) {
+        guard let role = deck.splitDeckRole else {
+            return
+        }
+        switch role {
+        case .master:
+            deck.setPan(-1.0)
+        case .cue:
+            deck.setPan(1.0)
         }
     }
 

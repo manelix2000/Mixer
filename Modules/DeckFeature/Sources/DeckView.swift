@@ -217,7 +217,7 @@ public struct DeckView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
 
-            Text("Mode applies to new engine instances.")
+            Text("Mode applies immediately to current deck routing.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -376,7 +376,7 @@ private struct DeckPanControls: View {
                 thumbText: panRoutingText(deckViewModel.pan)
             )
             .frame(minWidth: 130, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
-            .accessibilityLabel("Deck pan control")
+            .accessibilityLabel(accessibilityPanLabel)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -386,29 +386,42 @@ private struct DeckPanControls: View {
 
     @ViewBuilder
     private var artworkBadge: some View {
-        if let artwork = deckViewModel.trackArtwork {
-            Image(uiImage: artwork)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 24, height: 24)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.black.opacity(0.25), lineWidth: 0.7)
-                )
-        } else {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Image(systemName: "music.note")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.black.opacity(0.18), lineWidth: 0.7)
-                )
+        ZStack(alignment: .bottomTrailing) {
+            if let artwork = deckViewModel.trackArtwork {
+                Image(uiImage: artwork)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(Color.black.opacity(0.25), lineWidth: 0.7)
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(Color.black.opacity(0.18), lineWidth: 0.7)
+                    )
+            }
+
+            if let role = deckViewModel.splitDeckRole {
+                Text(roleBadgeText(for: role))
+                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
+                    .offset(x: 4, y: 4)
+            }
         }
     }
 
@@ -420,6 +433,27 @@ private struct DeckPanControls: View {
             return "R"
         }
         return "C"
+    }
+
+    private func roleBadgeText(for role: SplitDeckRole) -> String {
+        switch role {
+        case .master:
+            return "M"
+        case .cue:
+            return "CUE"
+        }
+    }
+
+    private var accessibilityPanLabel: String {
+        guard let role = deckViewModel.splitDeckRole else {
+            return "Deck pan control"
+        }
+        switch role {
+        case .master:
+            return "Master pan control"
+        case .cue:
+            return "Cue pan control"
+        }
     }
 }
 
