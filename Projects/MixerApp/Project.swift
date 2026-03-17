@@ -43,10 +43,7 @@ let project = Project(
                     "DEVELOPMENT_TEAM": "FX8D5XGPA8",
                     "DEVELOPMENT_TEAM[sdk=iphoneos*]": "FX8D5XGPA8",
                     "PROVISIONING_PROFILE_SPECIFIER": "Privalia Wildcard",
-                    "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Privalia Wildcard",
-                    // Temporary fallback: current aubio.framework does not contain arm64-simulator slices.
-                    // Remove this when migrating to an aubio XCFramework with ios-arm64_x86_64-simulator.
-                    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64"
+                    "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Privalia Wildcard"
                 ]
             )
         )

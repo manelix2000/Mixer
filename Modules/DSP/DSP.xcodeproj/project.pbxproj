@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		29B1E01FE26DF8E5145EFFE2 /* Aubio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6DB13F57308982DA8F5A9F5C /* Aubio.framework */; };
+		1825A3585C033349D2743776 /* Aubio.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9FFF6E454C6D7212B652E642 /* Aubio.xcframework */; };
 		3A63B850C281344CCC43E759 /* AubioTempoDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1F6ABE2AC2D74AAD0B1BCF /* AubioTempoDetector.swift */; };
 		7006F30CD58761EEA94902CC /* BPMResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A397913D38F6347EC8D8232 /* BPMResult.swift */; };
 		A4DBE11D13C753C0A55DC7B4 /* DSPModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A60AD66CBC6714CB244D52 /* DSPModule.swift */; };
@@ -32,11 +32,11 @@
 /* Begin PBXFileReference section */
 		2D1F6ABE2AC2D74AAD0B1BCF /* AubioTempoDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AubioTempoDetector.swift; sourceTree = "<group>"; };
 		42A60AD66CBC6714CB244D52 /* DSPModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPModule.swift; sourceTree = "<group>"; };
-		6DB13F57308982DA8F5A9F5C /* Aubio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Aubio.framework; sourceTree = "<group>"; };
 		72C991A217DBAF3E76FE1584 /* StubTempoDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StubTempoDetector.swift; sourceTree = "<group>"; };
 		87B830E06C102C30A6817618 /* DSP.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DSP.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A37E9C3191FE61AFBA4FD29 /* DSP-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "DSP-Info.plist"; sourceTree = "<group>"; };
 		9A397913D38F6347EC8D8232 /* BPMResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMResult.swift; sourceTree = "<group>"; };
+		9FFF6E454C6D7212B652E642 /* Aubio.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Aubio.xcframework; sourceTree = "<group>"; };
 		BB50B06BBF10C75BF4029016 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
 		E87339C00EFC83C608C7F084 /* TempoDetecting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempoDetecting.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -47,7 +47,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EA82BBD8EF24E121A364E3FC /* Accelerate.framework in Frameworks */,
-				29B1E01FE26DF8E5145EFFE2 /* Aubio.framework in Frameworks */,
+				1825A3585C033349D2743776 /* Aubio.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,7 +75,7 @@
 		5288569AA1662B9BDBB441F9 /* aubio */ = {
 			isa = PBXGroup;
 			children = (
-				6DB13F57308982DA8F5A9F5C /* Aubio.framework */,
+				9FFF6E454C6D7212B652E642 /* Aubio.xcframework */,
 			);
 			path = aubio;
 			sourceTree = "<group>";

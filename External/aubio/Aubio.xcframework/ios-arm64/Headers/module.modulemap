@@ -1,0 +1,6 @@
+module aubio [system] {
+  umbrella header "aubio.h"
+  export *
+  module * { export * }
+  link "aubio"
+}
