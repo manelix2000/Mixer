@@ -42,7 +42,9 @@ public struct DeckView: View {
                                 get: { viewModel.isPitchLockedToExternalBPM },
                                 set: { viewModel.setPitchLockEnabled($0) }
                             ),
-                            areControlsVisible: $areControlsVisible
+                            areControlsVisible: $areControlsVisible,
+                            externalBPMBadgeText: leftDeckMicBPMBadgeText,
+                            isExternalBPMListening: viewModel.isMicrophoneBPMDetectionActive || viewModel.isExternalBPMLoading
                         )
 
                         if isIPad || isRightDeckVisible {
@@ -133,7 +135,6 @@ public struct DeckView: View {
 
     private var controlsColumn: some View {
         HStack(alignment: .top, spacing: 12) {
-            externalBPMControls
             DeckPanControls(
                 deckViewModel: viewModel.leftTurntableDeckViewModel
             )
@@ -145,31 +146,15 @@ public struct DeckView: View {
         }
     }
 
-    private var externalBPMControls: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                Text("Mic BPM ")
-                    .font(.subheadline.weight(.semibold))
-                if viewModel.isExternalBPMLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                
-                Spacer()
-                
-                Text(viewModel.externalBPMText)
-                    .font(.footnote.monospacedDigit().weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            
-            Text(viewModel.externalBPMStatusText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var leftDeckMicBPMBadgeText: String? {
+        guard viewModel.isMicrophoneBPMDetectionActive || viewModel.isExternalBPMLoading else {
+            return nil
         }
-        .padding(10)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+        if viewModel.externalBPMText == "-- BPM" {
+            return viewModel.externalBPMStatusText
+        }
+        return "\(viewModel.externalBPMStatusText) \(viewModel.externalBPMText)"
     }
 
 }

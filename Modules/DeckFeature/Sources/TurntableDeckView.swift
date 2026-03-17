@@ -15,6 +15,8 @@ public struct TurntableDeckView: View {
     @StateObject private var viewModel: TurntableDeckViewModel
     @Binding private var isPitchLockedToExternalBPM: Bool
     @Binding private var areControlsVisible: Bool
+    private let externalBPMBadgeText: String?
+    private let isExternalBPMListening: Bool
     @State private var isImportingTrack = false
     @State private var pinchStartZoom: Double?
     @State private var platterLastAngle: Double?
@@ -27,11 +29,15 @@ public struct TurntableDeckView: View {
     public init(
         viewModel: TurntableDeckViewModel,
         isPitchLockedToExternalBPM: Binding<Bool>,
-        areControlsVisible: Binding<Bool>
+        areControlsVisible: Binding<Bool>,
+        externalBPMBadgeText: String? = nil,
+        isExternalBPMListening: Bool = false
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _isPitchLockedToExternalBPM = isPitchLockedToExternalBPM
         _areControlsVisible = areControlsVisible
+        self.externalBPMBadgeText = externalBPMBadgeText
+        self.isExternalBPMListening = isExternalBPMListening
     }
 
     public var body: some View {
@@ -72,23 +78,8 @@ public struct TurntableDeckView: View {
 
                         VStack {
                             HStack {
-                                if isPitchLockedToExternalBPM {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Locked Pitch")
-                                            .font(.caption2.weight(.semibold))
-                                        Text(
-                                            String(
-                                                format: "%.1f BPM | %+.1f%%",
-                                                viewModel.displayedTargetBPM,
-                                                ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
-                                            )
-                                        )
-                                        .font(.caption2.monospacedDigit())
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Capsule())
+                                if let topLeftBadgeText {
+                                    topLeftBadgeView(text: topLeftBadgeText)
                                 }
 
                                 Spacer()
@@ -170,6 +161,49 @@ public struct TurntableDeckView: View {
         .onDisappear {
             armVisibilityTask?.cancel()
             armVisibilityTask = nil
+        }
+    }
+
+    private var topLeftBadgeText: String? {
+        if isPitchLockedToExternalBPM {
+            return String(
+                format: "Locked Pitch %.1f BPM | %+.1f%%",
+                viewModel.displayedTargetBPM,
+                ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
+            )
+        }
+        return externalBPMBadgeText
+    }
+
+    @ViewBuilder
+    private func topLeftBadgeView(text: String) -> some View {
+        if !isPitchLockedToExternalBPM && isExternalBPMListening {
+            TimelineView(.animation) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                let pulse = (sin(t * (2.0 * .pi * 0.7)) + 1.0) * 0.5
+                let glowOpacity = 0.20 + (pulse * 0.42)
+                Text(text)
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .shadow(
+                        color: Color(red: 1.0, green: 0.82, blue: 0.32).opacity(glowOpacity),
+                        radius: 5.4,
+                        x: 0,
+                        y: 0
+                    )
+            }
+        } else {
+            Text(text)
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
         }
     }
 
