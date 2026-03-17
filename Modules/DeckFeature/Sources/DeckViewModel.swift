@@ -31,6 +31,7 @@ public final class DeckViewModel: ObservableObject {
     private let audioEngine: AudioEngineControlling
     private let microphoneBPMPipeline = MicrophoneBPMPipeline()
     private var latestExternalBPM: Double?
+    private var isSplitModeActive: Bool
 
     public init(
         volume: Double = 0.8,
@@ -70,10 +71,12 @@ public final class DeckViewModel: ObservableObject {
         // In split mode this also snaps roles to L/R defaults at startup.
         if self.leftTurntableDeckViewModel.splitDeckRole != nil ||
             self.rightTurntableDeckViewModel.splitDeckRole != nil {
+            self.isSplitModeActive = true
             applySplitDefaultPanIfNeeded(on: self.leftTurntableDeckViewModel)
             applySplitDefaultPanIfNeeded(on: self.rightTurntableDeckViewModel)
             self.pan = Double(self.audioEngine.pan)
         } else {
+            self.isSplitModeActive = false
             self.leftTurntableDeckViewModel.setPan(Double(leftAudioEngine.pan))
             self.rightTurntableDeckViewModel.setPan(Double(rightAudioEngine.pan))
         }
@@ -114,6 +117,7 @@ public final class DeckViewModel: ObservableObject {
     }
 
     public func handleAudioEngineModeChanged(_ mode: AudioEngineMode) {
+        isSplitModeActive = (mode == .split)
         switch mode {
         case .standard:
             // Reset to center when split mode is disabled.
@@ -183,8 +187,7 @@ public final class DeckViewModel: ObservableObject {
         let baseGain = min(max(volume, 0), 1)
 
         // Standard mode: identical gain on both decks.
-        guard leftTurntableDeckViewModel.splitDeckRole != nil ||
-                rightTurntableDeckViewModel.splitDeckRole != nil else {
+        guard isSplitModeActive else {
             leftTurntableDeckViewModel.setMasterVolume(baseGain)
             rightTurntableDeckViewModel.setMasterVolume(baseGain)
             return
@@ -207,6 +210,7 @@ public final class DeckViewModel: ObservableObject {
 
         applyGain(
             to: leftTurntableDeckViewModel,
+            fallbackRole: .master,
             isCueEnabled: isLeftDeckCueEnabled,
             baseGain: baseGain,
             masterFactor: masterFactor,
@@ -214,6 +218,7 @@ public final class DeckViewModel: ObservableObject {
         )
         applyGain(
             to: rightTurntableDeckViewModel,
+            fallbackRole: .cue,
             isCueEnabled: isRightDeckCueEnabled,
             baseGain: baseGain,
             masterFactor: masterFactor,
@@ -223,20 +228,19 @@ public final class DeckViewModel: ObservableObject {
 
     private func applyGain(
         to deck: TurntableDeckViewModel,
+        fallbackRole: SplitDeckRole,
         isCueEnabled: Bool,
         baseGain: Double,
         masterFactor: Double,
         cueFactor: Double
     ) {
-        let role = deck.splitDeckRole
+        let role = deck.splitDeckRole ?? fallbackRole
         let roleFactor: Double
         switch role {
         case .master:
             roleFactor = isCueEnabled ? masterFactor : 0.0
         case .cue:
             roleFactor = isCueEnabled ? cueFactor : 0.0
-        case .none:
-            roleFactor = 1.0
         }
         deck.setMasterVolume(baseGain * roleFactor)
     }

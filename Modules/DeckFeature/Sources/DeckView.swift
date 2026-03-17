@@ -515,8 +515,8 @@ private struct SplitCueControls: View {
                 } label: {
                     Text(mode.rawValue)
                         .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 3)
                         .lineLimit(1)
                 }
                 .buttonStyle(.borderedProminent)
