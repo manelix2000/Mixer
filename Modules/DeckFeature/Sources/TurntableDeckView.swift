@@ -934,10 +934,16 @@ private final class TouchSurfaceView: UIView {
         let pressure = normalizedPressure(for: touch)
         let rawForce = touch.force
         let maxForce = touch.maximumPossibleForce
+        let useFallbackPressure = shouldUseFallbackPressure(for: touch)
         Self.log.info(
-            "touchesBegan | rawForce=\(rawForce, format: .fixed(precision: 3)) maxForce=\(maxForce, format: .fixed(precision: 3)) normalized=\(pressure, format: .fixed(precision: 3))"
+            """
+            touchesBegan | rawForce=\(rawForce, format: .fixed(precision: 3)) \
+            maxForce=\(maxForce, format: .fixed(precision: 3)) \
+            normalized=\(pressure, format: .fixed(precision: 3)) \
+            fallback=\(useFallbackPressure, privacy: .public)
+            """
         )
-        if maxForce > 0 {
+        if !useFallbackPressure {
             stopFallbackPressureUpdates()
             coordinator?.onTouchBegan(activeTouchLocation ?? .zero, pressure, bounds.size)
         } else {
@@ -951,16 +957,22 @@ private final class TouchSurfaceView: UIView {
         guard let touch = touches.first else { return }
         activeTouchLocation = touch.location(in: self)
         let pressure = normalizedPressure(for: touch)
+        let useFallbackPressure = shouldUseFallbackPressure(for: touch)
         let now = CACurrentMediaTime()
         let shouldLog = abs(pressure - lastLoggedPressure) >= 0.05 || (now - lastMoveLogTime) >= 0.35
         if shouldLog {
             lastMoveLogTime = now
             lastLoggedPressure = pressure
             Self.log.info(
-                "touchesMoved | rawForce=\(touch.force, format: .fixed(precision: 3)) maxForce=\(touch.maximumPossibleForce, format: .fixed(precision: 3)) normalized=\(pressure, format: .fixed(precision: 3))"
+                """
+                touchesMoved | rawForce=\(touch.force, format: .fixed(precision: 3)) \
+                maxForce=\(touch.maximumPossibleForce, format: .fixed(precision: 3)) \
+                normalized=\(pressure, format: .fixed(precision: 3)) \
+                fallback=\(useFallbackPressure, privacy: .public)
+                """
             )
         }
-        if touch.maximumPossibleForce > 0 {
+        if !useFallbackPressure {
             stopFallbackPressureUpdates()
             coordinator?.onTouchMoved(activeTouchLocation ?? .zero, pressure, bounds.size)
         }
@@ -992,6 +1004,20 @@ private final class TouchSurfaceView: UIView {
             return 0
         }
         return min(max(touch.force / maxForce, 0), 1)
+    }
+
+    private func shouldUseFallbackPressure(for touch: UITouch) -> Bool {
+        // iOS-on-Mac mouse/trackpad input can report non-zero maximumPossibleForce
+        // without providing meaningful pressure deltas. Use the hold-ramp fallback.
+        if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+            return true
+        }
+
+        if touch.maximumPossibleForce <= 0 {
+            return true
+        }
+
+        return false
     }
 
     private func startFallbackPressureUpdates() {
