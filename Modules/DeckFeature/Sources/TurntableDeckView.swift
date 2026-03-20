@@ -26,6 +26,9 @@ public struct TurntableDeckView: View {
     @State private var waveformLastDragX: CGFloat?
     @State private var armVisible = true
     @State private var armVisibilityTask: Task<Void, Never>?
+    @State private var eqLowValue: Double = 0.5
+    @State private var eqMidValue: Double = 0.5
+    @State private var eqHighValue: Double = 0.5
 
     public init(
         viewModel: TurntableDeckViewModel,
@@ -246,34 +249,39 @@ public struct TurntableDeckView: View {
     }
 
     private var TurntableEqualizerOverlay: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                    )
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        EqualizerOverlayIcon(isDisabledState: false)
-                            .frame(width: 13, height: 13)
-                        Text("EQ")
-                            .font(.caption.weight(.semibold))
-                        Spacer()
-                    }
-
-                    HStack(alignment: .bottom, spacing: 16) {
-                        EqualizerOverlayBand(label: "LOW")
-                        EqualizerOverlayBand(label: "MID")
-                        EqualizerOverlayBand(label: "HIGH")
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    EqualizerOverlayIcon(isDisabledState: false)
+                        .frame(width: 13, height: 13)
+                    Text("EQ")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
                 }
-                .padding(12)
+
+                Spacer(minLength: 8)
+
+                HStack(alignment: .bottom, spacing: 20) {
+                    Spacer(minLength: 0)
+                    EqualizerOverlayBand(label: "LOW", value: $eqLowValue, bandHeight: 128)
+                    EqualizerOverlayBand(label: "MID", value: $eqMidValue, bandHeight: 128)
+                    EqualizerOverlayBand(label: "HIGH", value: $eqHighValue, bandHeight: 128)
+                    Spacer(minLength: 0)
+                }
+
+                Spacer(minLength: 8)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .padding(12)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .allowsHitTesting(true)
     }
 
@@ -1437,18 +1445,20 @@ private struct EqualizerOverlayIcon: View {
 
 private struct EqualizerOverlayBand: View {
     let label: String
+    @Binding var value: Double
+    let bandHeight: CGFloat
 
     var body: some View {
-        VStack(spacing: 6) {
-            ZStack(alignment: .center) {
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.22))
-                    .frame(width: 10, height: 72)
+        VStack(spacing: 8) {
+            VerticalPitchFader(
+                value: $value,
+                border: .white.opacity(0.65),
+                range: 0...1,
+                text: nil,
+                thumbBackgroundColor: Color(white: 0.95)
+            )
+            .frame(width: 40, height: bandHeight)
 
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.95))
-                    .frame(width: 26, height: 14)
-            }
             Text(label)
                 .font(.caption2.monospaced().weight(.semibold))
                 .foregroundStyle(.secondary)
