@@ -26,6 +26,7 @@ public struct TurntableDeckView: View {
     @State private var waveformLastDragX: CGFloat?
     @State private var armVisible = true
     @State private var armVisibilityTask: Task<Void, Never>?
+    @State private var isPitchAdjusting = false
 
     public init(
         viewModel: TurntableDeckViewModel,
@@ -425,7 +426,20 @@ public struct TurntableDeckView: View {
                                     .controlSize(.small)
                                     .tint(.white)
                             }
+
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Text(String(format: "%.1f BPM", viewModel.displayedTargetBPM))
+                                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                                        .monospacedDigit()
+                                        .foregroundStyle(.white)
+                                        .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
+                                }
+                                .opacity(isPitchAdjusting ? 1 : 0)
+                                .allowsHitTesting(isPitchAdjusting)
                         }
+                        .allowsHitTesting(!isPitchAdjusting)
                         .contentShape(Rectangle())
                         .onTapGesture { location in
                             let leftBoundary = Self.waveformTapSeekHorizontalMargin
@@ -458,6 +472,7 @@ public struct TurntableDeckView: View {
                                 }
                         )
                         .simultaneousGesture(waveformScratchGesture(width: waveformGeometry.size.width))
+                        .animation(.easeInOut(duration: 0.18), value: isPitchAdjusting)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 35)
@@ -653,7 +668,12 @@ public struct TurntableDeckView: View {
                         textColor: .black,
                         thumbBackgroundColor: Color(white: 0.95),
                         thumbPopoverSide: .left,
-                        thumbPopoverSize: .large
+                        thumbPopoverSize: .large,
+                        onInteractionChanged: { isInteracting in
+                            withAnimation(.easeInOut(duration: 0.14)) {
+                                isPitchAdjusting = isInteracting
+                            }
+                        }
                     )
                     .frame(maxHeight: .infinity)
                     .disabled(
@@ -1145,11 +1165,14 @@ private struct VerticalPitchFader: View {
     var thumbBackgroundColor: Color = Color(uiColor: .systemBackground)
     var thumbPopoverSide: ThumbPopoverSide = .none
     var thumbPopoverSize: ThumbPopoverSize = .regular
+    var onInteractionChanged: ((Bool) -> Void)? = nil
 
     @State private var isThumbPopoverVisible = false
     @State private var pressStartTime: TimeInterval?
     @State private var gestureStartedOnThumb = false
     @State private var hidePopoverTask: Task<Void, Never>?
+    @State private var interactionEndTask: Task<Void, Never>?
+    @State private var isInteracting = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -1229,6 +1252,7 @@ private struct VerticalPitchFader: View {
                         if pressStartTime == nil {
                             pressStartTime = CACurrentMediaTime()
                             gestureStartedOnThumb = abs(y - thumbCenterY) <= (thumbSize * 0.8)
+                            beginInteraction()
                         }
 
                         if thumbPopoverSide != .none, gestureStartedOnThumb {
@@ -1247,20 +1271,24 @@ private struct VerticalPitchFader: View {
                         hidePopoverTask = nil
                         pressStartTime = nil
                         gestureStartedOnThumb = false
+                        endInteraction()
                     }
             )
             .simultaneousGesture(
                 TapGesture(count: 2)
                     .onEnded {
+                        beginInteraction()
                         isThumbPopoverVisible = false
                         hidePopoverTask?.cancel()
                         hidePopoverTask = nil
                         pressStartTime = nil
                         gestureStartedOnThumb = false
                         value = 0
+                        scheduleInteractionEnd()
                     }
             )
             .onTapGesture { location in
+                beginInteraction()
                 hidePopoverTask?.cancel()
                 hidePopoverTask = nil
                 pressStartTime = nil
@@ -1272,6 +1300,7 @@ private struct VerticalPitchFader: View {
                 if thumbPopoverSide != .none {
                     showPopoverTemporarily()
                 }
+                scheduleInteractionEnd()
             }
         }
     }
@@ -1365,6 +1394,32 @@ private struct VerticalPitchFader: View {
             try? await Task.sleep(nanoseconds: 1_100_000_000)
             await MainActor.run {
                 isThumbPopoverVisible = false
+            }
+        }
+    }
+
+    private func beginInteraction() {
+        interactionEndTask?.cancel()
+        interactionEndTask = nil
+        guard !isInteracting else { return }
+        isInteracting = true
+        onInteractionChanged?(true)
+    }
+
+    private func endInteraction() {
+        interactionEndTask?.cancel()
+        interactionEndTask = nil
+        guard isInteracting else { return }
+        isInteracting = false
+        onInteractionChanged?(false)
+    }
+
+    private func scheduleInteractionEnd() {
+        interactionEndTask?.cancel()
+        interactionEndTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            await MainActor.run {
+                endInteraction()
             }
         }
     }
