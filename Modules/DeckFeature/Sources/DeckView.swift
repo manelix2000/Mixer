@@ -450,8 +450,18 @@ private struct SplitCueControls: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                cueMixButtons
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 6) {
+                    Text("Mix")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    HorizontalFader(
+                        value: cueMixFaderBinding,
+                        range: -1...1,
+                        thumbText: viewModel.cueMixMode.rawValue
+                    )
+                    .frame(minWidth: 110, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                }
+                .frame(maxWidth: .infinity)
 
                 HStack(spacing: 6) {
                     Text("Cue")
@@ -507,22 +517,34 @@ private struct SplitCueControls: View {
         .buttonStyle(.plain)
     }
 
-    private var cueMixButtons: some View {
-        HStack(spacing: 6) {
-            ForEach(DeckViewModel.CueMixMode.allCases, id: \.self) { mode in
-                Button {
-                    viewModel.setCueMixMode(mode)
-                } label: {
-                    Text(mode.rawValue)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 3)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(viewModel.cueMixMode == mode ? .accentColor : .gray.opacity(0.35))
+    private var cueMixFaderBinding: Binding<Double> {
+        Binding(
+            get: { cueMixValue(for: viewModel.cueMixMode) },
+            set: { value in
+                viewModel.setCueMixMode(cueMixMode(for: value))
             }
+        )
+    }
+
+    private func cueMixValue(for mode: DeckViewModel.CueMixMode) -> Double {
+        switch mode {
+        case .cue:
+            return -1.0
+        case .blend:
+            return 0.0
+        case .master:
+            return 1.0
         }
+    }
+
+    private func cueMixMode(for value: Double) -> DeckViewModel.CueMixMode {
+        if value <= -0.33 {
+            return .cue
+        }
+        if value >= 0.33 {
+            return .master
+        }
+        return .blend
     }
 
     @ViewBuilder
