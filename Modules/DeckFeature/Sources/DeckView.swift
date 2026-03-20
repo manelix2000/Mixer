@@ -357,6 +357,7 @@ private struct HorizontalFader: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let thumbText: String
+    @State private var isDraggingFromThumb = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -430,21 +431,21 @@ private struct HorizontalFader: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         let x = min(max(gesture.location.x, 0), width)
+                        let thumbCenterX = thumbX + (thumbWidth * 0.5)
+                        if !isDraggingFromThumb {
+                            let startedOnThumb = abs(x - thumbCenterX) <= (thumbWidth * 0.8)
+                            guard startedOnThumb else {
+                                return
+                            }
+                            isDraggingFromThumb = true
+                        }
                         let mappedProgress = x / width
                         value = mappedValue(forNormalizedProgress: mappedProgress)
                     }
-            )
-            .simultaneousGesture(
-                TapGesture(count: 2)
-                    .onEnded {
-                        value = 0
+                    .onEnded { _ in
+                        isDraggingFromThumb = false
                     }
             )
-            .onTapGesture { location in
-                let x = min(max(location.x, 0), width)
-                let mappedProgress = x / width
-                value = mappedValue(forNormalizedProgress: mappedProgress)
-            }
         }
         .frame(minWidth: 130, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
     }

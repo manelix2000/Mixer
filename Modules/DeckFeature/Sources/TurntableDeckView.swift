@@ -1257,7 +1257,13 @@ private struct VerticalPitchFader: View {
                         if pressStartTime == nil {
                             pressStartTime = CACurrentMediaTime()
                             gestureStartedOnThumb = abs(y - thumbCenterY) <= (thumbSize * 0.8)
+                            guard gestureStartedOnThumb else {
+                                return
+                            }
                             beginInteraction()
+                        }
+                        guard gestureStartedOnThumb else {
+                            return
                         }
 
                         if thumbPopoverSide != .none, gestureStartedOnThumb {
@@ -1282,6 +1288,9 @@ private struct VerticalPitchFader: View {
             .simultaneousGesture(
                 TapGesture(count: 2)
                     .onEnded {
+                        guard gestureStartedOnThumb else {
+                            return
+                        }
                         beginInteraction()
                         isThumbPopoverVisible = false
                         hidePopoverTask?.cancel()
@@ -1293,15 +1302,16 @@ private struct VerticalPitchFader: View {
                     }
             )
             .onTapGesture { location in
+                let y = min(max(location.y, 0), height)
+                let tappedThumb = abs(y - thumbCenterY) <= (thumbSize * 0.8)
+                guard tappedThumb else {
+                    return
+                }
                 beginInteraction()
                 hidePopoverTask?.cancel()
                 hidePopoverTask = nil
                 pressStartTime = nil
                 gestureStartedOnThumb = false
-                let y = min(max(location.y, 0), height)
-                let mappedDisplayProgress = 1.0 - (y / height)
-                let mappedValueProgress = valueProgressFromDisplayProgress(mappedDisplayProgress)
-                value = mappedValue(forNormalizedProgress: mappedValueProgress)
                 if thumbPopoverSide != .none {
                     showPopoverTemporarily()
                 }
