@@ -585,7 +585,9 @@ public struct TurntableDeckView: View {
                             ((viewModel.displayedTargetBPM / max(viewModel.originalBPM, 0.001)) - 1.0) * 100.0
                         ),
                         textColor: .black,
-                        thumbBackgroundColor: Color(white: 0.95)
+                        thumbBackgroundColor: Color(white: 0.95),
+                        thumbPopoverSide: .left,
+                        thumbPopoverSize: .large
                     )
                     .frame(maxHeight: .infinity)
                     .disabled(
@@ -632,7 +634,6 @@ public struct TurntableDeckView: View {
             .padding(0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
 
@@ -1049,6 +1050,26 @@ private final class TouchSurfaceView: UIView {
 }
 
 private struct VerticalPitchFader: View {
+    enum ThumbPopoverSide {
+        case none
+        case left
+        case right
+    }
+    enum ThumbPopoverSize {
+        case compact
+        case regular
+        case large
+    }
+    private struct PopoverMetrics {
+        let width: CGFloat
+        let height: CGFloat
+        let cornerRadius: CGFloat
+        let horizontalPadding: CGFloat
+        let fontSize: CGFloat
+        let pointerWidth: CGFloat
+        let pointerHeight: CGFloat
+    }
+
     @Binding var value: Double
     var border: Color = .black
     let range: ClosedRange<Double>
@@ -1056,6 +1077,13 @@ private struct VerticalPitchFader: View {
     var text: String? = nil
     var textColor: Color = .primary
     var thumbBackgroundColor: Color = Color(uiColor: .systemBackground)
+    var thumbPopoverSide: ThumbPopoverSide = .none
+    var thumbPopoverSize: ThumbPopoverSize = .regular
+
+    @State private var isThumbPopoverVisible = false
+    @State private var pressStartTime: TimeInterval?
+    @State private var gestureStartedOnThumb = false
+    @State private var hidePopoverTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { geometry in
@@ -1065,9 +1093,19 @@ private struct VerticalPitchFader: View {
             let thumbSize: CGFloat = 26
             let usableHeight = max(height - thumbSize, 1)
             let thumbY = (1.0 - progress) * usableHeight
+            let thumbCenterY = thumbY + (thumbSize * 0.5)
             let baselineProgress = displayProgress(fromValueProgress: baselineProgressForRange())
             let selectedHeight = max(abs(progress - baselineProgress) * height, 2)
             let selectedMidpoint = (progress + baselineProgress) * 0.5
+            let popoverMetrics = popoverStyleMetrics(for: thumbPopoverSize)
+            let popoverXOffset: CGFloat = switch thumbPopoverSide {
+            case .none:
+                0
+            case .left:
+                -((34 * 0.5) + popoverMetrics.pointerWidth + (popoverMetrics.width * 0.5))
+            case .right:
+                (34 * 0.5) + popoverMetrics.pointerWidth + (popoverMetrics.width * 0.5)
+            }
 
             ZStack(alignment: .center) {
                 Capsule()
@@ -1104,29 +1142,71 @@ private struct VerticalPitchFader: View {
                     .frame(width: 34, height: thumbSize)
                     .offset(y: thumbY - (usableHeight * 0.5))
                     .shadow(color: .black.opacity(0.16), radius: 2, x: 0, y: 1)
+
             }
             .frame(maxWidth: .infinity)
+            .overlay {
+                if isThumbPopoverVisible, thumbPopoverSide != .none {
+                    popoverView(metrics: popoverMetrics)
+                        .offset(
+                            x: popoverXOffset,
+                            y: thumbY - (usableHeight * 0.5)
+                        )
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         let y = min(max(gesture.location.y, 0), height)
+                        if pressStartTime == nil {
+                            pressStartTime = CACurrentMediaTime()
+                            gestureStartedOnThumb = abs(y - thumbCenterY) <= (thumbSize * 0.8)
+                        }
+
+                        if thumbPopoverSide != .none,
+                           gestureStartedOnThumb,
+                           let start = pressStartTime,
+                           CACurrentMediaTime() - start >= 0.16 {
+                            isThumbPopoverVisible = true
+                        }
+
                         let mappedDisplayProgress = 1.0 - (y / height)
                         let mappedValueProgress = valueProgressFromDisplayProgress(mappedDisplayProgress)
                         value = mappedValue(forNormalizedProgress: mappedValueProgress)
+                    }
+                    .onEnded { _ in
+                        isThumbPopoverVisible = false
+                        hidePopoverTask?.cancel()
+                        hidePopoverTask = nil
+                        pressStartTime = nil
+                        gestureStartedOnThumb = false
                     }
             )
             .simultaneousGesture(
                 TapGesture(count: 2)
                     .onEnded {
+                        isThumbPopoverVisible = false
+                        hidePopoverTask?.cancel()
+                        hidePopoverTask = nil
+                        pressStartTime = nil
+                        gestureStartedOnThumb = false
                         value = 0
                     }
             )
             .onTapGesture { location in
+                hidePopoverTask?.cancel()
+                hidePopoverTask = nil
+                pressStartTime = nil
+                gestureStartedOnThumb = false
                 let y = min(max(location.y, 0), height)
                 let mappedDisplayProgress = 1.0 - (y / height)
                 let mappedValueProgress = valueProgressFromDisplayProgress(mappedDisplayProgress)
                 value = mappedValue(forNormalizedProgress: mappedValueProgress)
+                if thumbPopoverSide != .none {
+                    showPopoverTemporarily()
+                }
             }
         }
     }
@@ -1166,5 +1246,121 @@ private struct VerticalPitchFader: View {
             return 1.0 - displayProgress
         }
         return displayProgress
+    }
+
+    private func popoverText() -> String {
+        if let text {
+            return text
+        }
+        return String(format: "%.2f", value)
+    }
+
+    @ViewBuilder
+    private func popoverView(metrics: PopoverMetrics) -> some View {
+        HStack(spacing: 0) {
+            if thumbPopoverSide == .right {
+                sidePointer(direction: .left, metrics: metrics)
+            }
+
+            Text(popoverText())
+                .font(.system(size: metrics.fontSize, weight: .bold, design: .monospaced))
+                .foregroundStyle(.black)
+                .frame(width: metrics.width, height: metrics.height)
+                .padding(.horizontal, metrics.horizontalPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
+                        .fill(Color(white: 0.98))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
+                        .stroke(border.opacity(0.36), lineWidth: 1)
+                )
+
+            if thumbPopoverSide == .left {
+                sidePointer(direction: .right, metrics: metrics)
+            }
+        }
+        .shadow(color: .black.opacity(0.14), radius: 2, x: 0, y: 1)
+    }
+
+    private func sidePointer(direction: TrianglePointer.Direction, metrics: PopoverMetrics) -> some View {
+        TrianglePointer(direction: direction)
+            .fill(Color(white: 0.98))
+            .frame(width: metrics.pointerWidth, height: metrics.pointerHeight)
+            .overlay(
+                TrianglePointer(direction: direction)
+                    .stroke(border.opacity(0.36), lineWidth: 1)
+            )
+    }
+
+    private func showPopoverTemporarily() {
+        isThumbPopoverVisible = true
+        hidePopoverTask?.cancel()
+        hidePopoverTask = Task {
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            await MainActor.run {
+                isThumbPopoverVisible = false
+            }
+        }
+    }
+
+    private func popoverStyleMetrics(for size: ThumbPopoverSize) -> PopoverMetrics {
+        switch size {
+        case .compact:
+            return PopoverMetrics(
+                width: 64,
+                height: 28,
+                cornerRadius: 8,
+                horizontalPadding: 6,
+                fontSize: 12,
+                pointerWidth: 10,
+                pointerHeight: 12
+            )
+        case .regular:
+            return PopoverMetrics(
+                width: 80,
+                height: 34,
+                cornerRadius: 10,
+                horizontalPadding: 7,
+                fontSize: 14,
+                pointerWidth: 11,
+                pointerHeight: 14
+            )
+        case .large:
+            return PopoverMetrics(
+                width: 104,
+                height: 40,
+                cornerRadius: 12,
+                horizontalPadding: 8,
+                fontSize: 16,
+                pointerWidth: 12,
+                pointerHeight: 16
+            )
+        }
+    }
+}
+
+private struct TrianglePointer: Shape {
+    enum Direction {
+        case left
+        case right
+    }
+
+    let direction: Direction
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        switch direction {
+        case .left:
+            path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .right:
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        }
+        path.closeSubpath()
+        return path
     }
 }
