@@ -8,6 +8,7 @@ public struct DeckView: View {
     @State private var areControlsVisible: Bool
     @State private var isRightDeckVisible: Bool
     @State private var isSettingsVisible: Bool
+    @State private var isEqualizerVisible: Bool
     @State private var selectedAudioEngineMode: AudioEngineMode
     @State private var selectedSplitDeckLayout: SplitDeckLayout
     private let isIPad: Bool
@@ -24,6 +25,7 @@ public struct DeckView: View {
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
         _isSettingsVisible = State(initialValue: false)
+        _isEqualizerVisible = State(initialValue: false)
         _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
         _selectedSplitDeckLayout = State(initialValue: layoutStore.selectedLayout)
         _viewModel = StateObject(wrappedValue: DeckViewModel())
@@ -39,6 +41,7 @@ public struct DeckView: View {
         _areControlsVisible = State(initialValue: isIPad)
         _isRightDeckVisible = State(initialValue: isIPad)
         _isSettingsVisible = State(initialValue: false)
+        _isEqualizerVisible = State(initialValue: false)
         _selectedAudioEngineMode = State(initialValue: modeStore.selectedMode)
         _selectedSplitDeckLayout = State(initialValue: layoutStore.selectedLayout)
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -161,8 +164,22 @@ public struct DeckView: View {
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
+
+            Spacer(minLength: 8)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    isEqualizerVisible.toggle()
+                }
+            } label: {
+                EqualizerControlIcon(isDisabledState: isEqualizerVisible)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel(isEqualizerVisible ? "Hide equalizer" : "Show equalizer")
         }
         .frame(width: 44)
+        .frame(maxHeight: .infinity, alignment: .top)
         .accessibilityLabel((isIPad || areControlsVisible) ? "Hide controls" : "Show controls")
         .accessibilityHint("Toggles the controls column visibility")
     }
@@ -211,6 +228,7 @@ public struct DeckView: View {
                     set: { viewModel.setPitchLockEnabled($0) }
                 ),
                 areControlsVisible: $areControlsVisible,
+                isEqualizerOverlayVisible: isEqualizerVisible,
                 externalBPMBadgeText: leftDeckMicBPMBadgeText,
                 isExternalBPMListening: viewModel.isMicrophoneBPMDetectionActive || viewModel.isExternalBPMLoading
             )
@@ -219,10 +237,12 @@ public struct DeckView: View {
                 TurntableDeckView(
                     viewModel: viewModel.rightTurntableDeckViewModel,
                     isPitchLockedToExternalBPM: .constant(false),
-                    areControlsVisible: $areControlsVisible
+                    areControlsVisible: $areControlsVisible,
+                    isEqualizerOverlayVisible: isEqualizerVisible
                 )
             }
         }
+        .animation(.easeInOut(duration: 0.22), value: isEqualizerVisible)
     }
 
     private var settingsCard: some View {
@@ -301,6 +321,36 @@ public struct DeckView: View {
         }
     }
 
+}
+
+private struct EqualizerControlIcon: View {
+    let isDisabledState: Bool
+
+    var body: some View {
+        ZStack {
+            HStack(alignment: .bottom, spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 6)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 10)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 7.5)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 12)
+            }
+
+            if isDisabledState {
+                Rectangle()
+                    .fill(Color.red.opacity(0.9))
+                    .frame(width: 16, height: 2)
+                    .rotationEffect(.degrees(-35))
+            }
+        }
+    }
 }
 
 private struct HorizontalFader: View {

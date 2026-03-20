@@ -15,6 +15,7 @@ public struct TurntableDeckView: View {
     @StateObject private var viewModel: TurntableDeckViewModel
     @Binding private var isPitchLockedToExternalBPM: Bool
     @Binding private var areControlsVisible: Bool
+    private let isEqualizerOverlayVisible: Bool
     private let externalBPMBadgeText: String?
     private let isExternalBPMListening: Bool
     @State private var isImportingTrack = false
@@ -30,12 +31,14 @@ public struct TurntableDeckView: View {
         viewModel: TurntableDeckViewModel,
         isPitchLockedToExternalBPM: Binding<Bool>,
         areControlsVisible: Binding<Bool>,
+        isEqualizerOverlayVisible: Bool = false,
         externalBPMBadgeText: String? = nil,
         isExternalBPMListening: Bool = false
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _isPitchLockedToExternalBPM = isPitchLockedToExternalBPM
         _areControlsVisible = areControlsVisible
+        self.isEqualizerOverlayVisible = isEqualizerOverlayVisible
         self.externalBPMBadgeText = externalBPMBadgeText
         self.isExternalBPMListening = isExternalBPMListening
     }
@@ -123,6 +126,11 @@ public struct TurntableDeckView: View {
                             }
                             .padding(controlsPadding)
                         }
+
+                        if isEqualizerOverlayVisible {
+                            TurntableEqualizerOverlay
+                                .transition(.opacity)
+                        }
                     }
                     .frame(width: turntableSize)
 
@@ -165,6 +173,7 @@ public struct TurntableDeckView: View {
             armVisibilityTask?.cancel()
             armVisibilityTask = nil
         }
+        .animation(.easeInOut(duration: 0.22), value: isEqualizerOverlayVisible)
     }
 
     private var topLeftBadgeText: String? {
@@ -234,6 +243,38 @@ public struct TurntableDeckView: View {
 
     private var turntableMetalPlateBackground: some View {
         metalPlateBackground(cornerRadius: 12)
+    }
+
+    private var TurntableEqualizerOverlay: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        EqualizerOverlayIcon(isDisabledState: false)
+                            .frame(width: 13, height: 13)
+                        Text("EQ")
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                    }
+
+                    HStack(alignment: .bottom, spacing: 16) {
+                        EqualizerOverlayBand(label: "LOW")
+                        EqualizerOverlayBand(label: "MID")
+                        EqualizerOverlayBand(label: "HIGH")
+                    }
+                }
+                .padding(12)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .allowsHitTesting(true)
     }
 
     private func metalPlateBackground(cornerRadius: CGFloat) -> some View {
@@ -1361,5 +1402,56 @@ private struct TrianglePointer: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+private struct EqualizerOverlayIcon: View {
+    let isDisabledState: Bool
+
+    var body: some View {
+        ZStack {
+            HStack(alignment: .bottom, spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 6)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 10)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 7.5)
+                RoundedRectangle(cornerRadius: 1.1, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 2.8, height: 12)
+            }
+
+            if isDisabledState {
+                Rectangle()
+                    .fill(Color.red.opacity(0.9))
+                    .frame(width: 16, height: 2)
+                    .rotationEffect(.degrees(-35))
+            }
+        }
+    }
+}
+
+private struct EqualizerOverlayBand: View {
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack(alignment: .center) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.22))
+                    .frame(width: 10, height: 72)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.95))
+                    .frame(width: 26, height: 14)
+            }
+            Text(label)
+                .font(.caption2.monospaced().weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }
