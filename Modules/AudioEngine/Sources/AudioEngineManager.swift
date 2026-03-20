@@ -32,6 +32,7 @@ public protocol AudioEngineControlling: AnyObject {
     func setVolume(_ value: Float)
     func setPan(_ value: Float)
     func setPlaybackRate(_ value: Float)
+    func setEqualizer(low: Float, mid: Float, high: Float)
     func startMicrophoneCapture(
         onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
     ) throws
@@ -84,6 +85,7 @@ public final class AudioEngineManager: AudioEngineControlling {
     private let engine: AVAudioEngine
     private let playerNode: AVAudioPlayerNode
     private let varispeedNode: AVAudioUnitVarispeed
+    private let equalizerNode: AVAudioUnitEQ
     private let stateLock = NSLock()
     private var isGraphConfigured = false
     private var loadedFile: AVAudioFile?
@@ -115,6 +117,7 @@ public final class AudioEngineManager: AudioEngineControlling {
         engine: AVAudioEngine = AVAudioEngine(),
         playerNode: AVAudioPlayerNode = AVAudioPlayerNode(),
         varispeedNode: AVAudioUnitVarispeed = AVAudioUnitVarispeed(),
+        equalizerNode: AVAudioUnitEQ = AVAudioUnitEQ(numberOfBands: 3),
         initialVolume: Float = 1.0,
         initialPan: Float = 0.0,
         initialPlaybackRate: Float = 1.0
@@ -122,12 +125,15 @@ public final class AudioEngineManager: AudioEngineControlling {
         self.engine = engine
         self.playerNode = playerNode
         self.varispeedNode = varispeedNode
+        self.equalizerNode = equalizerNode
         self.internalVolume = Self.clamp(volume: initialVolume)
         self.internalPan = Self.clamp(pan: initialPan)
         self.internalPlaybackRate = Self.clamp(playbackRate: initialPlaybackRate)
         self.playerNode.volume = self.internalVolume
         self.playerNode.pan = self.internalPan
         self.varispeedNode.rate = self.internalPlaybackRate
+        configureEqualizerBands()
+        setEqualizer(low: 0.5, mid: 0.5, high: 0.5)
     }
 
     public var isRunning: Bool {
@@ -403,6 +409,22 @@ public final class AudioEngineManager: AudioEngineControlling {
         }
     }
 
+    public func setEqualizer(low: Float, mid: Float, high: Float) {
+        withStateLock {
+            let clampedLow = Self.clamp(normalizedEqualizerValue: low)
+            let clampedMid = Self.clamp(normalizedEqualizerValue: mid)
+            let clampedHigh = Self.clamp(normalizedEqualizerValue: high)
+            let bands = equalizerNode.bands
+            guard bands.count >= 3 else {
+                return
+            }
+            // Use a wider range for LOW so bass changes are easier to perceive.
+            bands[0].gain = Self.equalizerGainFromNormalized(clampedLow, rangeInDecibels: 16.0)
+            bands[1].gain = Self.equalizerGainFromNormalized(clampedMid)
+            bands[2].gain = Self.equalizerGainFromNormalized(clampedHigh)
+        }
+    }
+
     public func startMicrophoneCapture(
         onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
     ) throws {
@@ -559,8 +581,10 @@ public final class AudioEngineManager: AudioEngineControlling {
     private func configureGraph() {
         engine.attach(playerNode)
         engine.attach(varispeedNode)
+        engine.attach(equalizerNode)
         engine.connect(playerNode, to: varispeedNode, format: nil)
-        engine.connect(varispeedNode, to: engine.mainMixerNode, format: nil)
+        engine.connect(varispeedNode, to: equalizerNode, format: nil)
+        engine.connect(equalizerNode, to: engine.mainMixerNode, format: nil)
     }
 
     private func startEngineLocked() throws {
@@ -698,6 +722,42 @@ public final class AudioEngineManager: AudioEngineControlling {
 
     private static func clamp(playbackRate: Float) -> Float {
         min(max(playbackRate, 0.5), 2.0)
+    }
+
+    private static func clamp(normalizedEqualizerValue: Float) -> Float {
+        min(max(normalizedEqualizerValue, 0), 1)
+    }
+
+    private static func equalizerGainFromNormalized(
+        _ normalized: Float,
+        rangeInDecibels: Float = 12.0
+    ) -> Float {
+        // Map 0...1 to a symmetric range centered at 0 dB.
+        // Example for 12 dB range: 0.5 -> 0 dB, 0 -> -12 dB, 1 -> +12 dB.
+        (normalized - 0.5) * (rangeInDecibels * 2.0)
+    }
+
+    private func configureEqualizerBands() {
+        let bands = equalizerNode.bands
+        guard bands.count >= 3 else {
+            return
+        }
+
+        bands[0].filterType = .lowShelf
+        // Raise/steepen low shelf so "LOW" remains audible on compact speakers.
+        bands[0].frequency = 260
+        bands[0].bandwidth = 0.6
+        bands[0].bypass = false
+
+        bands[1].filterType = .parametric
+        bands[1].frequency = 1_000
+        bands[1].bandwidth = 1.0
+        bands[1].bypass = false
+
+        bands[2].filterType = .highShelf
+        bands[2].frequency = 8_000
+        bands[2].bandwidth = 0.7
+        bands[2].bypass = false
     }
 
     private static func isValidMicrophoneFormat(_ format: AVAudioFormat) -> Bool {

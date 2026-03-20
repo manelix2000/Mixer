@@ -111,6 +111,10 @@ public final class SplitAudioEngineManager: AudioEngineControlling, AudioEngineR
         standardEngine.setPlaybackRate(value)
     }
 
+    public func setEqualizer(low: Float, mid: Float, high: Float) {
+        standardEngine.setEqualizer(low: low, mid: mid, high: high)
+    }
+
     public func startMicrophoneCapture(
         onBuffer: @escaping @Sendable (TempoInputBuffer) -> Void
     ) throws {

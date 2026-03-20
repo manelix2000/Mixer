@@ -26,9 +26,6 @@ public struct TurntableDeckView: View {
     @State private var waveformLastDragX: CGFloat?
     @State private var armVisible = true
     @State private var armVisibilityTask: Task<Void, Never>?
-    @State private var eqLowValue: Double = 0.5
-    @State private var eqMidValue: Double = 0.5
-    @State private var eqHighValue: Double = 0.5
 
     public init(
         viewModel: TurntableDeckViewModel,
@@ -130,10 +127,9 @@ public struct TurntableDeckView: View {
                             .padding(controlsPadding)
                         }
 
-                        if isEqualizerOverlayVisible {
-                            TurntableEqualizerOverlay
-                                .transition(.opacity)
-                        }
+                        TurntableEqualizerOverlay
+                            .opacity(isEqualizerOverlayVisible ? 1 : 0)
+                            .allowsHitTesting(isEqualizerOverlayVisible)
                     }
                     .frame(width: turntableSize)
 
@@ -259,7 +255,7 @@ public struct TurntableDeckView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    EqualizerOverlayIcon(isDisabledState: false)
+                    EqualizerOverlayIcon(isDisabledState: false, barColor: .black)
                         .frame(width: 13, height: 13)
                     Text("EQ")
                         .font(.caption.weight(.semibold))
@@ -270,9 +266,30 @@ public struct TurntableDeckView: View {
 
                 HStack(alignment: .bottom, spacing: 20) {
                     Spacer(minLength: 0)
-                    EqualizerOverlayBand(label: "LOW", value: $eqLowValue, bandHeight: 128)
-                    EqualizerOverlayBand(label: "MID", value: $eqMidValue, bandHeight: 128)
-                    EqualizerOverlayBand(label: "HIGH", value: $eqHighValue, bandHeight: 128)
+                    EqualizerOverlayBand(
+                        label: "LOW",
+                        value: Binding(
+                            get: { viewModel.equalizerLow },
+                            set: { viewModel.setEqualizerLow($0) }
+                        ),
+                        bandHeight: 128
+                    )
+                    EqualizerOverlayBand(
+                        label: "MID",
+                        value: Binding(
+                            get: { viewModel.equalizerMid },
+                            set: { viewModel.setEqualizerMid($0) }
+                        ),
+                        bandHeight: 128
+                    )
+                    EqualizerOverlayBand(
+                        label: "HIGH",
+                        value: Binding(
+                            get: { viewModel.equalizerHigh },
+                            set: { viewModel.setEqualizerHigh($0) }
+                        ),
+                        bandHeight: 128
+                    )
                     Spacer(minLength: 0)
                 }
 
@@ -1415,21 +1432,22 @@ private struct TrianglePointer: Shape {
 
 private struct EqualizerOverlayIcon: View {
     let isDisabledState: Bool
+    let barColor: Color
 
     var body: some View {
         ZStack {
             HStack(alignment: .bottom, spacing: 2) {
                 RoundedRectangle(cornerRadius: 1.1, style: .continuous)
-                    .fill(Color.white)
+                    .fill(barColor)
                     .frame(width: 2.8, height: 6)
                 RoundedRectangle(cornerRadius: 1.1, style: .continuous)
-                    .fill(Color.white)
+                    .fill(barColor)
                     .frame(width: 2.8, height: 10)
                 RoundedRectangle(cornerRadius: 1.1, style: .continuous)
-                    .fill(Color.white)
+                    .fill(barColor)
                     .frame(width: 2.8, height: 7.5)
                 RoundedRectangle(cornerRadius: 1.1, style: .continuous)
-                    .fill(Color.white)
+                    .fill(barColor)
                     .frame(width: 2.8, height: 12)
             }
 
@@ -1440,6 +1458,11 @@ private struct EqualizerOverlayIcon: View {
                     .rotationEffect(.degrees(-35))
             }
         }
+    }
+
+    init(isDisabledState: Bool, barColor: Color = .white) {
+        self.isDisabledState = isDisabledState
+        self.barColor = barColor
     }
 }
 

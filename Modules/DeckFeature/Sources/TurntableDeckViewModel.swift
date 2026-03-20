@@ -56,6 +56,9 @@ public final class TurntableDeckViewModel: ObservableObject {
     @Published public private(set) var pan: Double
     @Published public private(set) var panControlRange: ClosedRange<Double>
     @Published public private(set) var splitDeckRole: SplitDeckRole?
+    @Published public private(set) var equalizerLow: Double
+    @Published public private(set) var equalizerMid: Double
+    @Published public private(set) var equalizerHigh: Double
 
     private let audioEngine: AudioEngineControlling
     private let waveformAnalyzer: WaveformAnalyzing
@@ -129,9 +132,13 @@ public final class TurntableDeckViewModel: ObservableObject {
         self.panControlRange = resolvedPanRange
         self.splitDeckRole = resolvedSplitRole
         self.pan = min(max(Double(audioEngine.pan), resolvedPanRange.lowerBound), resolvedPanRange.upperBound)
+        self.equalizerLow = 0.5
+        self.equalizerMid = 0.5
+        self.equalizerHigh = 0.5
         self.masterVolume = 1.0
 
         applyEffectiveOutputVolume()
+        applyEqualizer()
         applyTargetBPM()
         refreshBPMText()
         startTurntableTimer()
@@ -336,6 +343,21 @@ public final class TurntableDeckViewModel: ObservableObject {
         let clamped = min(max(value, panControlRange.lowerBound), panControlRange.upperBound)
         audioEngine.setPan(Float(clamped))
         pan = min(max(Double(audioEngine.pan), panControlRange.lowerBound), panControlRange.upperBound)
+    }
+
+    public func setEqualizerLow(_ value: Double) {
+        equalizerLow = min(max(value, 0), 1)
+        applyEqualizer()
+    }
+
+    public func setEqualizerMid(_ value: Double) {
+        equalizerMid = min(max(value, 0), 1)
+        applyEqualizer()
+    }
+
+    public func setEqualizerHigh(_ value: Double) {
+        equalizerHigh = min(max(value, 0), 1)
+        applyEqualizer()
     }
 
     public func refreshPanRouting(resetPanToCenter: Bool) {
@@ -1165,6 +1187,14 @@ public final class TurntableDeckViewModel: ObservableObject {
     private func applyEffectiveOutputVolume() {
         let combined = min(max(volume * masterVolume, 0.0), 1.0)
         audioEngine.setVolume(Float(combined))
+    }
+
+    private func applyEqualizer() {
+        audioEngine.setEqualizer(
+            low: Float(equalizerLow),
+            mid: Float(equalizerMid),
+            high: Float(equalizerHigh)
+        )
     }
 
     private func effectiveTargetBPMForCurrentState() -> Double {
