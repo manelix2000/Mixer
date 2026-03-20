@@ -246,57 +246,62 @@ public struct TurntableDeckView: View {
     }
 
     private var TurntableEqualizerOverlay: some View {
-        ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                )
+        GeometryReader { overlayGeometry in
+            let contentHeight = max(overlayGeometry.size.height - 24, 0)
+            let estimatedFixedChrome: CGFloat = 52
+            let dynamicBandHeight = max(min(contentHeight - estimatedFixedChrome, 128), 56)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    EqualizerOverlayIcon(isDisabledState: false, barColor: .black)
-                        .frame(width: 13, height: 13)
-                    Text("EQ")
-                        .font(.caption.weight(.semibold))
-                    Spacer()
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+
+                ZStack(alignment: .center) {
+                    VStack {
+                        HStack {
+                            EqualizerOverlayIcon(isDisabledState: false, barColor: .black)
+                                .frame(width: 13, height: 13)
+                            Text("EQ")
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .zIndex(1)
+
+                    HStack(alignment: .bottom, spacing: 20) {
+                        EqualizerOverlayBand(
+                            label: "LOW",
+                            value: Binding(
+                                get: { viewModel.equalizerLow },
+                                set: { viewModel.setEqualizerLow($0) }
+                            ),
+                            bandHeight: dynamicBandHeight
+                        )
+                        EqualizerOverlayBand(
+                            label: "MID",
+                            value: Binding(
+                                get: { viewModel.equalizerMid },
+                                set: { viewModel.setEqualizerMid($0) }
+                            ),
+                            bandHeight: dynamicBandHeight
+                        )
+                        EqualizerOverlayBand(
+                            label: "HIGH",
+                            value: Binding(
+                                get: { viewModel.equalizerHigh },
+                                set: { viewModel.setEqualizerHigh($0) }
+                            ),
+                            bandHeight: dynamicBandHeight
+                        )
+                    }
+                    .padding(0)
                 }
-
-                Spacer(minLength: 8)
-
-                HStack(alignment: .bottom, spacing: 20) {
-                    Spacer(minLength: 0)
-                    EqualizerOverlayBand(
-                        label: "LOW",
-                        value: Binding(
-                            get: { viewModel.equalizerLow },
-                            set: { viewModel.setEqualizerLow($0) }
-                        ),
-                        bandHeight: 128
-                    )
-                    EqualizerOverlayBand(
-                        label: "MID",
-                        value: Binding(
-                            get: { viewModel.equalizerMid },
-                            set: { viewModel.setEqualizerMid($0) }
-                        ),
-                        bandHeight: 128
-                    )
-                    EqualizerOverlayBand(
-                        label: "HIGH",
-                        value: Binding(
-                            get: { viewModel.equalizerHigh },
-                            set: { viewModel.setEqualizerHigh($0) }
-                        ),
-                        bandHeight: 128
-                    )
-                    Spacer(minLength: 0)
-                }
-
-                Spacer(minLength: 8)
             }
-            .padding(12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
