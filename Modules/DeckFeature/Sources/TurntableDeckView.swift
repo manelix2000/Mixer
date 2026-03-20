@@ -1165,10 +1165,9 @@ private struct VerticalPitchFader: View {
                             gestureStartedOnThumb = abs(y - thumbCenterY) <= (thumbSize * 0.8)
                         }
 
-                        if thumbPopoverSide != .none,
-                           gestureStartedOnThumb,
-                           let start = pressStartTime,
-                           CACurrentMediaTime() - start >= 0.16 {
+                        if thumbPopoverSide != .none, gestureStartedOnThumb {
+                            hidePopoverTask?.cancel()
+                            hidePopoverTask = nil
                             isThumbPopoverVisible = true
                         }
 
