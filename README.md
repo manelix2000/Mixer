@@ -20,11 +20,19 @@ It is intentionally **not a professional mixer app** and should be used for lear
 ![Master buttons](Projects/MixerApp/Resources/Screenshot4.png)
 
 ## Functionalities
-- Controls column toggle: show/hide the top controls panel.
-- Right deck toggle (phone layout): show/hide the second deck.
+- Controls column toggle (iPhone): show/hide the top controls panel.
+- Controls always visible on iPad (no open/close controls button).
+- Settings button: shows/hides a settings card with animated deck/control transitions.
+- Right deck toggle (iPhone layout): show/hide the second deck.
 - Mic BPM button: start/stop microphone tempo detection.
 - Pitch lock button: lock/unlock left deck pitch to detected external BPM.
-- Master volume slider and pan slider (L/C/R routing display).
+- Per-deck pan control using horizontal faders (with artwork and routing role badges).
+- Split Audio Engine mode toggle in settings (standard/split behavior).
+- Split deck layout selector in settings (`L:Master / R:Cue` or `L:Cue / R:Master`).
+- Split cue controls line:
+  - Deck `CUE` enable per deck
+  - Cue mix mode horizontal fader (`left=CUE`, `center=BLEND`, `right=MASTER`)
+  - Cue level horizontal fader
 - Load track button: import an audio file (`mp3`, `wav`, `aiff`, `m4a`).
 - Start/Pause and Stop transport buttons.
 - Deck volume fader.
@@ -36,6 +44,7 @@ It is intentionally **not a professional mixer app** and should be used for lear
   - circular drag to scrub/scratch audio
   - pressure/press-hold interaction to momentarily modulate playback rate
 - Fader gestures: drag or tap to set value, double-tap to reset to center/default.
+- Bottom-centered mic listening label on deck (`Listening...` and detected `BPM`) with blinking warm glow while active.
 
 ## Limitations
 - Not intended as a pro DJ platform.
