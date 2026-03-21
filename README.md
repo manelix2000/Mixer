@@ -14,9 +14,12 @@ It is intentionally **not a professional mixer app** and should be used for lear
 ![Two decks](Projects/MixerApp/Resources/Screenshot2.png) 
 
 **Loading tracks**
-![Loading track](Projects/MixerApp/Resources/Screenshot3.png) 
+![Loading track](Projects/MixerApp/Resources/Screenshot5.png) 
 
 **Master buttons**
+![Master buttons](Projects/MixerApp/Resources/Screenshot3.png)
+
+**Equalizer controls**
 ![Master buttons](Projects/MixerApp/Resources/Screenshot4.png)
 
 ## Functionalities
