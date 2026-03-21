@@ -18,6 +18,9 @@ let project = Project(
                         "MicrogrammaDExtendedBold.ttf"
                     ],
                     "NSMicrophoneUsageDescription": "Mixer uses the microphone to detect external BPM.",
+                    "UIBackgroundModes": [
+                        "audio"
+                    ],
                     "UISupportedInterfaceOrientations": [
                         "UIInterfaceOrientationLandscapeLeft",
                         "UIInterfaceOrientationLandscapeRight"
