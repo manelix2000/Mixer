@@ -157,6 +157,8 @@ public final class TurntableDeckViewModel: ObservableObject {
         print("[Mixer][Import] selectTrack called with URL: \(url)")
         Self.trackLog.info("selectTrack called with URL: \(url.path(percentEncoded: false), privacy: .public)")
         playbackStatusText = "Importing..."
+        // Keep transport disabled until the new file is fully loaded in the engine.
+        selectedTrackURL = nil
         selectedTrackName = url.lastPathComponent
 
         let resolvedURL: URL
@@ -199,7 +201,6 @@ public final class TurntableDeckViewModel: ObservableObject {
         turntablePhysics.reset()
         lastWrappedPlatterDegrees = nil
         publishTurntableState()
-        selectedTrackURL = resolvedURL
         selectedTrackName = url.lastPathComponent
         loadTrackArtwork(url: resolvedURL)
 
@@ -207,6 +208,7 @@ public final class TurntableDeckViewModel: ObservableObject {
             try audioEngine.loadFile(url: resolvedURL)
             print("[Mixer][Import] audioEngine.loadFile succeeded")
             Self.trackLog.info("audioEngine.loadFile succeeded.")
+            selectedTrackURL = resolvedURL
             playbackState = audioEngine.playbackState
             playbackStatusText = ""
             refreshPlaybackTimeText()
