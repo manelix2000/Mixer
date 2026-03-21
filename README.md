@@ -36,14 +36,21 @@ It is intentionally **not a professional mixer app** and should be used for lear
 - Load track button: import an audio file (`mp3`, `wav`, `aiff`, `m4a`).
 - Start/Pause and Stop transport buttons.
 - Deck volume fader.
-- Pitch fader for BPM offset with sensitivity range buttons (`+` / `-`).
+- Pitch fader for BPM offset with sensitivity range buttons (`+` / `-`) and thumb popover value display.
+- While pitch is being adjusted, waveform shows a blurred BPM focus overlay and blocks waveform hits.
 - Waveform zoom buttons (`+` / `-`) and pinch-to-zoom gesture.
 - Waveform tap-to-seek gesture (tap in waveform area to seek position).
 - Waveform horizontal drag gesture for scrub/scratch interaction.
+- Equalizer button (always visible in controls column): show/hide per-deck EQ overlay cards.
+- Per-deck 3-band equalizer overlay (`LOW`, `MID`, `HIGH`) with adaptive fader height and touch shielding over deck controls.
+- EQ is connected to the audio engine (per deck):
+  - `LOW`: low-shelf tuned for better audibility on compact speakers
+  - `MID`: parametric band
+  - `HIGH`: high-shelf band
 - Turntable touch gestures:
   - circular drag to scrub/scratch audio
   - pressure/press-hold interaction to momentarily modulate playback rate
-- Fader gestures: drag or tap to set value, double-tap to reset to center/default.
+- Vertical and horizontal faders now require thumb-started drag (track taps do not reposition values).
 - Bottom-centered mic listening label on deck (`Listening...` and detected `BPM`) with blinking warm glow while active.
 
 ## Limitations
