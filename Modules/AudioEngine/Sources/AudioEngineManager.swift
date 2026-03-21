@@ -660,10 +660,18 @@ public final class AudioEngineManager: AudioEngineControlling {
         // AVAudioSession is process-wide. Reapplying category/activation from every deck can
         // stall UI/audio and cause audible state shifts when a second deck starts.
         if !hasConfiguredSharedPlaybackSession {
+            var options: AVAudioSession.CategoryOptions = [
+                .mixWithOthers,
+                .allowBluetoothHFP,
+                .allowBluetoothA2DP
+            ]
+            if shouldDefaultToSpeaker(for: session) {
+                options.insert(.defaultToSpeaker)
+            }
             try session.setCategory(
                 .playAndRecord,
                 mode: .default,
-                options: [.mixWithOthers, .defaultToSpeaker]
+                options: options
             )
             hasConfiguredSharedPlaybackSession = true
         }
@@ -695,7 +703,12 @@ public final class AudioEngineManager: AudioEngineControlling {
             }
         }
 
-        try? session.overrideOutputAudioPort(.speaker)
+        if Self.shouldDefaultToSpeaker(for: session) {
+            try? session.overrideOutputAudioPort(.speaker)
+        } else {
+            // Preserve active external routes (Bluetooth/AirPlay/headphones/etc.).
+            try? session.overrideOutputAudioPort(.none)
+        }
         try? session.setActive(true)
         Self.log.info(
             """
@@ -704,6 +717,21 @@ public final class AudioEngineManager: AudioEngineControlling {
             """
         )
         return session.isInputAvailable
+    }
+
+    private static func shouldDefaultToSpeaker(for session: AVAudioSession) -> Bool {
+        !hasExternalOutputRoute(session.currentRoute)
+    }
+
+    private static func hasExternalOutputRoute(_ route: AVAudioSessionRouteDescription) -> Bool {
+        route.outputs.contains(where: { output in
+            switch output.portType {
+            case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .airPlay, .headphones, .lineOut, .carAudio, .usbAudio:
+                return true
+            default:
+                return false
+            }
+        })
     }
 
     private func withStateLock<T>(_ operation: () throws -> T) rethrows -> T {
