@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 55;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -27,6 +27,7 @@
 		CDA2C06AA0F08726B5931BF6 /* DeckFeature.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 346C498AC1CFCBF80413CE25 /* DeckFeature.framework */; };
 		CF2CEE63808D417DD6CCBDDD /* Waveform.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F20A18C847ECC5083DB98E0D /* Waveform.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DBDBE31571AD9DB73DA18CD9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 595C42B0619A046E4AF515C3 /* ContentView.swift */; };
+		E35D4671ABE8194096CDD1E4 /* Screenshot5.png in Resources */ = {isa = PBXBuildFile; fileRef = DC43AE826293861CE43B310C /* Screenshot5.png */; };
 		E955522E27E17A7B5801D469 /* Screenshot1.png in Resources */ = {isa = PBXBuildFile; fileRef = 40AC5FFAEABBAF7DA92866C2 /* Screenshot1.png */; };
 		EB3BB116449B2276FA03D313 /* UIComponents.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 79B00B80D9BC141FBD8F7BB5 /* UIComponents.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		FC81BB52F2C6D0576E58AF27 /* TuistAssets+MixerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E0D04DC606728236C29233 /* TuistAssets+MixerApp.swift */; };
@@ -72,6 +73,7 @@
 		C313388CE1035576F99E3750 /* MicrogrammaDExtendedBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = MicrogrammaDExtendedBold.ttf; sourceTree = "<group>"; };
 		C6BD01C56D9A23AAFF645882 /* MixerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MixerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2E0D04DC606728236C29233 /* TuistAssets+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+MixerApp.swift"; sourceTree = "<group>"; };
+		DC43AE826293861CE43B310C /* Screenshot5.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Screenshot5.png; sourceTree = "<group>"; };
 		F20A18C847ECC5083DB98E0D /* Waveform.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Waveform.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D431326990951D672F69E9 /* TuistBundle+MixerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+MixerApp.swift"; sourceTree = "<group>"; };
 		F6AC95646212D100F8D1A2B7 /* LaunchScreenMixer.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreenMixer.storyboard; sourceTree = "<group>"; };
@@ -122,6 +124,7 @@
 				0CB9E04498E423AC0F5BCF37 /* Screenshot2.png */,
 				86ED43620C432A52AA9C44DB /* Screenshot3.png */,
 				8E271A62BEDCF222996CE4FC /* Screenshot4.png */,
+				DC43AE826293861CE43B310C /* Screenshot5.png */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -205,6 +208,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = D4A9ED3EA158DED02F712F5C /* Build configuration list for PBXProject "MixerApp" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -237,6 +242,7 @@
 				1B30961F0DBE2204F778B333 /* Screenshot2.png in Resources */,
 				4013C49B9B282E35A3ACF6AF /* Screenshot3.png in Resources */,
 				3DBE89DE07E63DA99C0FD075 /* Screenshot4.png in Resources */,
+				E35D4671ABE8194096CDD1E4 /* Screenshot5.png in Resources */,
 				C9D7BBA6EA24CBC9B2E98E99 /* appstore.png in Resources */,
 				354A926A5F631311A841EB18 /* launch.png in Resources */,
 				53D650C1F6E80F848D04BFB7 /* playstore.png in Resources */,
@@ -328,7 +334,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer: Manuel Mateos Ramirez (N9A2P3JC94)";
 				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = BSMET3TNXE;
+				DEVELOPMENT_TEAM = A7GL585WAC;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = U84GD972G4;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
@@ -349,7 +355,10 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -417,7 +426,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Distribution: Flacotech SL (U84GD972G4)";
 				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = BSMET3TNXE;
+				DEVELOPMENT_TEAM = U84GD972G4;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = U84GD972G4;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
@@ -432,7 +441,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.manelix.Mixer;
 				PRODUCT_NAME = MixerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "DJ companion dev";
+				PROVISIONING_PROFILE_SPECIFIER = "DJ companion dist";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "DJ companion dist";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;

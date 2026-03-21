@@ -18,6 +18,7 @@ let project = Project(
                         "MicrogrammaDExtendedBold.ttf"
                     ],
                     "NSMicrophoneUsageDescription": "Mixer uses the microphone to detect external BPM.",
+                    "NSCameraUsageDescription": "Mixer uses the camera to detect external BPM.",
                     "UIBackgroundModes": [
                         "audio"
                     ],
@@ -41,12 +42,29 @@ let project = Project(
                 .project(target: "DeckFeature", path: "../../Modules/DeckFeature")
             ],
             settings: .settings(
-                base: [
-                    "CODE_SIGN_STYLE": "Manual",
-                    "DEVELOPMENT_TEAM": "FX8D5XGPA8",
-                    "DEVELOPMENT_TEAM[sdk=iphoneos*]": "FX8D5XGPA8",
-                    "PROVISIONING_PROFILE_SPECIFIER": "Privalia Wildcard",
-                    "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Privalia Wildcard"
+                configurations: [
+                    .debug(
+                        name: "Debug",
+                        settings: [
+                            "CODE_SIGN_IDENTITY": "iPhone Developer: Manuel Mateos Ramirez (N9A2P3JC94)",
+                            "CODE_SIGN_STYLE": "Manual",
+                            "DEVELOPMENT_TEAM": "A7GL585WAC",
+                            "DEVELOPMENT_TEAM[sdk=iphoneos*]": "U84GD972G4",
+                            "PROVISIONING_PROFILE_SPECIFIER": "DJ companion dev",
+                            "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "DJ companion dev"
+                        ]
+                    ),
+                    .release(
+                        name: "Release",
+                        settings: [
+                            "CODE_SIGN_IDENTITY": "iPhone Distribution: Flacotech SL (U84GD972G4)",
+                            "CODE_SIGN_STYLE": "Manual",
+                            "DEVELOPMENT_TEAM": "U84GD972G4",
+                            "DEVELOPMENT_TEAM[sdk=iphoneos*]": "U84GD972G4",
+                            "PROVISIONING_PROFILE_SPECIFIER": "DJ companion dist",
+                            "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "DJ companion dist"
+                        ]
+                    )
                 ]
             )
         )
