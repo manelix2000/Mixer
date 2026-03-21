@@ -42,6 +42,10 @@ let project = Project(
                 .project(target: "DeckFeature", path: "../../Modules/DeckFeature")
             ],
             settings: .settings(
+                base: [
+                    "CURRENT_PROJECT_VERSION": "2",
+                    "MARKETING_VERSION": "1.0"
+                ],
                 configurations: [
                     .debug(
                         name: "Debug",
