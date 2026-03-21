@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 55;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -205,8 +205,6 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = D4A9ED3EA158DED02F712F5C /* Build configuration list for PBXProject "MixerApp" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -328,10 +326,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "iPhone Developer: Manuel Mateos Ramirez (N9A2P3JC94)";
 				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = FX8D5XGPA8;
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = FX8D5XGPA8;
+				DEVELOPMENT_TEAM = BSMET3TNXE;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = U84GD972G4;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -345,16 +343,13 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.manelix.Mixer;
 				PRODUCT_NAME = MixerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "Privalia Wildcard";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Privalia Wildcard";
+				PROVISIONING_PROFILE_SPECIFIER = "DJ companion dev";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "DJ companion dev";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -420,10 +415,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "iPhone Distribution: Flacotech SL (U84GD972G4)";
 				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = FX8D5XGPA8;
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = FX8D5XGPA8;
+				DEVELOPMENT_TEAM = BSMET3TNXE;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = U84GD972G4;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "Derived/InfoPlists/MixerApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -437,8 +432,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.manelix.Mixer;
 				PRODUCT_NAME = MixerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "Privalia Wildcard";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Privalia Wildcard";
+				PROVISIONING_PROFILE_SPECIFIER = "DJ companion dev";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "DJ companion dist";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
