@@ -277,8 +277,8 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
       </div>
 
       <div className="relative h-full min-h-0 rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#9aa1a7_45%,_#848b92_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_22px_40px_rgba(0,0,0,0.35)]">
-        <div className="grid h-full min-h-0 grid-cols-[minmax(56px,72px)_minmax(0,1fr)_minmax(72px,92px)] items-stretch gap-1">
-          <div className="flex h-full min-h-0 w-fit justify-self-start items-start">
+        <div className="grid h-full min-h-0 grid-cols-[max-content_minmax(0,1fr)_max-content] items-stretch gap-2">
+          <div className="flex h-full min-h-0 w-fit items-start">
             <VerticalFader
               label="VOL"
               mode="volume"
@@ -333,7 +333,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
             </div>
           </div>
 
-          <div className="flex h-full min-h-0 w-fit justify-self-end items-end">
+          <div className="flex h-full min-h-0 w-fit items-end">
             <div className="flex h-full min-h-0 flex-col items-center">
               <VerticalFader
                 label="PITCH"
@@ -762,7 +762,7 @@ function VerticalFader({
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col items-center rounded-xl bg-black/10 px-2 py-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col items-center rounded-xl bg-black/10 px-1 py-2">
       {labelPosition === "top" ? (
         <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/65">
           {label}
