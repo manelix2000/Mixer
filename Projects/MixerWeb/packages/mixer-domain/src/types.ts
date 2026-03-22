@@ -39,6 +39,7 @@ export type DeckRuntimeState = {
   deckId: DeckId;
   engine: AudioDeckLike | null;
   trackName: string | null;
+  artworkDataUrl: string | null;
   waveform: number[];
   bpmResult: BPMResult | null;
   bpmText: string;
@@ -62,6 +63,7 @@ export function createDeckRuntimeState(deckId: DeckId): DeckRuntimeState {
     deckId,
     engine: null,
     trackName: null,
+    artworkDataUrl: null,
     waveform: new Array(220).fill(0.08),
     bpmResult: null,
     bpmText: "-- BPM",

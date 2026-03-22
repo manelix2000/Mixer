@@ -59,6 +59,210 @@ function formatBpm(result: BPMResult | null): string {
   return "-- BPM";
 }
 
+async function extractArtworkDataUrl(file: File): Promise<string | null> {
+  try {
+    const header = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+    if (header.length < 10 || header[0] !== 0x49 || header[1] !== 0x44 || header[2] !== 0x33) {
+      return null;
+    }
+
+    const versionMajor = header[3];
+    if (versionMajor < 2 || versionMajor > 4) {
+      return null;
+    }
+
+    const tagSize = decodeSynchsafeInteger(header, 6);
+    const tagBuffer = new Uint8Array(await file.slice(10, 10 + tagSize).arrayBuffer());
+
+    if (versionMajor === 2) {
+      return extractId3v22Picture(tagBuffer);
+    }
+
+    return extractId3v23OrV24Picture(tagBuffer, versionMajor);
+  } catch {
+    return null;
+  }
+}
+
+function decodeSynchsafeInteger(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) << 21) |
+    ((bytes[offset + 1] ?? 0) << 14) |
+    ((bytes[offset + 2] ?? 0) << 7) |
+    (bytes[offset + 3] ?? 0)
+  );
+}
+
+function decodeBigEndianInteger(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) << 24) |
+    ((bytes[offset + 1] ?? 0) << 16) |
+    ((bytes[offset + 2] ?? 0) << 8) |
+    (bytes[offset + 3] ?? 0)
+  );
+}
+
+function extractId3v23OrV24Picture(tagData: Uint8Array, versionMajor: number): string | null {
+  let offset = 0;
+  while (offset + 10 <= tagData.length) {
+    const id = String.fromCharCode(
+      tagData[offset] ?? 0,
+      tagData[offset + 1] ?? 0,
+      tagData[offset + 2] ?? 0,
+      tagData[offset + 3] ?? 0
+    );
+    if (!id.trim()) {
+      break;
+    }
+
+    const frameSize =
+      versionMajor === 4
+        ? decodeSynchsafeInteger(tagData, offset + 4)
+        : decodeBigEndianInteger(tagData, offset + 4);
+    if (frameSize <= 0) {
+      break;
+    }
+
+    const frameStart = offset + 10;
+    const frameEnd = frameStart + frameSize;
+    if (frameEnd > tagData.length) {
+      break;
+    }
+
+    if (id === "APIC") {
+      return parseApicFrame(tagData.subarray(frameStart, frameEnd));
+    }
+
+    offset = frameEnd;
+  }
+
+  return null;
+}
+
+function extractId3v22Picture(tagData: Uint8Array): string | null {
+  let offset = 0;
+  while (offset + 6 <= tagData.length) {
+    const id = String.fromCharCode(
+      tagData[offset] ?? 0,
+      tagData[offset + 1] ?? 0,
+      tagData[offset + 2] ?? 0
+    );
+    if (!id.trim()) {
+      break;
+    }
+
+    const frameSize =
+      ((tagData[offset + 3] ?? 0) << 16) |
+      ((tagData[offset + 4] ?? 0) << 8) |
+      (tagData[offset + 5] ?? 0);
+    if (frameSize <= 0) {
+      break;
+    }
+
+    const frameStart = offset + 6;
+    const frameEnd = frameStart + frameSize;
+    if (frameEnd > tagData.length) {
+      break;
+    }
+
+    if (id === "PIC") {
+      return parsePicFrame(tagData.subarray(frameStart, frameEnd));
+    }
+
+    offset = frameEnd;
+  }
+
+  return null;
+}
+
+function parseApicFrame(frameData: Uint8Array): string | null {
+  if (frameData.length < 4) {
+    return null;
+  }
+
+  const encoding = frameData[0] ?? 0;
+  let index = 1;
+  let mimeEnd = index;
+  while (mimeEnd < frameData.length && frameData[mimeEnd] !== 0) {
+    mimeEnd += 1;
+  }
+  if (mimeEnd >= frameData.length) {
+    return null;
+  }
+
+  const mimeType = new TextDecoder("latin1").decode(frameData.subarray(index, mimeEnd)) || "image/jpeg";
+  index = mimeEnd + 1;
+  if (index >= frameData.length) {
+    return null;
+  }
+
+  index += 1; // picture type
+  index = skipId3Description(frameData, index, encoding);
+  if (index >= frameData.length) {
+    return null;
+  }
+
+  const imageData = frameData.subarray(index);
+  if (imageData.length === 0) {
+    return null;
+  }
+
+  return URL.createObjectURL(new Blob([imageData], { type: mimeType }));
+}
+
+function parsePicFrame(frameData: Uint8Array): string | null {
+  if (frameData.length < 6) {
+    return null;
+  }
+
+  const encoding = frameData[0] ?? 0;
+  const format = new TextDecoder("latin1").decode(frameData.subarray(1, 4)).toLowerCase();
+  const mimeType =
+    format === "png" ? "image/png" : format === "gif" ? "image/gif" : "image/jpeg";
+
+  let index = 4;
+  index += 1; // picture type
+  index = skipId3Description(frameData, index, encoding);
+  if (index >= frameData.length) {
+    return null;
+  }
+
+  const imageData = frameData.subarray(index);
+  if (imageData.length === 0) {
+    return null;
+  }
+
+  return URL.createObjectURL(new Blob([imageData], { type: mimeType }));
+}
+
+function skipId3Description(frameData: Uint8Array, start: number, encoding: number): number {
+  let index = start;
+  if (encoding === 1 || encoding === 2) {
+    while (index + 1 < frameData.length) {
+      if (frameData[index] === 0 && frameData[index + 1] === 0) {
+        return index + 2;
+      }
+      index += 2;
+    }
+    return frameData.length;
+  }
+
+  while (index < frameData.length) {
+    if (frameData[index] === 0) {
+      return index + 1;
+    }
+    index += 1;
+  }
+
+  return frameData.length;
+}
+
+function revokeBlobUrl(url: string | null): void {
+  if (url && url.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export const useMixerStore = create<MixerStore>((set, get) => ({
   capabilities: {
     supported: false,
@@ -144,10 +348,18 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
       }
     }));
 
-    const buffer = await deck.engine.loadFile(file);
+    const previousArtwork = deck.artworkDataUrl;
+    const [buffer, artworkDataUrl] = await Promise.all([
+      deck.engine.loadFile(file),
+      extractArtworkDataUrl(file)
+    ]);
     const waveform = generateWaveformSamples(buffer, 220);
     const bpmResult = detectTempoFromBuffer(buffer);
     const snapshot = deck.engine.getSnapshot();
+
+    if (previousArtwork !== artworkDataUrl) {
+      revokeBlobUrl(previousArtwork);
+    }
 
     set((state) => ({
       decks: {
@@ -157,6 +369,7 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
           waveform,
           bpmResult,
           bpmText: formatBpm(bpmResult),
+          artworkDataUrl,
           isAnalyzing: false,
           statusMessage:
             bpmResult.kind === "detected"

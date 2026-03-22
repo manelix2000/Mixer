@@ -138,6 +138,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
           <div className="relative flex w-full min-w-0 justify-self-stretch items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-2">
             <PlatterView
               angleDegrees={deck.platterDegrees}
+              artworkDataUrl={deck.artworkDataUrl}
               isPlaying={deck.isPlaying}
               onScrub={(normalizedPosition) => {
                 isScratchingRef.current = true;

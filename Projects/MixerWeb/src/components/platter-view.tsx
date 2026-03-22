@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type PlatterViewProps = {
   angleDegrees: number;
+  artworkDataUrl?: string | null;
   isPlaying: boolean;
   onScrub: (normalizedPosition: number) => void;
   onScrubEnd: () => void;
@@ -11,6 +12,7 @@ type PlatterViewProps = {
 
 export function PlatterView({
   angleDegrees,
+  artworkDataUrl,
   isPlaying,
   onScrub,
   onScrubEnd
@@ -139,31 +141,47 @@ export function PlatterView({
         className="absolute inset-[17%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_rgba(15,21,30,1)_52%,_rgba(0,0,0,1)_100%)]"
         style={ringStyle}
       >
-        <div className="absolute inset-[12%] rounded-full border border-accent/30 bg-[radial-gradient(circle,_rgba(249,115,22,0.46),_rgba(20,23,27,0.9)_58%,_rgba(10,10,10,1)_100%)]" />
-        <div className="absolute inset-[28%] rounded-full border border-white/20 bg-[#efefef]/10" />
+        {artworkDataUrl ? (
+          <div className="absolute inset-[3%] overflow-hidden rounded-full border border-white/25">
+            <img
+              alt=""
+              className="h-full w-full rounded-full object-cover"
+              draggable={false}
+              src={artworkDataUrl}
+            />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.08)_0%,_rgba(255,255,255,0)_58%,_rgba(0,0,0,0.2)_100%)]" />
+          </div>
+        ) : (
+          <>
+            <div className="absolute inset-[12%] rounded-full border border-accent/30 bg-[radial-gradient(circle,_rgba(249,115,22,0.46),_rgba(20,23,27,0.9)_58%,_rgba(10,10,10,1)_100%)]" />
+            <div className="absolute inset-[28%] rounded-full border border-white/20 bg-[#efefef]/10" />
+          </>
+        )}
         <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/80" />
       </div>
 
-      <div className="absolute inset-0 z-20" style={centerAnchoredRotationStyle}>
-        <div
-          className="absolute inset-x-0 top-[22%] text-center font-bold tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
-          style={{
-            fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
-            fontSize: techniksFontSize
-          }}
-        >
-          Techniks
+      {!artworkDataUrl ? (
+        <div className="absolute inset-0 z-20" style={centerAnchoredRotationStyle}>
+          <div
+            className="absolute inset-x-0 top-[22%] text-center font-bold tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+            style={{
+              fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
+              fontSize: techniksFontSize
+            }}
+          >
+            Techniks
+          </div>
+          <div
+            className="absolute inset-x-0 bottom-[19%] rotate-180 text-center font-bold tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+            style={{
+              fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
+              fontSize: techniksFontSize
+            }}
+          >
+            Techniks
+          </div>
         </div>
-        <div
-          className="absolute inset-x-0 bottom-[19%] rotate-180 text-center font-bold tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
-          style={{
-            fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
-            fontSize: techniksFontSize
-          }}
-        >
-          Techniks
-        </div>
-      </div>
+      ) : null}
 
       <div className="absolute right-[5.6%] top-[4.6%] z-30 h-[16.5%] w-[16.5%] rounded-full border border-black/35 bg-[radial-gradient(circle_at_36%_28%,_#dfe4ea_0%,_#98a1ab_38%,_#5d6570_72%,_#4f5761_100%)] shadow-[0_8px_16px_rgba(0,0,0,0.28)]" />
       <div className="absolute right-[8.2%] top-[7.2%] z-30 h-[11.2%] w-[11.2%] rounded-full border border-black/30 bg-[radial-gradient(circle_at_32%_24%,_#f0f3f6_0%,_#c7ced6_40%,_#8f98a3_76%,_#7c858f_100%)]" />
