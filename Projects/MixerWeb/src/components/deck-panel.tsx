@@ -49,14 +49,11 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
         />
       </div>
 
-      <div className="h-fit rounded-xl bg-[#222629] p-3">
+      <div className="h-fit rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#a7afb6_46%,_#8b939a_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)]">
         <div className="mb-2 flex items-center justify-between gap-3 text-black/80">
           <div className="min-w-0">
-            <div className="truncate text-[31px] font-semibold tracking-tight text-black/85">
+            <div className="truncate text-[27px] font-semibold tracking-tight text-black/85">
               {deck.trackName ?? "No Track"}
-            </div>
-            <div className="mt-0.5 text-[11px] font-semibold text-black/60">
-              {deck.bpmText} {deck.rate.toFixed(3)}x
             </div>
           </div>
           <div className="text-sm font-semibold tabular-nums">{deck.currentTimeText}</div>
@@ -115,11 +112,15 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
           </div>
         </div>
 
+        <div className="mt-1 text-[11px] font-semibold text-black/60">
+          {deck.bpmText} {deck.rate.toFixed(3)}x
+        </div>
+
       </div>
 
       <div className="h-full min-h-0 rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#9aa1a7_45%,_#848b92_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_22px_40px_rgba(0,0,0,0.35)]">
-        <div className="grid h-full min-h-0 items-stretch gap-3 lg:grid-cols-[74px_minmax(280px,1fr)_84px]">
-          <div className="flex h-full min-h-0 flex-row gap-3 lg:flex-col lg:items-start">
+        <div className="grid h-full min-h-0 items-stretch gap-2 lg:grid-cols-[max-content_minmax(0,1fr)_max-content]">
+          <div className="flex h-full min-h-0 w-fit justify-self-start flex-row gap-3 lg:flex-col lg:items-start">
             <VerticalFader
               label="VOL"
               mode="volume"
@@ -134,11 +135,10 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             />
           </div>
 
-          <div className="relative flex items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-2">
+          <div className="relative flex w-full min-w-0 justify-self-stretch items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-2">
             <PlatterView
               angleDegrees={deck.platterDegrees}
               isPlaying={deck.isPlaying}
-              label={deck.trackName ?? (deckId === "left" ? "DECK A" : "DECK B")}
               onScrub={(normalizedPosition) => {
                 isScratchingRef.current = true;
                 void scratchDeckNormalized(deckId, normalizedPosition);
@@ -175,7 +175,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             </div>
           </div>
 
-          <div className="flex h-full min-h-0 flex-row gap-3 lg:flex-col lg:items-end">
+          <div className="flex h-full min-h-0 w-fit justify-self-end flex-row gap-3 lg:flex-col lg:items-end">
             <VerticalFader
               label="PITCH"
               mode="pitch"

@@ -5,7 +5,6 @@ import { useMemo, useRef } from "react";
 type PlatterViewProps = {
   angleDegrees: number;
   isPlaying: boolean;
-  label: string;
   onScrub: (normalizedPosition: number) => void;
   onScrubEnd: () => void;
 };
@@ -13,7 +12,6 @@ type PlatterViewProps = {
 export function PlatterView({
   angleDegrees,
   isPlaying,
-  label,
   onScrub,
   onScrubEnd
 }: PlatterViewProps) {
@@ -79,9 +77,6 @@ export function PlatterView({
         <div className="absolute inset-[12%] rounded-full border border-accent/30 bg-[radial-gradient(circle,_rgba(249,115,22,0.45),_rgba(35,20,7,0.92)_55%,_rgba(10,10,10,1)_100%)]" />
         <div className="absolute inset-[28%] rounded-full border border-white/20 bg-[#efefef]/10" />
         <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/80" />
-      </div>
-      <div className="absolute inset-x-0 bottom-10 text-center">
-        <div className="mt-2 text-lg font-semibold tracking-[0.24em] text-white/88">{label}</div>
       </div>
     </div>
   );
