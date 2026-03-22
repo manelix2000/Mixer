@@ -25,6 +25,10 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
 
   const isScratchingRef = useRef(false);
   const [waveformZoom, setWaveformZoom] = useState(1);
+  const [isPitchDragging, setIsPitchDragging] = useState(false);
+
+  const detectedBpm = deck.bpmResult?.kind === "detected" ? deck.bpmResult.bpm : null;
+  const targetBpmText = detectedBpm ? (detectedBpm * deck.rate).toFixed(1) : "--.-";
 
   useEffect(() => {
     let frame = 0;
@@ -86,6 +90,13 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
               heightClassName="h-[60px]"
               onSeek={deck.duration > 0 ? (progress) => void seekDeckNormalized(deckId, progress) : undefined}
             />
+            {isPitchDragging ? (
+              <div className="pointer-events-none absolute inset-0 z-30">
+                <div className="flex h-full w-full items-center justify-center rounded-md border border-white/12 bg-[#666]/95 text-[50px] font-bold leading-none tracking-tight text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                  {targetBpmText} BPM
+                </div>
+              </div>
+            ) : null}
 
             <div className="absolute inset-x-2 top-1/2 z-10 flex -translate-y-1/2 items-center justify-between">
               <button
@@ -112,8 +123,15 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
           </div>
         </div>
 
-        <div className="mt-1 text-[11px] font-semibold text-black/60">
-          {deck.bpmText} {deck.rate.toFixed(3)}x
+        <div className="mt-1 flex items-center justify-between gap-3 text-[11px] font-semibold text-black/60">
+          <div className="tabular-nums">
+            {targetBpmText} BPM {deck.rate.toFixed(3)}x
+          </div>
+          <div className="text-right tabular-nums">
+            {deck.bpmResult?.kind === "detected"
+              ? `Detected ${deck.bpmResult.bpm.toFixed(1)} BPM (acc. ${deck.bpmResult.confidence.toFixed(2)})`
+              : "Detected --.- BPM (acc. --.--)"}
+          </div>
         </div>
 
       </div>
@@ -183,6 +201,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
               mode="pitch"
               max={1.16}
               min={0.84}
+              onInteractionChange={setIsPitchDragging}
               onChange={(value) => {
                 void setDeckRate(deckId, value);
               }}
@@ -367,6 +386,7 @@ function VerticalFader({
   mode,
   max,
   min,
+  onInteractionChange,
   onChange,
   thumbPopoverSize = "regular",
   thumbPopoverSide = "none",
@@ -376,6 +396,7 @@ function VerticalFader({
   mode: "volume" | "pitch";
   max: number;
   min: number;
+  onInteractionChange?: (isInteracting: boolean) => void;
   onChange: (value: number) => void;
   thumbPopoverSize?: "compact" | "regular" | "large";
   thumbPopoverSide?: "none" | "left" | "right";
@@ -449,6 +470,7 @@ function VerticalFader({
           if (thumbPopoverSide !== "none") {
             setIsThumbPopoverVisible(true);
           }
+          onInteractionChange?.(true);
           setIsDraggingFromThumb(true);
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
@@ -469,6 +491,7 @@ function VerticalFader({
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
           setIsDraggingFromThumb(false);
+          onInteractionChange?.(false);
           if (thumbPopoverSide !== "none") {
             popoverHideTimeoutRef.current = window.setTimeout(() => {
               setIsThumbPopoverVisible(false);
@@ -478,6 +501,7 @@ function VerticalFader({
         }}
         onPointerCancel={() => {
           setIsDraggingFromThumb(false);
+          onInteractionChange?.(false);
           setIsThumbPopoverVisible(false);
           if (popoverHideTimeoutRef.current !== null) {
             window.clearTimeout(popoverHideTimeoutRef.current);
