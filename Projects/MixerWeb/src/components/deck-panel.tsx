@@ -196,7 +196,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
       <div className="h-fit rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#a7afb6_46%,_#8b939a_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)]">
         <div className="mb-2 flex items-center justify-between gap-3 text-black/80">
           <div className="min-w-0">
-            <div className="truncate text-[27px] font-semibold tracking-tight text-black/85">
+            <div className="truncate text-sm font-bold tracking-tight text-black/85">
               {deck.trackName ?? "No Track"}
             </div>
           </div>
