@@ -132,7 +132,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   };
 
   return (
-    <article className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-3">
+    <article className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-0">
       <div className="flex items-center gap-2 rounded-md border border-black/12 bg-[#b4babf] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-black/30 bg-[linear-gradient(180deg,_#dfe4e8_0%,_#a6adb4_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
           {deck.artworkDataUrl ? (

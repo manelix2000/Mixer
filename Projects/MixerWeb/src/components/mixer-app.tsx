@@ -9,7 +9,6 @@ export function MixerApp() {
   const capabilities = useMixerStore((state) => state.capabilities);
   const micState = useMixerStore((state) => state.microphoneState);
   const toggleMicrophone = useMixerStore((state) => state.toggleMicrophone);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -19,14 +18,6 @@ export function MixerApp() {
     <main className="min-h-screen bg-black">
       <section className="mx-auto flex min-h-screen max-w-[1660px] gap-3 p-3">
         <aside className="relative flex w-[50px] flex-col items-center rounded-2xl bg-black/90 pt-1.5">
-          <RailButton
-            label="gear"
-            icon={<GearIcon />}
-            onClick={() => {
-              setIsSettingsOpen((value) => !value);
-            }}
-            tone="active"
-          />
           <RailButton
             label="toggle mic"
             icon={<MicIcon muted={!micState.isRunning} />}
@@ -41,17 +32,6 @@ export function MixerApp() {
             label="monitor"
             tone="inactive"
           />
-          {isSettingsOpen ? (
-            <div className="absolute left-[56px] top-1 z-20 w-[220px] rounded-xl border border-white/10 bg-[#0f1012] p-3 shadow-[0_20px_36px_rgba(0,0,0,0.35)]">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                Settings
-              </div>
-              <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-[11px] text-white/85">
-                Next dev tools are pinned under this settings rail in development mode.
-              </div>
-              <div className="mt-2 text-[11px] font-semibold text-white/60">{capabilities.message}</div>
-            </div>
-          ) : null}
           <RailButton
             icon={<BarsIcon />}
             label="levels"
@@ -101,20 +81,6 @@ function RailButton({
     >
       {icon}
     </button>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
-      <path
-        d="M10.5 3.3h3l.6 1.7a7.6 7.6 0 0 1 1.5.6l1.6-.8 2.1 2.1-.8 1.6c.2.5.4 1 .6 1.5l1.7.6v3l-1.7.6a7.6 7.6 0 0 1-.6 1.5l.8 1.6-2.1 2.1-1.6-.8a7.6 7.6 0 0 1-1.5.6l-.6 1.7h-3l-.6-1.7a7.6 7.6 0 0 1-1.5-.6l-1.6.8-2.1-2.1.8-1.6a7.6 7.6 0 0 1-.6-1.5l-1.7-.6v-3l1.7-.6c.2-.5.4-1 .6-1.5l-.8-1.6 2.1-2.1 1.6.8c.5-.2 1-.4 1.5-.6l.6-1.7z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <circle cx="12" cy="12" fill="none" r="2.6" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
   );
 }
 
