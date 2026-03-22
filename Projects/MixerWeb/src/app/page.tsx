@@ -123,8 +123,8 @@ export default function LandingPage() {
             <PlatformCard
               badge="Mobile"
               body="Native iOS build with turntable workflow, BPM tools, and touch-optimized practice controls."
-              ctaLabel="iOS Release"
-              href="https://github.com/manelix2000/Mixer"
+              ctaLabel="App Store"
+              href="https://apps.apple.com/app/id6760940944"
               title="iOS"
             />
             <PlatformCard
