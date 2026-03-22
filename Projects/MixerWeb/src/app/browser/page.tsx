@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MixerApp } from "@/components/mixer-app";
 
@@ -44,6 +45,12 @@ export default function BrowserMixerPage() {
           >
             Open Store Page
           </a>
+          <Link
+            className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-white/25 bg-white/8 px-4 py-2.5 text-sm font-semibold text-white/90"
+            href="/"
+          >
+            Go Back
+          </Link>
         </div>
       </main>
     );
