@@ -1,3 +1,4 @@
+import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -5,4 +6,4 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@mixer/audio-core", "@mixer/domain"]
 };
 
-export default nextConfig;
+export default withBotId(nextConfig);

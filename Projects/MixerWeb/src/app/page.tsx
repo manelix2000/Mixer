@@ -170,7 +170,7 @@ export default function LandingPage() {
             is focused on repetition, timing awareness, and BPM alignment habits.
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {featureCards.map((feature) => (
+            {featureCards.map((feature, index) => (
               <article
                 key={feature.title}
                 className="overflow-hidden rounded-2xl border border-white/14 bg-[linear-gradient(180deg,_rgba(255,255,255,0.08)_0%,_rgba(255,255,255,0.03)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.26)]"
@@ -181,6 +181,8 @@ export default function LandingPage() {
                       alt={feature.imageAlt}
                       className={feature.imageClassName}
                       fill
+                      loading={index === 0 ? "eager" : "lazy"}
+                      priority={index === 0}
                       sizes="(max-width: 768px) 100vw, 33vw"
                       src={feature.imageSrc}
                     />
@@ -202,6 +204,9 @@ export default function LandingPage() {
           <div className="flex flex-col items-end gap-1">
             <Link className="text-[#8fb9ff] hover:text-[#b0ceff]" href="/faq">
               FAQ
+            </Link>
+            <Link className="text-[#8fb9ff] hover:text-[#b0ceff]" href="/contact">
+              Contact
             </Link>
             <Link className="text-[#8fb9ff] hover:text-[#b0ceff]" href="/privacy">
               Privacy Policy

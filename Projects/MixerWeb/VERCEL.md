@@ -104,5 +104,73 @@ After setup:
    - `/` (landing)
    - `/browser` (web mixer app)
    - `/faq`
+   - `/contact`
    - `/privacy`
 
+---
+
+## 8. Contact Form (Vercel Function + Anti-Bot)
+
+The contact form uses:
+
+- Next.js Route Handler at `src/app/api/contact/route.ts` (runs as a Vercel Function).
+- Vercel BotID (primary anti-bot layer, enforced in client + server).
+- Server-side rate limit + honeypot + minimum-submit-time validation.
+- Resend Email API for message delivery.
+
+### Vercel BotID Setup (Required)
+
+1. In Vercel dashboard, open your project.
+2. Go to **Security** and enable **BotID**.
+3. Redeploy after enabling BotID.
+4. Confirm these code integrations exist in this repo:
+   - `next.config.ts` wraps config with `withBotId(...)`
+   - `src/instrumentation-client.ts` protects `POST /api/contact`
+   - `src/app/api/contact/route.ts` calls `checkBotId()` before processing form data
+5. Ensure your deployment is actually running on Vercel (BotID headers/context are provided by Vercel runtime).
+
+BotID does not require a public site key in the form UI.
+It runs as an invisible challenge and sends verification metadata that `checkBotId()` reads server-side.
+
+### Local Development Notes (BotID)
+
+- Local development is allowed to continue even if BotID runtime metadata is unavailable.
+- Final bot enforcement happens on Vercel deployments.
+- Always validate bot behavior in a preview or production deployment, not only `localhost`.
+
+### BotID Verification Checklist
+
+After deploying:
+
+1. Open `/contact`.
+2. Submit a normal form request and confirm success.
+3. Check Vercel logs for `/api/contact` if a request is blocked (`403` with bot protection message).
+4. Keep server-side fallback checks enabled (rate limit, honeypot, minimum submit time) for layered protection.
+
+### Required Environment Variables (Vercel Project Settings > Environment Variables)
+
+- `CONTACT_TO_EMAIL`  
+  Destination inbox (example: `support@yourdomain.com`).
+- `CONTACT_FROM_EMAIL`  
+  Verified sender in Resend (example: `DJcompanion <noreply@yourdomain.com>`).
+- `RESEND_API_KEY`  
+  Your Resend API key.
+
+### Resend Setup
+
+1. Create a Resend account.
+2. Verify a sending domain or sender identity.
+3. Create an API key.
+4. Set:
+   - `RESEND_API_KEY`
+   - `CONTACT_FROM_EMAIL` (must be verified in Resend)
+   - `CONTACT_TO_EMAIL` (where form messages are delivered)
+
+### Validation Behavior
+
+- BotID blocks non-verified bot traffic on `/api/contact`.
+- Server rejects likely bots using:
+  - hidden honeypot field
+  - too-fast submit check
+  - per-IP rate limit (windowed)
+- If mail env vars are missing, `/api/contact` responds with `503` to prevent fake success.

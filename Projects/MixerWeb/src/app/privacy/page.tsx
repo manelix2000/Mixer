@@ -78,12 +78,10 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-white">8. Contact</h2>
             <p className="mt-1">
-              For privacy-related questions, use the project repository contact channel:
+              For privacy-related questions, use the contact form:
               {" "}
-              <a className="text-[#9fc2ff] underline" href="https://github.com/manelix2000/Mixer">
-                github.com/manelix2000/Mixer
-              </a>
-              .
+              <Link className="text-[#9fc2ff] underline" href="/contact">/contact</Link>.
+              The form includes anti-bot protection and rate limiting to reduce abuse.
             </p>
           </section>
         </article>
