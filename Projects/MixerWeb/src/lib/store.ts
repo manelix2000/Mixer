@@ -23,6 +23,8 @@ type MixerStore = {
   microphoneAnalyzer: BrowserMicrophoneTempoAnalyzer | null;
   microphoneState: {
     bpmText: string;
+    level: number;
+    peak: number;
     isRunning: boolean;
     status: string;
   };
@@ -275,6 +277,8 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
   microphoneAnalyzer: null,
   microphoneState: {
     bpmText: "-- BPM",
+    level: 0,
+    peak: 0,
     isRunning: false,
     status: "Microphone BPM stopped"
   },
@@ -488,6 +492,8 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
       set({
         microphoneState: {
           bpmText: "-- BPM",
+          level: 0,
+          peak: 0,
           isRunning: false,
           status: "Microphone capture is not available in this browser."
         }
@@ -501,6 +507,8 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
         microphoneAnalyzer: null,
         microphoneState: {
           bpmText: "-- BPM",
+          level: 0,
+          peak: 0,
           isRunning: false,
           status: "Microphone BPM stopped"
         }
@@ -508,23 +516,54 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
       return;
     }
 
-    const analyzer = new BrowserMicrophoneTempoAnalyzer((result) => {
-      set({
-        microphoneState: {
-          bpmText: formatBpm(result),
-          isRunning: true,
-          status:
-            result.kind === "detected"
-              ? `Listening live • confidence ${(result.confidence * 100).toFixed(0)}%`
-              : "Listening live • insufficient confidence"
-        }
-      });
-    });
+    const analyzer = new BrowserMicrophoneTempoAnalyzer(
+      (result) => {
+        const unavailableStatus = (() => {
+          if (result.kind === "detected") {
+            return "";
+          }
+
+          switch (result.reason) {
+            case "warming-up":
+              return "Listening live • warming up audio window...";
+            case "insufficient-signal":
+              return "Listening live • signal too low";
+            case "low-confidence":
+              return "Listening live • beat not stable enough yet";
+            default:
+              return `Listening live • ${result.reason}`;
+          }
+        })();
+
+        set((state) => ({
+          microphoneState: {
+            ...state.microphoneState,
+            bpmText: formatBpm(result),
+            isRunning: true,
+            status:
+              result.kind === "detected"
+                ? `Listening live • ${result.bpm.toFixed(1)} BPM • confidence ${(result.confidence * 100).toFixed(0)}%`
+                : unavailableStatus
+          }
+        }));
+      },
+      ({ rms, peak }) => {
+        set((state) => ({
+          microphoneState: {
+            ...state.microphoneState,
+            level: Math.min(Math.max(rms * 22, 0), 1),
+            peak: Math.min(Math.max(peak, 0), 1)
+          }
+        }));
+      }
+    );
 
     set({
       microphoneAnalyzer: analyzer,
       microphoneState: {
         bpmText: "-- BPM",
+        level: 0,
+        peak: 0,
         isRunning: true,
         status: "Requesting microphone access..."
       }
@@ -537,6 +576,8 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
         microphoneAnalyzer: null,
         microphoneState: {
           bpmText: "-- BPM",
+          level: 0,
+          peak: 0,
           isRunning: false,
           status:
             error instanceof Error

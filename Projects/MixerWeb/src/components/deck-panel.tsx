@@ -49,7 +49,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
   const absolutePitchMinRate = 0.84;
   const absolutePitchMaxRate = 1.16;
   const micOverlayText = micState.isRunning
-    ? (micState.bpmText !== "-- BPM" ? `Listening to MIC... ${micState.bpmText}` : "Listening to MIC...")
+    ? (micState.status || (micState.bpmText !== "-- BPM" ? `Listening to MIC... ${micState.bpmText}` : "Listening to MIC..."))
     : null;
 
   useEffect(() => {
@@ -316,8 +316,9 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
               />
             </div>
             {micOverlayText ? (
-              <div className="mixer-mic-glow pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white/50 px-3 py-1 text-[10px] font-semibold text-black/75 backdrop-blur">
-                {micOverlayText}
+              <div className="mixer-mic-glow pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/50 px-3 py-1 text-[10px] font-semibold text-black/75 backdrop-blur">
+                <span className="max-w-[290px] truncate whitespace-nowrap">{micOverlayText}</span>
+                <MicLevelMeter level={micState.level} peak={micState.peak} />
               </div>
             ) : null}
             <div className="absolute bottom-3 right-3">
@@ -404,6 +405,37 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
         ) : null}
       </div>
     </article>
+  );
+}
+
+function MicLevelMeter({ level, peak }: { level: number; peak: number }) {
+  const bars = 6;
+  const activeBars = Math.min(Math.max(Math.round(level * bars), 0), bars);
+  const peakBar = Math.min(Math.max(Math.round(peak * bars), 1), bars);
+
+  return (
+    <div className="flex items-end gap-px rounded-full bg-black/12 px-1 py-[3px]">
+      {Array.from({ length: bars }, (_, index) => {
+        const barIndex = index + 1;
+        const isActive = barIndex <= activeBars;
+        const isPeak = barIndex === peakBar;
+        return (
+          <div
+            key={barIndex}
+            className={`w-[2px] rounded-full ${
+              isPeak
+                ? "bg-yellow-300"
+                : isActive
+                  ? "bg-emerald-400"
+                  : "bg-black/25"
+            }`}
+            style={{
+              height: `${4 + (barIndex * 1.2)}px`
+            }}
+          />
+        );
+      })}
+    </div>
   );
 }
 
