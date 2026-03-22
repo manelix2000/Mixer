@@ -12,6 +12,7 @@ type DeckPanelProps = {
 
 export function DeckPanel({ deckId }: DeckPanelProps) {
   const deck = useMixerStore((state) => state.decks[deckId]);
+  const micState = useMixerStore((state) => state.microphoneState);
   const syncDeck = useMixerStore((state) => state.syncDeck);
   const loadTrack = useMixerStore((state) => state.loadTrack);
   const toggleDeckPlayback = useMixerStore((state) => state.toggleDeckPlayback);
@@ -29,6 +30,9 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
 
   const detectedBpm = deck.bpmResult?.kind === "detected" ? deck.bpmResult.bpm : null;
   const targetBpmText = detectedBpm ? (detectedBpm * deck.rate).toFixed(1) : "--.-";
+  const micOverlayText = micState.isRunning
+    ? (micState.bpmText !== "-- BPM" ? `Listening to MIC... ${micState.bpmText}` : "Listening to MIC...")
+    : null;
 
   useEffect(() => {
     let frame = 0;
@@ -45,6 +49,20 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   return (
     <article className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-3">
       <div className="flex items-center gap-2 rounded-md border border-black/12 bg-[#b4babf] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-black/30 bg-[linear-gradient(180deg,_#dfe4e8_0%,_#a6adb4_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+          {deck.artworkDataUrl ? (
+            <img
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+              src={deck.artworkDataUrl}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] font-bold uppercase tracking-[0.08em] text-black/55">
+              ART
+            </div>
+          )}
+        </div>
         <PanFader
           onChange={(value) => {
             void setDeckPan(deckId, value);
@@ -65,7 +83,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
 
         <div className="grid grid-cols-[42px_minmax(0,1fr)] items-stretch gap-2">
           <div className="h-[60px]">
-            <label className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-md border border-white/25 bg-[linear-gradient(180deg,_rgba(255,255,255,0.24),_rgba(255,255,255,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur">
+            <label className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-[11px] border border-[#0a66d9] bg-[#0a84ff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_6px_12px_rgba(10,132,255,0.34)]">
               <FolderIcon />
               <input
                 accept="audio/*"
@@ -183,6 +201,11 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
                 text={deck.isPlaying ? "PAUSE" : "START"}
               />
             </div>
+            {micOverlayText ? (
+              <div className="mixer-mic-glow pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white/50 px-3 py-1 text-[10px] font-semibold text-black/75 backdrop-blur">
+                {micOverlayText}
+              </div>
+            ) : null}
             <div className="absolute bottom-3 right-3">
               <ChromeButton
                 disabled={!deck.isLoaded}
@@ -218,13 +241,18 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
 
 function FolderIcon() {
   return (
-    <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+    <svg aria-hidden="true" height="23" viewBox="0 0 24 24" width="23">
       <path
-        d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7z"
-        fill="currentColor"
-        opacity="0.92"
+        d="M3.2 7.3a2.1 2.1 0 0 1 2.1-2.1h4.7l1.9 1.9h6.8a2.1 2.1 0 0 1 2.1 2.1v6.9a2.9 2.9 0 0 1-2.9 2.9H6.1a2.9 2.9 0 0 1-2.9-2.9V7.3z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
       />
-      <path d="M4 9h16" opacity="0.22" stroke="#0b1016" strokeWidth="1.2" />
+      <circle cx="17.9" cy="8.1" fill="currentColor" r="3.1" />
+      <line stroke="#0a84ff" strokeLinecap="round" strokeWidth="1.7" x1="17.9" x2="17.9" y1="6.8" y2="9.4" />
+      <line stroke="#0a84ff" strokeLinecap="round" strokeWidth="1.7" x1="16.6" x2="19.2" y1="8.1" y2="8.1" />
     </svg>
   );
 }
@@ -547,7 +575,7 @@ function VerticalFader({
           {thumbText}
         </div>
         {isThumbPopoverVisible && thumbPopoverSide !== "none" ? (
-          <div className="pointer-events-none absolute z-20" style={popoverAnchorStyle}>
+          <div className="pointer-events-none absolute z-[2147483647]" style={popoverAnchorStyle}>
             <div className="relative">
               <div
                 className="flex items-center justify-center rounded-[12px] border border-black/25 bg-[#f9f9f9] px-2 text-black shadow-[0_2px_6px_rgba(0,0,0,0.16)]"
