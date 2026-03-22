@@ -23,9 +23,25 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   const seekDeckNormalized = useMixerStore((state) => state.seekDeckNormalized);
   const [waveformZoom, setWaveformZoom] = useState(1);
   const [isPitchDragging, setIsPitchDragging] = useState(false);
+  const [pitchSensitivityPercent, setPitchSensitivityPercent] = useState(8);
+  const pressureBendRef = useRef<{
+    active: boolean;
+    direction: -1 | 1;
+    startRate: number;
+    startTimestampMs: number;
+    rafId: number | null;
+  }>({
+    active: false,
+    direction: 1,
+    startRate: 1,
+    startTimestampMs: 0,
+    rafId: null
+  });
 
   const detectedBpm = deck.bpmResult?.kind === "detected" ? deck.bpmResult.bpm : null;
   const targetBpmText = detectedBpm ? (detectedBpm * deck.rate).toFixed(1) : "--.-";
+  const pitchMinRate = 1 - (pitchSensitivityPercent / 100);
+  const pitchMaxRate = 1 + (pitchSensitivityPercent / 100);
   const micOverlayText = micState.isRunning
     ? (micState.bpmText !== "-- BPM" ? `Listening to MIC... ${micState.bpmText}` : "Listening to MIC...")
     : null;
@@ -41,6 +57,79 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
     frame = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(frame);
   }, [deckId, syncDeck]);
+
+  useEffect(() => {
+    return () => {
+      const interaction = pressureBendRef.current;
+      if (interaction.rafId !== null) {
+        window.cancelAnimationFrame(interaction.rafId);
+        interaction.rafId = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const clamped = Math.min(Math.max(deck.rate, pitchMinRate), pitchMaxRate);
+    if (Math.abs(clamped - deck.rate) > 0.0001) {
+      void setDeckRate(deckId, clamped);
+    }
+  }, [deck.rate, deckId, pitchMaxRate, pitchMinRate, setDeckRate]);
+
+  const applyPressureBendFrame = () => {
+    const interaction = pressureBendRef.current;
+    if (!interaction.active) {
+      interaction.rafId = null;
+      return;
+    }
+
+    const elapsedMs = performance.now() - interaction.startTimestampMs;
+    const normalizedPressure = Math.min(Math.max(elapsedMs / 460, 0.12), 1);
+    const pressureCurve = Math.pow(normalizedPressure, 1.6);
+    const multiplier =
+      interaction.direction < 0
+        ? Math.max(1.0 - (pressureCurve * 0.9), 0.08)
+        : Math.min(1.0 + (pressureCurve * 0.9), 1.92);
+
+    const adjustedRate = Math.min(Math.max(interaction.startRate * multiplier, pitchMinRate), pitchMaxRate);
+    void setDeckRate(deckId, adjustedRate);
+    interaction.rafId = window.requestAnimationFrame(applyPressureBendFrame);
+  };
+
+  const beginPressureBend = (direction: -1 | 1) => {
+    const interaction = pressureBendRef.current;
+    if (interaction.active) {
+      interaction.direction = direction;
+      return;
+    }
+
+    interaction.active = true;
+    interaction.direction = direction;
+    interaction.startRate = deck.rate;
+    interaction.startTimestampMs = performance.now();
+
+    const tapNudgeRate = Math.min(Math.max(deck.rate + (direction * 0.01), pitchMinRate), pitchMaxRate);
+    void setDeckRate(deckId, tapNudgeRate);
+
+    interaction.rafId = window.requestAnimationFrame(applyPressureBendFrame);
+  };
+
+  const updatePressureBend = (direction: -1 | 1) => {
+    pressureBendRef.current.direction = direction;
+  };
+
+  const endPressureBend = () => {
+    const interaction = pressureBendRef.current;
+    if (!interaction.active) {
+      return;
+    }
+
+    interaction.active = false;
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    void setDeckRate(deckId, interaction.startRate);
+  };
 
   return (
     <article className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-3">
@@ -170,6 +259,9 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             <PlatterView
               angleDegrees={deck.platterDegrees}
               artworkDataUrl={deck.artworkDataUrl}
+              onPressureBendEnd={endPressureBend}
+              onPressureBendMove={updatePressureBend}
+              onPressureBendStart={beginPressureBend}
             />
             {deck.statusMessage ? (
               <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/50 px-2.5 py-1 text-[10px] font-semibold text-black/70 backdrop-blur">
@@ -204,19 +296,56 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
           </div>
 
           <div className="flex h-full min-h-0 w-fit justify-self-end flex-row gap-3 lg:flex-col lg:items-end">
-            <VerticalFader
-              label="PITCH"
-              mode="pitch"
-              max={1.16}
-              min={0.84}
-              onInteractionChange={setIsPitchDragging}
-              onChange={(value) => {
-                void setDeckRate(deckId, value);
-              }}
-              thumbPopoverSize="large"
-              thumbPopoverSide="left"
-              value={deck.rate}
-            />
+            <div className="flex h-full min-h-0 flex-col items-center">
+              <VerticalFader
+                label="PITCH"
+                mode="pitch"
+                max={pitchMaxRate}
+                min={pitchMinRate}
+                onInteractionChange={setIsPitchDragging}
+                onChange={(value) => {
+                  void setDeckRate(deckId, value);
+                }}
+                thumbPopoverSize="large"
+                thumbPopoverSide="left"
+                value={deck.rate}
+              />
+              <div className="mt-2 flex items-center gap-1">
+                <button
+                  aria-label="Increase pitch sensitivity"
+                  className="flex h-6 w-8 items-center justify-center rounded-[3px] border border-black/55 bg-[linear-gradient(180deg,_#efefef_0%,_#d7d7d7_100%)] text-[18px] font-bold leading-none text-black/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
+                  onClick={() => {
+                    setPitchSensitivityPercent((value) => {
+                      if (value >= 16) {
+                        return value;
+                      }
+                      return value * 2;
+                    });
+                  }}
+                  type="button"
+                >
+                  +
+                </button>
+                <button
+                  aria-label="Decrease pitch sensitivity"
+                  className="flex h-6 w-8 items-center justify-center rounded-[3px] border border-black/55 bg-[linear-gradient(180deg,_#efefef_0%,_#d7d7d7_100%)] text-[18px] font-bold leading-none text-black/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
+                  onClick={() => {
+                    setPitchSensitivityPercent((value) => {
+                      if (value <= 2) {
+                        return value;
+                      }
+                      return Math.round(value * 0.5);
+                    });
+                  }}
+                  type="button"
+                >
+                  -
+                </button>
+              </div>
+              <div className="mt-1 text-[11px] font-semibold tracking-tight text-black/65">
+                ±{pitchSensitivityPercent}%
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -423,12 +552,14 @@ function VerticalFader({
   const height = Math.max((containerRef.current?.clientHeight ?? 220), 1);
   const usableHeight = Math.max(height - thumbSize, 1);
   const valueProgress = normalizedProgress(value, min, max);
-  const thumbY = (1.0 - valueProgress) * usableHeight;
+  const visualValueProgress = mode === "pitch" ? (1.0 - valueProgress) : valueProgress;
+  const thumbY = (1.0 - visualValueProgress) * usableHeight;
   const thumbCenterY = thumbY + (thumbSize * 0.5);
   const baselineValue = mode === "pitch" ? 1.0 : min;
   const baselineProgress = normalizedProgress(baselineValue, min, max);
-  const valueY = (1.0 - valueProgress) * height;
-  const baselineY = (1.0 - baselineProgress) * height;
+  const visualBaselineProgress = mode === "pitch" ? (1.0 - baselineProgress) : baselineProgress;
+  const valueY = (1.0 - visualValueProgress) * height;
+  const baselineY = (1.0 - visualBaselineProgress) * height;
   const selectedTop = Math.min(valueY, baselineY);
   const selectedHeight = Math.max(Math.abs(valueY - baselineY), 2);
   const thumbText =
@@ -493,7 +624,8 @@ function VerticalFader({
           }
           const rect = containerRef.current.getBoundingClientRect();
           const y = Math.min(Math.max(event.clientY - rect.top, 0), height);
-          const mappedProgress = 1 - (y / height);
+          const pointerProgress = 1 - (y / height);
+          const mappedProgress = mode === "pitch" ? (1 - pointerProgress) : pointerProgress;
           onChange(mappedValue(mappedProgress, min, max));
           if (thumbPopoverSide !== "none") {
             setIsThumbPopoverVisible(true);

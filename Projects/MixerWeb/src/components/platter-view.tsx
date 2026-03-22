@@ -5,13 +5,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type PlatterViewProps = {
   angleDegrees: number;
   artworkDataUrl?: string | null;
+  onPressureBendStart: (direction: -1 | 1) => void;
+  onPressureBendMove: (direction: -1 | 1) => void;
+  onPressureBendEnd: () => void;
 };
 
 export function PlatterView({
   angleDegrees,
-  artworkDataUrl
+  artworkDataUrl,
+  onPressureBendStart,
+  onPressureBendMove,
+  onPressureBendEnd
 }: PlatterViewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
   const [platterSize, setPlatterSize] = useState(420);
 
   const ringStyle = useMemo(
@@ -50,10 +57,92 @@ export function PlatterView({
     return () => observer.disconnect();
   }, []);
 
+  const resolvePressureDirection = (event: React.PointerEvent<HTMLDivElement>): -1 | 1 | null => {
+    if (!rootRef.current) {
+      return null;
+    }
+
+    const rect = rootRef.current.getBoundingClientRect();
+    const side = Math.min(rect.width, rect.height);
+    if (side <= 0) {
+      return null;
+    }
+
+    const xOffset = (rect.width - side) * 0.5;
+    const yOffset = (rect.height - side) * 0.5;
+    const x = event.clientX - rect.left - xOffset;
+    const y = event.clientY - rect.top - yOffset;
+    if (x < 0 || y < 0 || x > side || y > side) {
+      return null;
+    }
+
+    const center = side * 0.5;
+    const dx = x - center;
+    const dy = y - center;
+    const radius = Math.sqrt((dx * dx) + (dy * dy));
+    const maxRadius = side * 0.5;
+    const minRadius = side * 0.12;
+    if (radius < minRadius || radius > maxRadius) {
+      return null;
+    }
+
+    const bottomBlockedZoneRatio = 0.18;
+    if (y > side * (1.0 - bottomBlockedZoneRatio)) {
+      return null;
+    }
+
+    return x < center ? -1 : 1;
+  };
+
   return (
     <div
       ref={rootRef}
       className="relative aspect-square w-full max-w-[420px] touch-none select-none rounded-full border border-black/20 bg-[#090d11] shadow-platter"
+      onPointerDown={(event) => {
+        const direction = resolvePressureDirection(event);
+        if (!direction) {
+          return;
+        }
+
+        pointerIdRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onPressureBendStart(direction);
+      }}
+      onPointerMove={(event) => {
+        if (pointerIdRef.current !== event.pointerId) {
+          return;
+        }
+        const direction = resolvePressureDirection(event);
+        if (!direction) {
+          onPressureBendEnd();
+          pointerIdRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+          return;
+        }
+        onPressureBendMove(direction);
+      }}
+      onPointerUp={(event) => {
+        if (pointerIdRef.current !== event.pointerId) {
+          return;
+        }
+        pointerIdRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onPressureBendEnd();
+      }}
+      onPointerCancel={(event) => {
+        if (pointerIdRef.current !== event.pointerId) {
+          return;
+        }
+        pointerIdRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onPressureBendEnd();
+      }}
       role="presentation"
     >
       <div className="absolute inset-[1.2%] rounded-full border border-black/60 bg-[radial-gradient(circle,_#111_0%,_#07090c_64%,_#050608_100%)]" />
