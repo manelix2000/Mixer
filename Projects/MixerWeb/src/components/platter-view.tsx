@@ -138,7 +138,7 @@ export function PlatterView({
         }}
       />
       <div
-        className="absolute inset-[17%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_rgba(15,21,30,1)_52%,_rgba(0,0,0,1)_100%)]"
+        className={`absolute ${artworkDataUrl ? "inset-[11.4%]" : "inset-[17%]"} rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_rgba(15,21,30,1)_52%,_rgba(0,0,0,1)_100%)]`}
         style={ringStyle}
       >
         {artworkDataUrl ? (
