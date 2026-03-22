@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useState } from "react";
 
 type WaveformCanvasProps = {
   samples: number[];
@@ -18,6 +19,13 @@ export function WaveformCanvas({
   onSeek
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startProgress: number;
+    moved: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -48,9 +56,10 @@ export function WaveformCanvas({
     context.lineTo(width, height / 2);
     context.stroke();
 
-    const playedWidth = width * Math.min(Math.max(progress, 0), 1);
+    const clampedProgress = Math.min(Math.max(progress, 0), 1);
+    const indicatorX = width / 2;
     const columns = Math.max(Math.floor(width), 2);
-    const centerSample = Math.min(Math.max(progress, 0), 1) * Math.max(samples.length - 1, 0);
+    const centerSample = clampedProgress * Math.max(samples.length - 1, 0);
     const zoomLevel = Math.min(Math.max(zoom, 0.4), 3.5);
     const sampleSpacing = Math.max((1.45 * Math.pow(zoomLevel, 1.2)), 0.8);
 
@@ -60,30 +69,80 @@ export function WaveformCanvas({
       const sample = interpolatedSample(samples, samplePosition);
       const halfHeight = Math.max(2, sample * height * 0.38);
 
-      context.fillStyle = x <= playedWidth ? "rgba(249,115,22,0.82)" : "rgba(148, 152, 156, 0.52)";
+      context.fillStyle = x <= indicatorX ? "rgba(249,115,22,0.82)" : "rgba(148, 152, 156, 0.52)";
       context.fillRect(x, (height / 2) - halfHeight, 1.1, halfHeight * 2);
 
-      context.fillStyle = x <= playedWidth ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.06)";
+      context.fillStyle = x <= indicatorX ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.06)";
       context.fillRect(x, (height / 2) - (halfHeight * 0.48), 1.1, halfHeight * 0.96);
     }
 
     context.fillStyle = "rgba(255,255,255,0.92)";
-    context.fillRect(playedWidth, 0, 2, height);
+    context.fillRect(indicatorX, 0, 2, height);
   }, [progress, samples, zoom]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`${heightClassName} w-full cursor-pointer rounded-xl border border-black/15 bg-[#1a1d20]`}
-      onClick={(event) => {
+    <div
+      className={`${heightClassName} relative w-full touch-none ${onSeek ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
+      onPointerDown={(event) => {
         if (!onSeek) {
           return;
         }
-        const rect = event.currentTarget.getBoundingClientRect();
-        const clickProgress = (event.clientX - rect.left) / rect.width;
-        onSeek(Math.min(Math.max(clickProgress, 0), 1));
+        dragStateRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startProgress: Math.min(Math.max(progress, 0), 1),
+          moved: false
+        };
+        setIsDragging(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
       }}
-    />
+      onPointerMove={(event) => {
+        if (!onSeek || !dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        const deltaX = event.clientX - dragStateRef.current.startX;
+        const normalizedDelta = deltaX / Math.max(rect.width, 1);
+        if (Math.abs(deltaX) > 2) {
+          dragStateRef.current.moved = true;
+        }
+        onSeek(Math.min(Math.max(dragStateRef.current.startProgress + normalizedDelta, 0), 1));
+      }}
+      onPointerUp={(event) => {
+        if (!onSeek || !dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (!dragStateRef.current.moved) {
+          const localX = event.clientX - rect.left;
+          const direction = localX < rect.width / 2 ? -1 : 1;
+          const tapStep = 0.03;
+          onSeek(
+            Math.min(Math.max(dragStateRef.current.startProgress + (direction * tapStep), 0), 1)
+          );
+        }
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        dragStateRef.current = null;
+        setIsDragging(false);
+      }}
+      onPointerCancel={(event) => {
+        if (dragStateRef.current?.pointerId === event.pointerId) {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+          dragStateRef.current = null;
+          setIsDragging(false);
+        }
+      }}
+      role="presentation"
+    >
+      <canvas
+        ref={canvasRef}
+        className="h-full w-full rounded-xl border border-black/15 bg-[#1a1d20]"
+      />
+    </div>
   );
 }
 

@@ -21,10 +21,6 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   const setDeckVolume = useMixerStore((state) => state.setDeckVolume);
   const setDeckPan = useMixerStore((state) => state.setDeckPan);
   const seekDeckNormalized = useMixerStore((state) => state.seekDeckNormalized);
-  const scratchDeckNormalized = useMixerStore((state) => state.scratchDeckNormalized);
-  const stopScratching = useMixerStore((state) => state.stopScratching);
-
-  const isScratchingRef = useRef(false);
   const [waveformZoom, setWaveformZoom] = useState(1);
   const [isPitchDragging, setIsPitchDragging] = useState(false);
 
@@ -116,10 +112,10 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
               </div>
             ) : null}
 
-            <div className="absolute inset-x-2 top-1/2 z-10 flex -translate-y-1/2 items-center justify-between">
+            <div className="pointer-events-none absolute inset-x-2 top-1/2 z-10 flex -translate-y-1/2 items-center justify-between">
               <button
                 aria-label="Zoom in"
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-white/25 bg-[linear-gradient(180deg,_rgba(255,255,255,0.24),_rgba(255,255,255,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur"
+                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-md border border-white/25 bg-[linear-gradient(180deg,_rgba(255,255,255,0.24),_rgba(255,255,255,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur"
                 onClick={() => {
                   setWaveformZoom((value) => Math.min(value + 0.2, 3.5));
                 }}
@@ -129,7 +125,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
               </button>
               <button
                 aria-label="Zoom out"
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-white/25 bg-[linear-gradient(180deg,_rgba(255,255,255,0.24),_rgba(255,255,255,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur"
+                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-md border border-white/25 bg-[linear-gradient(180deg,_rgba(255,255,255,0.24),_rgba(255,255,255,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur"
                 onClick={() => {
                   setWaveformZoom((value) => Math.max(value - 0.2, 0.4));
                 }}
@@ -174,17 +170,6 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             <PlatterView
               angleDegrees={deck.platterDegrees}
               artworkDataUrl={deck.artworkDataUrl}
-              isPlaying={deck.isPlaying}
-              onScrub={(normalizedPosition) => {
-                isScratchingRef.current = true;
-                void scratchDeckNormalized(deckId, normalizedPosition);
-              }}
-              onScrubEnd={() => {
-                if (isScratchingRef.current) {
-                  isScratchingRef.current = false;
-                  stopScratching(deckId);
-                }
-              }}
             />
             {deck.statusMessage ? (
               <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/50 px-2.5 py-1 text-[10px] font-semibold text-black/70 backdrop-blur">

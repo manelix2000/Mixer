@@ -5,20 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type PlatterViewProps = {
   angleDegrees: number;
   artworkDataUrl?: string | null;
-  isPlaying: boolean;
-  onScrub: (normalizedPosition: number) => void;
-  onScrubEnd: () => void;
 };
 
 export function PlatterView({
   angleDegrees,
-  artworkDataUrl,
-  isPlaying,
-  onScrub,
-  onScrubEnd
+  artworkDataUrl
 }: PlatterViewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const pointerIdRef = useRef<number | null>(null);
   const [platterSize, setPlatterSize] = useState(420);
 
   const ringStyle = useMemo(
@@ -61,30 +54,6 @@ export function PlatterView({
     <div
       ref={rootRef}
       className="relative aspect-square w-full max-w-[420px] touch-none select-none rounded-full border border-black/20 bg-[#090d11] shadow-platter"
-      onPointerDown={(event) => {
-        pointerIdRef.current = event.pointerId;
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        if (pointerIdRef.current !== event.pointerId || !rootRef.current) {
-          return;
-        }
-
-        const rect = rootRef.current.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const normalized = Math.min(Math.max(x / rect.width, 0), 1);
-        onScrub(normalized);
-      }}
-      onPointerUp={(event) => {
-        if (pointerIdRef.current === event.pointerId) {
-          pointerIdRef.current = null;
-          onScrubEnd();
-        }
-      }}
-      onPointerCancel={() => {
-        pointerIdRef.current = null;
-        onScrubEnd();
-      }}
       role="presentation"
     >
       <div className="absolute inset-[1.2%] rounded-full border border-black/60 bg-[radial-gradient(circle,_#111_0%,_#07090c_64%,_#050608_100%)]" />
