@@ -37,6 +37,7 @@ type MixerStore = {
   setDeckRate: (deckId: DeckId, rate: number) => Promise<void>;
   setDeckVolume: (deckId: DeckId, volume: number) => Promise<void>;
   setDeckPan: (deckId: DeckId, pan: number) => Promise<void>;
+  setDeckEq: (deckId: DeckId, low: number, mid: number, high: number) => Promise<void>;
   toggleMicrophone: () => Promise<void>;
 };
 
@@ -324,7 +325,10 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
           isPlaying: snapshot.isPlaying,
           rate: snapshot.rate,
           volume: snapshot.volume,
-          pan: snapshot.pan
+          pan: snapshot.pan,
+          eqLow: snapshot.eqLow,
+          eqMid: snapshot.eqMid,
+          eqHigh: snapshot.eqHigh
         }
       }
     }));
@@ -464,6 +468,16 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
     }
 
     deck.engine.setPan(pan);
+    get().syncDeck(deckId);
+  },
+
+  setDeckEq: async (deckId, low, mid, high) => {
+    const deck = get().decks[deckId];
+    if (!deck.engine) {
+      return;
+    }
+
+    deck.engine.setEqualizer(low, mid, high);
     get().syncDeck(deckId);
   },
 

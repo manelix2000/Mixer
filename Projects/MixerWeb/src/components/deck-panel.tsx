@@ -21,6 +21,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
   const setDeckRate = useMixerStore((state) => state.setDeckRate);
   const setDeckVolume = useMixerStore((state) => state.setDeckVolume);
   const setDeckPan = useMixerStore((state) => state.setDeckPan);
+  const setDeckEq = useMixerStore((state) => state.setDeckEq);
   const seekDeckNormalized = useMixerStore((state) => state.seekDeckNormalized);
   const [waveformZoom, setWaveformZoom] = useState(1);
   const [isPitchDragging, setIsPitchDragging] = useState(false);
@@ -373,17 +374,45 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
             </div>
           </div>
         </div>
-        {isEqOverlayRendered ? <EQOverlay isVisible={isEqOverlayVisible} /> : null}
+        {isEqOverlayRendered ? (
+          <EQOverlay
+            eqHigh={deck.eqHigh}
+            eqLow={deck.eqLow}
+            eqMid={deck.eqMid}
+            isVisible={isEqOverlayVisible}
+            onHighChange={(value) => {
+              void setDeckEq(deckId, deck.eqLow, deck.eqMid, value);
+            }}
+            onLowChange={(value) => {
+              void setDeckEq(deckId, value, deck.eqMid, deck.eqHigh);
+            }}
+            onMidChange={(value) => {
+              void setDeckEq(deckId, deck.eqLow, value, deck.eqHigh);
+            }}
+          />
+        ) : null}
       </div>
     </article>
   );
 }
 
-function EQOverlay({ isVisible }: { isVisible: boolean }) {
-  const [low, setLow] = useState(0.58);
-  const [mid, setMid] = useState(0.56);
-  const [high, setHigh] = useState(0.6);
-
+function EQOverlay({
+  eqHigh,
+  eqLow,
+  eqMid,
+  isVisible,
+  onHighChange,
+  onLowChange,
+  onMidChange
+}: {
+  eqHigh: number;
+  eqLow: number;
+  eqMid: number;
+  isVisible: boolean;
+  onHighChange: (value: number) => void;
+  onLowChange: (value: number) => void;
+  onMidChange: (value: number) => void;
+}) {
   return (
     <div
       className={`absolute inset-0 z-[80] overflow-hidden rounded-xl border border-white/30 bg-white/42 backdrop-blur-[7px] transition-opacity duration-200 ease-out ${
@@ -404,9 +433,9 @@ function EQOverlay({ isVisible }: { isVisible: boolean }) {
               mode="volume"
               max={1}
               min={0}
-              onChange={setLow}
+              onChange={onLowChange}
               thumbPopoverSide="none"
-              value={low}
+              value={eqLow}
             />
           </div>
           <div className="h-[270px] w-[82px]">
@@ -416,9 +445,9 @@ function EQOverlay({ isVisible }: { isVisible: boolean }) {
               mode="volume"
               max={1}
               min={0}
-              onChange={setMid}
+              onChange={onMidChange}
               thumbPopoverSide="none"
-              value={mid}
+              value={eqMid}
             />
           </div>
           <div className="h-[270px] w-[82px]">
@@ -428,9 +457,9 @@ function EQOverlay({ isVisible }: { isVisible: boolean }) {
               mode="volume"
               max={1}
               min={0}
-              onChange={setHigh}
+              onChange={onHighChange}
               thumbPopoverSide="none"
-              value={high}
+              value={eqHigh}
             />
           </div>
         </div>

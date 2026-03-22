@@ -12,6 +12,9 @@ type AudioSnapshot = {
   rate: number;
   volume: number;
   pan: number;
+  eqLow: number;
+  eqMid: number;
+  eqHigh: number;
 };
 
 function formatSeconds(seconds: number): string {
@@ -29,6 +32,9 @@ export class BrowserAudioDeck {
   private audioContext: AudioContext | null = null;
   private gainNode: GainNode | null = null;
   private pannerNode: StereoPannerNode | null = null;
+  private eqLowNode: BiquadFilterNode | null = null;
+  private eqMidNode: BiquadFilterNode | null = null;
+  private eqHighNode: BiquadFilterNode | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
   private audioBuffer: AudioBuffer | null = null;
   private playbackOffset = 0;
@@ -37,6 +43,9 @@ export class BrowserAudioDeck {
   private rate = 1;
   private volume = 0.82;
   private pan = 0;
+  private eqLow = 0.5;
+  private eqMid = 0.5;
+  private eqHigh = 0.5;
   private physics = createTurntablePhysicsState();
   private lastSnapshotTimestamp = 0;
 
@@ -123,6 +132,14 @@ export class BrowserAudioDeck {
     }
   }
 
+  setEqualizer(low: number, mid: number, high: number): void {
+    this.eqLow = clamp(low, 0, 1);
+    this.eqMid = clamp(mid, 0, 1);
+    this.eqHigh = clamp(high, 0, 1);
+    this.ensureNodeGraph();
+    this.applyEqualizerGains();
+  }
+
   getSnapshot(): AudioSnapshot {
     const now = performance.now();
     const deltaSeconds =
@@ -148,7 +165,10 @@ export class BrowserAudioDeck {
       isPlaying: this.isPlaying,
       rate: this.rate,
       volume: this.volume,
-      pan: this.pan
+      pan: this.pan,
+      eqLow: this.eqLow,
+      eqMid: this.eqMid,
+      eqHigh: this.eqHigh
     };
   }
 
@@ -184,7 +204,7 @@ export class BrowserAudioDeck {
     const source = context.createBufferSource();
     source.buffer = this.audioBuffer;
     source.playbackRate.value = this.rate;
-    source.connect(this.gainNode!);
+    source.connect(this.eqLowNode!);
     source.onended = () => {
       if (!this.audioBuffer) {
         return;
@@ -216,16 +236,45 @@ export class BrowserAudioDeck {
 
   private ensureNodeGraph(): void {
     const context = this.ensureAudioContext();
-    if (this.gainNode && this.pannerNode) {
+    if (this.gainNode && this.pannerNode && this.eqLowNode && this.eqMidNode && this.eqHighNode) {
       return;
     }
 
     this.gainNode = context.createGain();
     this.pannerNode = context.createStereoPanner();
+    this.eqLowNode = context.createBiquadFilter();
+    this.eqMidNode = context.createBiquadFilter();
+    this.eqHighNode = context.createBiquadFilter();
+
+    this.eqLowNode.type = "lowshelf";
+    this.eqLowNode.frequency.value = 220;
+    this.eqMidNode.type = "peaking";
+    this.eqMidNode.frequency.value = 1100;
+    this.eqMidNode.Q.value = 0.9;
+    this.eqHighNode.type = "highshelf";
+    this.eqHighNode.frequency.value = 4600;
+
     this.gainNode.gain.value = this.volume;
     this.pannerNode.pan.value = this.pan;
+
+    this.applyEqualizerGains();
+
+    this.eqLowNode.connect(this.eqMidNode);
+    this.eqMidNode.connect(this.eqHighNode);
+    this.eqHighNode.connect(this.gainNode);
     this.gainNode.connect(this.pannerNode);
     this.pannerNode.connect(context.destination);
+  }
+
+  private applyEqualizerGains(): void {
+    if (!this.eqLowNode || !this.eqMidNode || !this.eqHighNode) {
+      return;
+    }
+
+    const gainFromNormalized = (value: number): number => ((clamp(value, 0, 1) - 0.5) * 24);
+    this.eqLowNode.gain.value = gainFromNormalized(this.eqLow);
+    this.eqMidNode.gain.value = gainFromNormalized(this.eqMid);
+    this.eqHighNode.gain.value = gainFromNormalized(this.eqHigh);
   }
 
   private ensureAudioContext(): AudioContext {

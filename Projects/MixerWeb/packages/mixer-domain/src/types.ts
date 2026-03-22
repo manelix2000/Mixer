@@ -24,6 +24,9 @@ export type AudioDeckLike = {
     rate: number;
     volume: number;
     pan: number;
+    eqLow: number;
+    eqMid: number;
+    eqHigh: number;
   };
   loadFile: (file: File) => Promise<AudioBuffer>;
   play: () => Promise<void>;
@@ -33,6 +36,7 @@ export type AudioDeckLike = {
   setPlaybackRate: (rate: number) => void;
   setVolume: (volume: number) => void;
   setPan: (pan: number) => void;
+  setEqualizer: (low: number, mid: number, high: number) => void;
 };
 
 export type DeckRuntimeState = {
@@ -56,6 +60,9 @@ export type DeckRuntimeState = {
   rate: number;
   volume: number;
   pan: number;
+  eqLow: number;
+  eqMid: number;
+  eqHigh: number;
 };
 
 export function createDeckRuntimeState(deckId: DeckId): DeckRuntimeState {
@@ -79,6 +86,9 @@ export function createDeckRuntimeState(deckId: DeckId): DeckRuntimeState {
     platterDegrees: 0,
     rate: 1,
     volume: 0.82,
-    pan: 0
+    pan: 0,
+    eqLow: 0.5,
+    eqMid: 0.5,
+    eqHigh: 0.5
   };
 }
