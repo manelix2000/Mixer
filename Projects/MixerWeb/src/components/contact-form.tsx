@@ -1,7 +1,6 @@
 "use client";
 
-import Script from "next/script";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type ContactResponse = {
   ok: boolean;
@@ -16,11 +15,7 @@ export function ContactForm() {
   const [company, setCompany] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ContactResponse | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState("");
   const [startedAt] = useState(() => Date.now());
-
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
-  const hasTurnstile = turnstileSiteKey.trim().length > 0;
 
   const statusTone = useMemo(() => {
     if (!result) {
@@ -30,12 +25,7 @@ export function ContactForm() {
   }, [result]);
 
   return (
-    <>
-      {hasTurnstile ? (
-        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
-      ) : null}
-
-      <form
+    <form
         className="mt-6 rounded-2xl border border-white/12 bg-[linear-gradient(180deg,_rgba(255,255,255,0.07),_rgba(255,255,255,0.02))] p-6 shadow-[0_20px_32px_rgba(0,0,0,0.24)]"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -58,8 +48,7 @@ export function ContactForm() {
                 subject,
                 message,
                 company,
-                startedAt,
-                turnstileToken
+                startedAt
               })
             });
 
@@ -71,7 +60,6 @@ export function ContactForm() {
               setSubject("");
               setMessage("");
               setCompany("");
-              setTurnstileToken("");
             }
           } catch {
             setResult({
@@ -146,21 +134,6 @@ export function ContactForm() {
           />
         </div>
 
-        {hasTurnstile ? (
-          <div className="mt-4">
-            <div
-              className="cf-turnstile"
-              data-callback="onContactTurnstileSuccess"
-              data-sitekey={turnstileSiteKey}
-              data-theme="dark"
-            />
-          </div>
-        ) : (
-          <p className="mt-4 text-xs text-[#b9c7dc]">
-            Anti-bot challenge is disabled in this environment.
-          </p>
-        )}
-
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className={`text-sm ${statusTone}`}>{result?.message ?? "Send us a message."}</p>
           <button
@@ -172,29 +145,7 @@ export function ContactForm() {
           </button>
         </div>
       </form>
-
-      <Script
-        id="contact-turnstile-callback"
-        strategy="afterInteractive"
-      >{`window.onContactTurnstileSuccess = function (token) { window.dispatchEvent(new CustomEvent("contact-turnstile", { detail: token })); };`}</Script>
-      <TurnstileBridge onToken={setTurnstileToken} />
-    </>
   );
-}
-
-function TurnstileBridge({ onToken }: { onToken: (token: string) => void }) {
-  useEffect(() => {
-    const listener = (event: Event) => {
-      const customEvent = event as CustomEvent<string>;
-      onToken(customEvent.detail ?? "");
-    };
-    window.addEventListener("contact-turnstile", listener);
-    return () => {
-      window.removeEventListener("contact-turnstile", listener);
-    };
-  }, [onToken]);
-
-  return null;
 }
 
 function Field({

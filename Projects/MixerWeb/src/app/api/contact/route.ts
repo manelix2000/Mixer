@@ -13,7 +13,6 @@ type ContactBody = {
   name?: unknown;
   startedAt?: unknown;
   subject?: unknown;
-  turnstileToken?: unknown;
 };
 
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -50,30 +49,6 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;");
 }
 
-async function verifyTurnstileToken(token: string, ip: string) {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    return { ok: true };
-  }
-
-  const form = new URLSearchParams();
-  form.set("secret", secret);
-  form.set("response", token);
-  form.set("remoteip", ip);
-
-  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body: form
-  });
-
-  if (!response.ok) {
-    return { ok: false };
-  }
-
-  const payload = (await response.json()) as { success?: boolean };
-  return { ok: payload.success === true };
-}
-
 async function sendWithResend({
   from,
   to,
@@ -92,23 +67,40 @@ async function sendWithResend({
     return { ok: false, reason: "missing_api_key" as const };
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject,
-      html,
-      reply_to: replyTo
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        from,
+        to,
+        subject,
+        html,
+        reply_to: replyTo
+      })
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "unknown";
+    return { ok: false, reason: "network_error" as const, detail: errorMessage };
+  }
 
   if (!response.ok) {
-    return { ok: false, reason: "send_failed" as const };
+    let detail = "";
+    try {
+      detail = await response.text();
+    } catch {
+      detail = "";
+    }
+    return {
+      ok: false,
+      reason: "send_failed" as const,
+      status: response.status,
+      detail
+    };
   }
 
   return { ok: true };
@@ -156,7 +148,6 @@ export async function POST(request: NextRequest) {
   const subject = asString(body.subject);
   const message = asString(body.message);
   const company = asString(body.company);
-  const turnstileToken = asString(body.turnstileToken);
   const startedAt = Number(body.startedAt);
 
   if (company.length > 0) {
@@ -178,22 +169,6 @@ export async function POST(request: NextRequest) {
   }
   if (message.length < 10 || message.length > 3000) {
     return NextResponse.json({ ok: false, message: "Message is invalid." }, { status: 400 });
-  }
-
-  if (process.env.TURNSTILE_SECRET_KEY) {
-    if (!turnstileToken) {
-      return NextResponse.json(
-        { ok: false, message: "Anti-bot challenge is required." },
-        { status: 400 }
-      );
-    }
-    const turnstile = await verifyTurnstileToken(turnstileToken, ip);
-    if (!turnstile.ok) {
-      return NextResponse.json(
-        { ok: false, message: "Anti-bot verification failed." },
-        { status: 400 }
-      );
-    }
   }
 
   const toEmail = process.env.CONTACT_TO_EMAIL;
@@ -229,8 +204,19 @@ export async function POST(request: NextRequest) {
   });
 
   if (!sent.ok) {
+    const debugDetail = sent.reason === "send_failed"
+      ? `status=${sent.status ?? "unknown"} detail=${sent.detail ?? ""}`
+      : sent.reason === "network_error"
+        ? `detail=${sent.detail ?? ""}`
+        : sent.reason;
+    console.error("[contact] resend_send_failed", debugDetail);
+
+    const isProduction = process.env.NODE_ENV === "production";
+    const userMessage = isProduction
+      ? "Failed to deliver your message. Please try again later."
+      : `Failed to deliver your message (${debugDetail}).`;
     return NextResponse.json(
-      { ok: false, message: "Failed to deliver your message. Please try again later." },
+      { ok: false, message: userMessage },
       { status: 502 }
     );
   }
