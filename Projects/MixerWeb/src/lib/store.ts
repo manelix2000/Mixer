@@ -361,7 +361,7 @@ export const useMixerStore = create<MixerStore>((set, get) => ({
       deck.engine.loadFile(file),
       extractArtworkDataUrl(file)
     ]);
-    const waveform = generateWaveformSamples(buffer, 220);
+    const waveform = generateWaveformSamples(buffer, 4096);
     const bpmResult = detectTempoFromBuffer(buffer);
     const snapshot = deck.engine.getSnapshot();
 

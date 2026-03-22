@@ -71,7 +71,7 @@ export function createDeckRuntimeState(deckId: DeckId): DeckRuntimeState {
     engine: null,
     trackName: null,
     artworkDataUrl: null,
-    waveform: new Array(220).fill(0.08),
+    waveform: new Array(4096).fill(0.08),
     bpmResult: null,
     bpmText: "-- BPM",
     statusMessage: "Load a local audio file to begin.",
