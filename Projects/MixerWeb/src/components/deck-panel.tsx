@@ -8,9 +8,10 @@ import { WaveformCanvas } from "@/components/waveform-canvas";
 
 type DeckPanelProps = {
   deckId: DeckId;
+  eqActive?: boolean;
 };
 
-export function DeckPanel({ deckId }: DeckPanelProps) {
+export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
   const deck = useMixerStore((state) => state.decks[deckId]);
   const micState = useMixerStore((state) => state.microphoneState);
   const syncDeck = useMixerStore((state) => state.syncDeck);
@@ -24,6 +25,8 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   const [waveformZoom, setWaveformZoom] = useState(1);
   const [isPitchDragging, setIsPitchDragging] = useState(false);
   const [pitchSensitivityPercent, setPitchSensitivityPercent] = useState(8);
+  const [isEqOverlayRendered, setIsEqOverlayRendered] = useState(eqActive);
+  const [isEqOverlayVisible, setIsEqOverlayVisible] = useState(eqActive);
   const pressureBendRef = useRef<{
     active: boolean;
     direction: -1 | 1;
@@ -67,6 +70,28 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let hideTimer: number | null = null;
+    if (eqActive) {
+      setIsEqOverlayRendered(true);
+      const frameId = window.requestAnimationFrame(() => {
+        setIsEqOverlayVisible(true);
+      });
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    setIsEqOverlayVisible(false);
+    hideTimer = window.setTimeout(() => {
+      setIsEqOverlayRendered(false);
+    }, 190);
+
+    return () => {
+      if (hideTimer !== null) {
+        window.clearTimeout(hideTimer);
+      }
+    };
+  }, [eqActive]);
 
   useEffect(() => {
     const clamped = Math.min(Math.max(deck.rate, pitchMinRate), pitchMaxRate);
@@ -132,7 +157,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
   };
 
   return (
-    <article className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-0">
+    <article className="relative grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl bg-[#111214] p-0">
       <div className="flex items-center gap-2 rounded-md border border-black/12 bg-[#b4babf] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-black/30 bg-[linear-gradient(180deg,_#dfe4e8_0%,_#a6adb4_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
           {deck.artworkDataUrl ? (
@@ -239,7 +264,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
 
       </div>
 
-      <div className="h-full min-h-0 rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#9aa1a7_45%,_#848b92_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_22px_40px_rgba(0,0,0,0.35)]">
+      <div className="relative h-full min-h-0 rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#9aa1a7_45%,_#848b92_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_22px_40px_rgba(0,0,0,0.35)]">
         <div className="grid h-full min-h-0 items-stretch gap-2 lg:grid-cols-[max-content_minmax(0,1fr)_max-content]">
           <div className="flex h-full min-h-0 w-fit justify-self-start flex-row gap-3 lg:flex-col lg:items-start">
             <VerticalFader
@@ -348,8 +373,79 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             </div>
           </div>
         </div>
+        {isEqOverlayRendered ? <EQOverlay isVisible={isEqOverlayVisible} /> : null}
       </div>
     </article>
+  );
+}
+
+function EQOverlay({ isVisible }: { isVisible: boolean }) {
+  const [low, setLow] = useState(0.58);
+  const [mid, setMid] = useState(0.56);
+  const [high, setHigh] = useState(0.6);
+
+  return (
+    <div
+      className={`absolute inset-0 z-[80] overflow-hidden rounded-xl border border-white/30 bg-white/42 backdrop-blur-[7px] transition-opacity duration-200 ease-out ${
+        isVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      }`}
+    >
+      <div className="h-full w-full bg-[rgba(255,255,255,0.5)]" />
+      <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 text-[31px] font-bold text-black/85">
+        <MiniBarsIcon />
+        <span className="text-[31px] leading-none tracking-tight">EQ</span>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center px-8">
+        <div className="flex items-end justify-center gap-4">
+          <div className="h-[270px] w-[82px]">
+            <VerticalFader
+              label="LOW"
+              labelPosition="bottom"
+              mode="volume"
+              max={1}
+              min={0}
+              onChange={setLow}
+              thumbPopoverSide="none"
+              value={low}
+            />
+          </div>
+          <div className="h-[270px] w-[82px]">
+            <VerticalFader
+              label="MID"
+              labelPosition="bottom"
+              mode="volume"
+              max={1}
+              min={0}
+              onChange={setMid}
+              thumbPopoverSide="none"
+              value={mid}
+            />
+          </div>
+          <div className="h-[270px] w-[82px]">
+            <VerticalFader
+              label="HIGH"
+              labelPosition="bottom"
+              mode="volume"
+              max={1}
+              min={0}
+              onChange={setHigh}
+              thumbPopoverSide="none"
+              value={high}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniBarsIcon() {
+  return (
+    <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
+      <rect fill="currentColor" height="7.5" rx="0.9" width="3.2" x="3.3" y="13.5" />
+      <rect fill="currentColor" height="11" rx="0.9" width="3.2" x="9.1" y="10" />
+      <rect fill="currentColor" height="15" rx="0.9" width="3.2" x="14.9" y="6" />
+    </svg>
   );
 }
 
@@ -525,6 +621,7 @@ function ChromeButton({
 
 function VerticalFader({
   label,
+  labelPosition = "top",
   mode,
   max,
   min,
@@ -532,9 +629,11 @@ function VerticalFader({
   onChange,
   thumbPopoverSize = "regular",
   thumbPopoverSide = "none",
+  readOnly = false,
   value
 }: {
   label: string;
+  labelPosition?: "top" | "bottom";
   mode: "volume" | "pitch";
   max: number;
   min: number;
@@ -542,6 +641,7 @@ function VerticalFader({
   onChange: (value: number) => void;
   thumbPopoverSize?: "compact" | "regular" | "large";
   thumbPopoverSide?: "none" | "left" | "right";
+  readOnly?: boolean;
   value: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -591,13 +691,18 @@ function VerticalFader({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col items-center rounded-xl bg-black/10 px-2 py-3">
-      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/65">
-        {label}
-      </div>
+      {labelPosition === "top" ? (
+        <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/65">
+          {label}
+        </div>
+      ) : null}
       <div
         ref={containerRef}
         className="relative min-h-0 w-[34px] flex-1 touch-none"
         onPointerDown={(event) => {
+          if (readOnly) {
+            return;
+          }
           if (!containerRef.current) {
             return;
           }
@@ -619,6 +724,9 @@ function VerticalFader({
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
         onPointerMove={(event) => {
+          if (readOnly) {
+            return;
+          }
           if (!isDraggingFromThumb || !containerRef.current) {
             return;
           }
@@ -632,6 +740,9 @@ function VerticalFader({
           }
         }}
         onPointerUp={(event) => {
+          if (readOnly) {
+            return;
+          }
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
@@ -645,6 +756,9 @@ function VerticalFader({
           }
         }}
         onPointerCancel={() => {
+          if (readOnly) {
+            return;
+          }
           setIsDraggingFromThumb(false);
           onInteractionChange?.(false);
           setIsThumbPopoverVisible(false);
@@ -654,6 +768,9 @@ function VerticalFader({
           }
         }}
         onClick={(event) => {
+          if (readOnly) {
+            return;
+          }
           if (!containerRef.current || thumbPopoverSide === "none") {
             return;
           }
@@ -717,6 +834,11 @@ function VerticalFader({
           </div>
         ) : null}
       </div>
+      {labelPosition === "bottom" ? (
+        <div className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/55">
+          {label}
+        </div>
+      ) : null}
     </div>
   );
 }

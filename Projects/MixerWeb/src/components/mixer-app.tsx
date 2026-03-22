@@ -9,6 +9,7 @@ export function MixerApp() {
   const capabilities = useMixerStore((state) => state.capabilities);
   const micState = useMixerStore((state) => state.microphoneState);
   const toggleMicrophone = useMixerStore((state) => state.toggleMicrophone);
+  const [isEqMode, setIsEqMode] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -35,15 +36,18 @@ export function MixerApp() {
           <RailButton
             icon={<BarsIcon />}
             label="levels"
-            tone="active"
+            onClick={() => {
+              setIsEqMode((value) => !value);
+            }}
+            tone={isEqMode ? "active" : "inactive"}
             className="mb-2 mt-auto"
           />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <section className="grid flex-1 gap-3 xl:grid-cols-2">
-            <DeckPanel deckId="left" />
-            <DeckPanel deckId="right" />
+            <DeckPanel deckId="left" eqActive={isEqMode} />
+            <DeckPanel deckId="right" eqActive={isEqMode} />
           </section>
         </div>
       </section>
