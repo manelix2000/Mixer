@@ -27,7 +27,7 @@ export function detectBrowserAudioCapabilities(): AudioCapabilityReport {
     supported: hasAudioContext,
     microphoneSupported,
     message: hasAudioContext
-      ? "Use modern desktop Chrome, Edge, or Safari for the best latency."
+      ? ""
       : "This browser does not expose the Web Audio primitives required by MixerWeb."
   };
 }

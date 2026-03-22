@@ -293,13 +293,15 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
           </div>
 
           <div className="relative flex w-full min-w-0 justify-self-stretch items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-1">
-            <PlatterView
-              angleDegrees={deck.platterDegrees}
-              artworkDataUrl={deck.artworkDataUrl}
-              onPressureBendEnd={endPressureBend}
-              onPressureBendMove={updatePressureBend}
-              onPressureBendStart={beginPressureBend}
-            />
+            <div className="flex h-full w-full items-center justify-center p-4">
+              <PlatterView
+                angleDegrees={deck.platterDegrees}
+                artworkDataUrl={deck.artworkDataUrl}
+                onPressureBendEnd={endPressureBend}
+                onPressureBendMove={updatePressureBend}
+                onPressureBendStart={beginPressureBend}
+              />
+            </div>
             {deck.statusMessage ? (
               <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/50 px-2.5 py-1 text-[10px] font-semibold text-black/70 backdrop-blur">
                 {deck.statusMessage}

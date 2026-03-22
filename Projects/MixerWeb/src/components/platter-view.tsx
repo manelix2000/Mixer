@@ -97,7 +97,7 @@ export function PlatterView({
   return (
     <div
       ref={rootRef}
-      className="relative aspect-square w-full max-w-[420px] touch-none select-none rounded-full border border-black/20 bg-[#090d11] shadow-platter"
+      className="relative aspect-square w-full max-h-full max-w-full touch-none select-none rounded-full border border-black/20 bg-[#090d11] shadow-platter"
       onPointerDown={(event) => {
         const direction = resolvePressureDirection(event);
         if (!direction) {
@@ -149,43 +149,49 @@ export function PlatterView({
       <div className="absolute inset-[2.9%] rounded-full border border-[#5a5a5a] bg-black" />
       <div className="absolute inset-[5.2%] rounded-full border border-[#1b1b1b] bg-[radial-gradient(circle,_#151515_0%,_#070707_76%,_#030303_100%)]" />
 
-      <svg
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-[3.8%] z-10"
-        style={ringStyle}
-        viewBox="0 0 100 100"
-      >
-        <circle
-          cx="50"
-          cy="50"
-          fill="none"
-          r="48"
-          stroke="rgba(236,236,236,0.62)"
-          strokeDasharray="0.1 3.6"
-          strokeLinecap="round"
-          strokeWidth="1.45"
-        />
-        <circle
-          cx="50"
-          cy="50"
-          fill="none"
-          r="46.2"
-          stroke="rgba(195,195,195,0.55)"
-          strokeDasharray="0.1 4.8"
-          strokeLinecap="round"
-          strokeWidth="1.9"
-        />
-        <circle
-          cx="50"
-          cy="50"
-          fill="none"
-          r="44.4"
-          stroke="rgba(216,216,216,0.56)"
-          strokeDasharray="0.1 3.9"
-          strokeLinecap="round"
-          strokeWidth="1.35"
-        />
-      </svg>
+      <div className="pointer-events-none absolute inset-[3.8%] z-10">
+        <svg
+          aria-hidden="true"
+          className="h-full w-full"
+          style={{
+            ...ringStyle,
+            transformBox: "fill-box",
+            transformOrigin: "center"
+          }}
+          viewBox="0 0 100 100"
+        >
+          <circle
+            cx="50"
+            cy="50"
+            fill="none"
+            r="48"
+            stroke="rgba(236,236,236,0.62)"
+            strokeDasharray="0.1 3.6"
+            strokeLinecap="round"
+            strokeWidth="1.45"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            fill="none"
+            r="46.2"
+            stroke="rgba(195,195,195,0.55)"
+            strokeDasharray="0.1 4.8"
+            strokeLinecap="round"
+            strokeWidth="1.9"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            fill="none"
+            r="44.4"
+            stroke="rgba(216,216,216,0.56)"
+            strokeDasharray="0.1 3.9"
+            strokeLinecap="round"
+            strokeWidth="1.35"
+          />
+        </svg>
+      </div>
 
       <div className="absolute inset-[12%] rounded-full border border-white/10 bg-[#07090b]" />
       <div
