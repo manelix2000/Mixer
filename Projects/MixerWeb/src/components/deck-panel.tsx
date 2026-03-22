@@ -129,8 +129,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
               onChange={(value) => {
                 void setDeckVolume(deckId, value);
               }}
-              thumbPopoverSize="large"
-              thumbPopoverSide="right"
+              thumbPopoverSide="none"
               value={deck.volume}
             />
           </div>
@@ -394,8 +393,10 @@ function VerticalFader({
   const thumbCenterY = thumbY + (thumbSize * 0.5);
   const baselineValue = mode === "pitch" ? 1.0 : min;
   const baselineProgress = normalizedProgress(baselineValue, min, max);
-  const selectedHeight = Math.max(Math.abs(valueProgress - baselineProgress) * height, 2);
-  const selectedMidpoint = (valueProgress + baselineProgress) * 0.5;
+  const valueY = (1.0 - valueProgress) * height;
+  const baselineY = (1.0 - baselineProgress) * height;
+  const selectedTop = Math.min(valueY, baselineY);
+  const selectedHeight = Math.max(Math.abs(valueY - baselineY), 2);
   const thumbText =
     mode === "volume"
       ? `${Math.round(value * 100)}%`
@@ -504,12 +505,12 @@ function VerticalFader({
         }}
         role="presentation"
       >
-        <div className="absolute left-1/2 top-0 h-full w-[10px] -translate-x-1/2 rounded-full border border-black/25 bg-[#dce6f0]" />
+        <div className="absolute left-1/2 top-0 h-full w-[10px] -translate-x-1/2 rounded-full border border-black/20 bg-[linear-gradient(180deg,_#eceff1_0%,_#c8ced3_100%)]" />
         <div
-          className="absolute left-1/2 w-[10px] -translate-x-1/2 rounded-full bg-sky-400/36"
+          className="absolute left-1/2 w-[10px] -translate-x-1/2 rounded-full bg-sky-400/35"
           style={{
             height: `${selectedHeight}px`,
-            top: `${(0.5 - selectedMidpoint) * height + (height * 0.5) - (selectedHeight * 0.5)}px`
+            top: `${selectedTop}px`
           }}
         />
         <div className="absolute left-1/2 top-1/2 h-px w-[20px] -translate-x-1/2 -translate-y-1/2 bg-black/35" />
