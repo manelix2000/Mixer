@@ -6,3 +6,8 @@ Modules/Waveform/Waveform.xcodeproj/xcuserdata
 Projects/MixerApp/MixerApp.xcodeproj/xcuserdata
 Mixer.xcworkspace/xcuserdata
 AppStore/*
+Projects/MixerWeb/node_modules
+Projects/MixerWeb/.pnpm-store
+Projects/MixerWeb/.next
+Projects/MixerWeb/packages/*/node_modules
+Projects/MixerWeb/tsconfig.tsbuildinfo
