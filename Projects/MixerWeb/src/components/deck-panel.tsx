@@ -46,6 +46,8 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
   const targetBpmText = detectedBpm ? (detectedBpm * deck.rate).toFixed(1) : "--.-";
   const pitchMinRate = 1 - (pitchSensitivityPercent / 100);
   const pitchMaxRate = 1 + (pitchSensitivityPercent / 100);
+  const absolutePitchMinRate = 0.84;
+  const absolutePitchMaxRate = 1.16;
   const micOverlayText = micState.isRunning
     ? (micState.bpmText !== "-- BPM" ? `Listening to MIC... ${micState.bpmText}` : "Listening to MIC...")
     : null;
@@ -95,6 +97,9 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
   }, [eqActive]);
 
   useEffect(() => {
+    if (pressureBendRef.current.active) {
+      return;
+    }
     const clamped = Math.min(Math.max(deck.rate, pitchMinRate), pitchMaxRate);
     if (Math.abs(clamped - deck.rate) > 0.0001) {
       void setDeckRate(deckId, clamped);
@@ -116,7 +121,10 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
         ? Math.max(1.0 - (pressureCurve * 0.9), 0.08)
         : Math.min(1.0 + (pressureCurve * 0.9), 1.92);
 
-    const adjustedRate = Math.min(Math.max(interaction.startRate * multiplier, pitchMinRate), pitchMaxRate);
+    const adjustedRate = Math.min(
+      Math.max(interaction.startRate * multiplier, absolutePitchMinRate),
+      absolutePitchMaxRate
+    );
     void setDeckRate(deckId, adjustedRate);
     interaction.rafId = window.requestAnimationFrame(applyPressureBendFrame);
   };
@@ -133,7 +141,10 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
     interaction.startRate = deck.rate;
     interaction.startTimestampMs = performance.now();
 
-    const tapNudgeRate = Math.min(Math.max(deck.rate + (direction * 0.01), pitchMinRate), pitchMaxRate);
+    const tapNudgeRate = Math.min(
+      Math.max(deck.rate + (direction * 0.01), absolutePitchMinRate),
+      absolutePitchMaxRate
+    );
     void setDeckRate(deckId, tapNudgeRate);
 
     interaction.rafId = window.requestAnimationFrame(applyPressureBendFrame);
