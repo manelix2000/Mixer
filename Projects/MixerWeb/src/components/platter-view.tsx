@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type PlatterViewProps = {
   angleDegrees: number;
@@ -17,6 +17,7 @@ export function PlatterView({
 }: PlatterViewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  const [platterSize, setPlatterSize] = useState(420);
 
   const ringStyle = useMemo(
     () => ({
@@ -24,6 +25,28 @@ export function PlatterView({
     }),
     [angleDegrees]
   );
+  const techniksFontSize = Math.max(28, Math.round(platterSize * 0.128));
+
+  useEffect(() => {
+    if (!rootRef.current || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const element = rootRef.current;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      const size = Math.min(entry.contentRect.width, entry.contentRect.height);
+      if (size > 0) {
+        setPlatterSize(size);
+      }
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
@@ -59,8 +82,42 @@ export function PlatterView({
       <div className="absolute inset-[2.9%] rounded-full border border-[#5a5a5a] bg-black" />
       <div className="absolute inset-[5.2%] rounded-full border border-[#1b1b1b] bg-[radial-gradient(circle,_#151515_0%,_#070707_76%,_#030303_100%)]" />
 
-      <div className="absolute inset-[6.4%] rounded-full border-[8px] border-transparent bg-[radial-gradient(circle,_transparent_58%,_rgba(255,255,255,0.02)_59%,_transparent_61%),repeating-conic-gradient(rgba(230,230,230,0.62)_0_1.2deg,rgba(0,0,0,0)_1.2deg_6deg)] [mask:radial-gradient(circle,transparent_57%,black_58%,black_70%,transparent_71%)]" />
-      <div className="absolute inset-[9.5%] rounded-full border-[6px] border-transparent bg-[repeating-conic-gradient(rgba(212,212,212,0.58)_0_1deg,rgba(0,0,0,0)_1deg_5.4deg)] [mask:radial-gradient(circle,transparent_66%,black_67%,black_77%,transparent_78%)]" />
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-[3.8%] z-10"
+        viewBox="0 0 100 100"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          fill="none"
+          r="48"
+          stroke="rgba(236,236,236,0.62)"
+          strokeDasharray="0.1 3.6"
+          strokeLinecap="round"
+          strokeWidth="1.45"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          fill="none"
+          r="46.2"
+          stroke="rgba(195,195,195,0.55)"
+          strokeDasharray="0.1 4.8"
+          strokeLinecap="round"
+          strokeWidth="1.9"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          fill="none"
+          r="44.4"
+          stroke="rgba(216,216,216,0.56)"
+          strokeDasharray="0.1 3.9"
+          strokeLinecap="round"
+          strokeWidth="1.35"
+        />
+      </svg>
 
       <div className="absolute inset-[12%] rounded-full border border-white/10 bg-[#07090b]" />
       <div
@@ -79,10 +136,16 @@ export function PlatterView({
         <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/80" />
       </div>
 
-      <div className="absolute inset-x-0 top-[22%] z-20 text-center text-[15%] font-bold italic tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+      <div
+        className="absolute inset-x-0 top-[22%] z-20 text-center font-bold tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+        style={{ fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif", fontSize: techniksFontSize }}
+      >
         Techniks
       </div>
-      <div className="absolute inset-x-0 bottom-[19%] z-20 rotate-180 text-center text-[15%] font-bold italic tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]">
+      <div
+        className="absolute inset-x-0 bottom-[19%] z-20 rotate-180 text-center font-bold tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+        style={{ fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif", fontSize: techniksFontSize }}
+      >
         Techniks
       </div>
 
