@@ -158,6 +158,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             <div className="absolute bottom-3 left-3">
               <ChromeButton
                 disabled={!deck.isLoaded}
+                glowState={deck.isPlaying ? "playing" : (deck.isLoaded ? "ready" : "none")}
                 onClick={() => {
                   void toggleDeckPlayback(deckId);
                 }}
@@ -167,6 +168,7 @@ export function DeckPanel({ deckId }: DeckPanelProps) {
             <div className="absolute bottom-3 right-3">
               <ChromeButton
                 disabled={!deck.isLoaded}
+                glowState="none"
                 onClick={() => {
                   void stopDeck(deckId);
                 }}
@@ -332,16 +334,25 @@ function panRoutingText(pan: number): string {
 
 function ChromeButton({
   disabled,
+  glowState = "none",
   onClick,
   text
 }: {
   disabled?: boolean;
+  glowState?: "none" | "ready" | "playing";
   onClick: () => void;
   text: string;
 }) {
+  const glowClass =
+    glowState === "playing"
+      ? "mixer-glow-playing"
+      : glowState === "ready"
+        ? "mixer-glow-ready"
+        : "";
+
   return (
     <button
-      className="min-w-[76px] rounded-sm border border-black/40 bg-[linear-gradient(180deg,_#f6f2de_0%,_#d5d1bf_100%)] px-3 py-1.5 text-[10px] font-bold tracking-[0.22em] text-black/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_0_0_2px_rgba(215,180,55,0.12)] disabled:opacity-40"
+      className={`min-w-[76px] rounded-sm border border-black/40 bg-[linear-gradient(180deg,_#f6f2de_0%,_#d5d1bf_100%)] px-3 py-1.5 text-[10px] font-bold tracking-[0.22em] text-black/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_0_0_2px_rgba(215,180,55,0.12)] disabled:opacity-40 ${glowClass}`}
       disabled={disabled}
       onClick={onClick}
       type="button"

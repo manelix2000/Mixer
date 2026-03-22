@@ -25,6 +25,13 @@ export function PlatterView({
     }),
     [angleDegrees]
   );
+  const centerAnchoredRotationStyle = useMemo(
+    () => ({
+      transform: `rotate(${angleDegrees}deg)`,
+      transformOrigin: "50% 50%"
+    }),
+    [angleDegrees]
+  );
   const techniksFontSize = Math.max(28, Math.round(platterSize * 0.128));
 
   useEffect(() => {
@@ -85,6 +92,7 @@ export function PlatterView({
       <svg
         aria-hidden="true"
         className="pointer-events-none absolute inset-[3.8%] z-10"
+        style={ringStyle}
         viewBox="0 0 100 100"
       >
         <circle
@@ -136,17 +144,25 @@ export function PlatterView({
         <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/80" />
       </div>
 
-      <div
-        className="absolute inset-x-0 top-[22%] z-20 text-center font-bold tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
-        style={{ fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif", fontSize: techniksFontSize }}
-      >
-        Techniks
-      </div>
-      <div
-        className="absolute inset-x-0 bottom-[19%] z-20 rotate-180 text-center font-bold tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
-        style={{ fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif", fontSize: techniksFontSize }}
-      >
-        Techniks
+      <div className="absolute inset-0 z-20" style={centerAnchoredRotationStyle}>
+        <div
+          className="absolute inset-x-0 top-[22%] text-center font-bold tracking-tight text-[#6d7c96]/92 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+          style={{
+            fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
+            fontSize: techniksFontSize
+          }}
+        >
+          Techniks
+        </div>
+        <div
+          className="absolute inset-x-0 bottom-[19%] rotate-180 text-center font-bold tracking-tight text-[#6d7c96]/80 [text-shadow:0_1px_0_rgba(0,0,0,0.35)]"
+          style={{
+            fontFamily: "MicrogrammaDExtendedBold, 'Arial Black', sans-serif",
+            fontSize: techniksFontSize
+          }}
+        >
+          Techniks
+        </div>
       </div>
 
       <div className="absolute right-[5.6%] top-[4.6%] z-30 h-[16.5%] w-[16.5%] rounded-full border border-black/35 bg-[radial-gradient(circle_at_36%_28%,_#dfe4ea_0%,_#98a1ab_38%,_#5d6570_72%,_#4f5761_100%)] shadow-[0_8px_16px_rgba(0,0,0,0.28)]" />
