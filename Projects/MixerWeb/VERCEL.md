@@ -152,7 +152,7 @@ After deploying:
 - `CONTACT_TO_EMAIL`  
   Destination inbox (example: `support@yourdomain.com`).
 - `CONTACT_FROM_EMAIL`  
-  Verified sender in Resend (example: `DJcompanion <noreply@yourdomain.com>`).
+  Verified sender in Resend (example: `DJcompanion <hi@djcompanion.app>`).
 - `RESEND_API_KEY`  
   Your Resend API key.
 
