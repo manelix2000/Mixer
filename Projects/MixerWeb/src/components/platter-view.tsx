@@ -34,7 +34,7 @@ export function PlatterView({
     }),
     [angleDegrees]
   );
-  const techniksFontSize = Math.max(28, Math.round(platterSize * 0.128));
+  const techniksFontSize = Math.round(platterSize * 0.128);
 
   useEffect(() => {
     if (!rootRef.current || typeof ResizeObserver === "undefined") {

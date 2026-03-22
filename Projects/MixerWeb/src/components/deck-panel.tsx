@@ -277,8 +277,8 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
       </div>
 
       <div className="relative h-full min-h-0 rounded-xl bg-[linear-gradient(180deg,_#d8dde0_0%,_#9aa1a7_45%,_#848b92_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_22px_40px_rgba(0,0,0,0.35)]">
-        <div className="grid h-full min-h-0 items-stretch gap-2 lg:grid-cols-[max-content_minmax(0,1fr)_max-content]">
-          <div className="flex h-full min-h-0 w-fit justify-self-start flex-row gap-3 lg:flex-col lg:items-start">
+        <div className="grid h-full min-h-0 grid-cols-[minmax(56px,72px)_minmax(0,1fr)_minmax(72px,92px)] items-stretch gap-1">
+          <div className="flex h-full min-h-0 w-fit justify-self-start items-start">
             <VerticalFader
               label="VOL"
               mode="volume"
@@ -292,7 +292,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
             />
           </div>
 
-          <div className="relative flex w-full min-w-0 justify-self-stretch items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-2">
+          <div className="relative flex w-full min-w-0 justify-self-stretch items-center justify-center rounded-xl border border-black/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.1),_rgba(0,0,0,0.04))] p-1">
             <PlatterView
               angleDegrees={deck.platterDegrees}
               artworkDataUrl={deck.artworkDataUrl}
@@ -333,7 +333,7 @@ export function DeckPanel({ deckId, eqActive = false }: DeckPanelProps) {
             </div>
           </div>
 
-          <div className="flex h-full min-h-0 w-fit justify-self-end flex-row gap-3 lg:flex-col lg:items-end">
+          <div className="flex h-full min-h-0 w-fit justify-self-end items-end">
             <div className="flex h-full min-h-0 flex-col items-center">
               <VerticalFader
                 label="PITCH"

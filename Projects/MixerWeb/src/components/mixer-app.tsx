@@ -45,7 +45,7 @@ export function MixerApp() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <section className="grid flex-1 gap-3 xl:grid-cols-2">
+          <section className="grid flex-1 min-h-0 grid-cols-2 gap-2 md:gap-3">
             <DeckPanel deckId="left" eqActive={isEqMode} />
             <DeckPanel deckId="right" eqActive={isEqMode} />
           </section>
