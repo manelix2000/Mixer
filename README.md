@@ -1,7 +1,7 @@
 # Amateur Deejay Companion
 
 ## Description
-Mixer (`dev.manelix.Mixer`) is an **amateur DJ companion app** for iOS focused on training your ear, practicing timing, and learning BPM matching basics.
+DJcompanion is an **amateur DJ companion app** for iOS focused on training your ear, practicing timing, and learning BPM matching basics.
 
 It is intentionally **not a professional mixer app** and should be used for learning and practice, not for live/club performance workflows.
 
