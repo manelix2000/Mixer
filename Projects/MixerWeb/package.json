@@ -15,6 +15,7 @@
     "@mixer/audio-core": "workspace:*",
     "@mixer/domain": "workspace:*",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/postgres": "^0.10.0",
     "@vercel/speed-insights": "^2.0.0",
     "botid": "^1.5.11",
     "next": "16.2.1",

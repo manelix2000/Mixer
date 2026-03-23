@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { NewsletterSignup } from "@/components/newsletter-signup";
 
 export const metadata: Metadata = {
   title: "DJcompanion | Beat Matching Trainer for Browser, iOS and Android",
@@ -198,6 +199,8 @@ export default function LandingPage() {
             ))}
           </div>
         </section>
+
+        <NewsletterSignup />
 
         <footer className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-white/12 pt-6 text-sm text-[#afbdd4]">
           <p>© 2026 DJcompanion</p>

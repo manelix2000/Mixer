@@ -106,6 +106,7 @@ After setup:
    - `/faq`
    - `/contact`
    - `/privacy`
+   - newsletter form on `/` submits successfully
 
 ---
 
@@ -152,7 +153,7 @@ After deploying:
 - `CONTACT_TO_EMAIL`  
   Destination inbox (example: `support@yourdomain.com`).
 - `CONTACT_FROM_EMAIL`  
-  Verified sender in Resend (example: `DJcompanion <hi@djcompanion.app>`).
+  Verified sender in Resend (example: `DJcompanion <contact@yourdomain.com>`).
 - `RESEND_API_KEY`  
   Your Resend API key.
 
@@ -174,3 +175,52 @@ After deploying:
   - too-fast submit check
   - per-IP rate limit (windowed)
 - If mail env vars are missing, `/api/contact` responds with `503` to prevent fake success.
+
+---
+
+## 9. Newsletter Subscribe (Vercel Function + Postgres)
+
+Newsletter subscriptions are handled by:
+
+- `POST /api/newsletter/subscribe`
+- BotID client + server protection
+- server-side anti-abuse checks (honeypot, submit-time gate, in-memory IP rate limit)
+- Vercel Postgres storage table `newsletter_subscriptions`
+
+### Required Setup
+
+1. In Vercel dashboard, add the **Postgres / Neon** storage integration to this project.
+2. Redeploy so database environment variables are injected.
+3. Ensure BotID is enabled (same setup as contact endpoint).
+
+### Database Behavior
+
+The endpoint creates this table if missing:
+
+```sql
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'subscribed',
+  source TEXT NOT NULL DEFAULT 'website',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Insert behavior:
+
+- New email -> inserted with `status='subscribed'`
+- Existing email -> upsert updates `status='subscribed'` and `updated_at`
+
+### Environment Variables
+
+When Postgres integration is connected, Vercel provides Postgres variables automatically.
+`@vercel/postgres` uses the injected connection URL at runtime.
+
+### Verification Checklist
+
+1. Open home page (`/`) and submit the newsletter form above footer.
+2. Expect success response from `/api/newsletter/subscribe`.
+3. In Vercel logs, check no bot blocks for normal traffic.
+4. Verify row appears in `newsletter_subscriptions`.
