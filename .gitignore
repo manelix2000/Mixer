@@ -11,3 +11,10 @@ Projects/MixerWeb/.pnpm-store
 Projects/MixerWeb/.next
 Projects/MixerWeb/packages/*/node_modules
 Projects/MixerWeb/tsconfig.tsbuildinfo
+Projects/MixerAndroid/app/build
+Projects/MixerAndroid/core/audio/build
+Projects/MixerAndroid/core/common/build
+Projects/MixerAndroid/core/dsp/build
+Projects/MixerAndroid/core/ui/build
+Projects/MixerAndroid/core/waveform/build
+Projects/MixerAndroid/feature/deck/build

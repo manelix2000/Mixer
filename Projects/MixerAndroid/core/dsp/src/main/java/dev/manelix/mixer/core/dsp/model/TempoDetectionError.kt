@@ -1,0 +1,11 @@
+package dev.manelix.mixer.core.dsp.model
+
+enum class TempoDetectionError {
+    EMPTY_INPUT,
+    INVALID_SAMPLE_RATE,
+    INVALID_CHANNEL_COUNT,
+    INVALID_CONFIGURATION,
+    BACKEND_UNAVAILABLE,
+    NATIVE_INITIALIZATION_FAILED,
+    NATIVE_PROCESSING_FAILED,
+}
