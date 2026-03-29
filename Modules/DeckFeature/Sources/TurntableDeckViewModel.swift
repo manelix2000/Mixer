@@ -953,7 +953,7 @@ public final class TurntableDeckViewModel: ObservableObject {
         waveformLoadID = loadID
         isWaveformLoading = true
         waveformText = "Loading waveform..."
-        let sampleCount = 4096
+        let sampleCount = 4096*4
 
         waveformLoadTask = Task { [waveformAnalyzer] in
             let result = await Task.detached(priority: .userInitiated) {

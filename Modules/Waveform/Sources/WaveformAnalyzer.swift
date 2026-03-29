@@ -60,7 +60,7 @@ public struct WaveformAnalyzer: WaveformAnalyzing, Sendable {
         let totalFrames = max(Int(file.length), 1)
         let framesPerBucket = max(Int(ceil(Double(totalFrames) / Double(sampleCount))), 1)
 
-        let chunkSize: AVAudioFrameCount = 4096
+        let chunkSize: AVAudioFrameCount = 4096*4
         guard let buffer = AVAudioPCMBuffer(pcmFormat: readFormat, frameCapacity: chunkSize) else {
             throw WaveformAnalyzerError.unsupportedAudioBuffer
         }
