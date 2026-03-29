@@ -9,6 +9,7 @@ import dev.manelix.mixer.core.audio.AudioEngineRoutingProvider
 import dev.manelix.mixer.core.audio.SkeletonAudioEngineController
 import dev.manelix.mixer.core.common.model.AudioEngineMode
 import dev.manelix.mixer.core.common.model.AudioPlaybackState
+import dev.manelix.mixer.core.common.model.CueMixMode
 import dev.manelix.mixer.core.common.model.SplitDeckLayout
 import dev.manelix.mixer.core.waveform.ProceduralWaveformAnalyzer
 import dev.manelix.mixer.core.waveform.WaveformAnalyzer
@@ -55,6 +56,7 @@ class DeckViewModel : ViewModel() {
         private const val WAVEFORM_POINTS_PER_REVOLUTION = 60.0
         private const val MIN_WAVEFORM_POINTS_PER_REVOLUTION = 20.0
         private const val PLATTER_POINTS_PER_REVOLUTION = 120.0
+        private val ALLOWED_PITCH_SENSITIVITY_PERCENTS = listOf(2, 4, 8, 16)
     }
 
     private val leftEngine: AudioEngineController = SkeletonAudioEngineController()
@@ -133,7 +135,22 @@ class DeckViewModel : ViewModel() {
 
     fun setAudioEngineMode(mode: AudioEngineMode) {
         _screenState.update { state ->
-            state.copy(root = state.root.copy(selectedAudioEngineMode = mode))
+            val updatedRoot = if (mode == AudioEngineMode.SPLIT) {
+                state.root.copy(
+                    selectedAudioEngineMode = mode,
+                    isLeftDeckCueEnabled = true,
+                    isRightDeckCueEnabled = true,
+                    cueMixMode = CueMixMode.BLEND,
+                )
+            } else {
+                state.root.copy(
+                    selectedAudioEngineMode = mode,
+                    isLeftDeckCueEnabled = false,
+                    isRightDeckCueEnabled = false,
+                    cueMixMode = CueMixMode.MASTER,
+                )
+            }
+            state.copy(root = updatedRoot)
         }
     }
 
@@ -203,9 +220,58 @@ class DeckViewModel : ViewModel() {
 
     fun setRightDeckPitchOffset(offset: Double) = setDeckPitchOffset(isLeft = false, offset = offset)
 
+    fun increaseLeftDeckPitchSensitivity() = adjustDeckPitchSensitivity(isLeft = true, increase = true)
+
+    fun decreaseLeftDeckPitchSensitivity() = adjustDeckPitchSensitivity(isLeft = true, increase = false)
+
+    fun increaseRightDeckPitchSensitivity() = adjustDeckPitchSensitivity(isLeft = false, increase = true)
+
+    fun decreaseRightDeckPitchSensitivity() = adjustDeckPitchSensitivity(isLeft = false, increase = false)
+
     fun setLeftDeckPan(value: Double) = setDeckPan(isLeft = true, value = value)
 
     fun setRightDeckPan(value: Double) = setDeckPan(isLeft = false, value = value)
+
+    fun toggleLeftDeckCue() {
+        _screenState.update { state ->
+            state.copy(root = state.root.copy(isLeftDeckCueEnabled = !state.root.isLeftDeckCueEnabled))
+        }
+    }
+
+    fun toggleRightDeckCue() {
+        _screenState.update { state ->
+            state.copy(root = state.root.copy(isRightDeckCueEnabled = !state.root.isRightDeckCueEnabled))
+        }
+    }
+
+    fun setCueMixFromFader(value: Double) {
+        val mode = when {
+            value <= -0.33 -> CueMixMode.CUE
+            value >= 0.33 -> CueMixMode.MASTER
+            else -> CueMixMode.BLEND
+        }
+        _screenState.update { state ->
+            state.copy(root = state.root.copy(cueMixMode = mode))
+        }
+    }
+
+    fun setCueLevelPercent(value: Int) {
+        _screenState.update { state ->
+            state.copy(root = state.root.copy(cueLevelPercent = value.coerceIn(0, 100)))
+        }
+    }
+
+    fun setLeftDeckEqualizerLow(value: Double) = setDeckEqualizerBand(isLeft = true, band = EqBand.LOW, value = value)
+
+    fun setLeftDeckEqualizerMid(value: Double) = setDeckEqualizerBand(isLeft = true, band = EqBand.MID, value = value)
+
+    fun setLeftDeckEqualizerHigh(value: Double) = setDeckEqualizerBand(isLeft = true, band = EqBand.HIGH, value = value)
+
+    fun setRightDeckEqualizerLow(value: Double) = setDeckEqualizerBand(isLeft = false, band = EqBand.LOW, value = value)
+
+    fun setRightDeckEqualizerMid(value: Double) = setDeckEqualizerBand(isLeft = false, band = EqBand.MID, value = value)
+
+    fun setRightDeckEqualizerHigh(value: Double) = setDeckEqualizerBand(isLeft = false, band = EqBand.HIGH, value = value)
 
     override fun onCleared() {
         leftWaveformJob?.cancel()
@@ -397,6 +463,44 @@ class DeckViewModel : ViewModel() {
         engineForDeck(isLeft).setPlaybackRate((target / original).toFloat())
     }
 
+    private fun adjustDeckPitchSensitivity(
+        isLeft: Boolean,
+        increase: Boolean,
+    ) {
+        updateDeckState(isLeft) { deck ->
+            val currentIndex = ALLOWED_PITCH_SENSITIVITY_PERCENTS.indexOf(deck.pitchSensitivityPercent).let { index ->
+                if (index >= 0) index else ALLOWED_PITCH_SENSITIVITY_PERCENTS.indexOf(8).coerceAtLeast(0)
+            }
+            val nextIndex = if (increase) {
+                (currentIndex + 1).coerceAtMost(ALLOWED_PITCH_SENSITIVITY_PERCENTS.lastIndex)
+            } else {
+                (currentIndex - 1).coerceAtLeast(0)
+            }
+            val nextSensitivity = ALLOWED_PITCH_SENSITIVITY_PERCENTS[nextIndex]
+            val nextPitchLimit = nextSensitivity / 100.0
+            val clampedTarget = if (deck.originalBpm > 0.0) {
+                val currentOffset = ((deck.targetBpm / deck.originalBpm) - 1.0).coerceIn(-nextPitchLimit, nextPitchLimit)
+                deck.originalBpm * (1.0 + currentOffset)
+            } else {
+                deck.targetBpm
+            }
+            deck.copy(
+                pitchSensitivityPercent = nextSensitivity,
+                targetBpm = clampedTarget,
+            )
+        }
+
+        val deck = currentDeckState(isLeft)
+        val original = if (deck.originalBpm > 0.0) deck.originalBpm else 120.0
+        val playbackRate = (deck.targetBpm / original).coerceIn(0.5, 2.0)
+        engineForDeck(isLeft).setPlaybackRate(playbackRate.toFloat())
+        updateDeckState(isLeft) {
+            it.copy(
+                bpmText = String.format("BPM %.1f | %.3fx", it.targetBpm, it.targetBpm / original),
+            )
+        }
+    }
+
     private fun setDeckPan(
         isLeft: Boolean,
         value: Double,
@@ -405,6 +509,21 @@ class DeckViewModel : ViewModel() {
         val clamped = deck.panControlRange.clamp(value)
         engineForDeck(isLeft).setPan(clamped.toFloat())
         updateDeckState(isLeft) { it.copy(pan = clamped) }
+    }
+
+    private fun setDeckEqualizerBand(
+        isLeft: Boolean,
+        band: EqBand,
+        value: Double,
+    ) {
+        val clamped = value.coerceIn(0.0, 1.0)
+        updateDeckState(isLeft) { deck ->
+            when (band) {
+                EqBand.LOW -> deck.copy(equalizerLow = clamped)
+                EqBand.MID -> deck.copy(equalizerMid = clamped)
+                EqBand.HIGH -> deck.copy(equalizerHigh = clamped)
+            }
+        }
     }
 
     private fun setDeckWaveformZoom(
@@ -438,6 +557,12 @@ class DeckViewModel : ViewModel() {
                 current.copy(playbackStatusText = statusForError(result.exceptionOrNull(), "Seek unavailable"))
             }
         }
+    }
+
+    private enum class EqBand {
+        LOW,
+        MID,
+        HIGH,
     }
 
     private fun beginDeckScratch(isLeft: Boolean) {

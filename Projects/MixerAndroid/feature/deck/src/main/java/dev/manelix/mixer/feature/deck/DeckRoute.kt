@@ -1,6 +1,9 @@
 package dev.manelix.mixer.feature.deck
 
 import android.os.Build
+import android.media.MediaMetadataRetriever
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -14,6 +17,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -25,18 +30,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -60,7 +67,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -68,22 +74,41 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -92,7 +117,9 @@ import dev.manelix.mixer.core.common.model.PanControlRange
 import dev.manelix.mixer.core.common.model.SplitDeckLayout
 import dev.manelix.mixer.core.ui.WaveformView
 import dev.manelix.mixer.feature.deck.model.DeckUiState
+import dev.manelix.mixer.feature.deck.model.hasSelectedTrack
 import dev.manelix.mixer.feature.deck.model.isPlaybackActive
+import kotlin.math.abs
 
 @Composable
 fun DeckRoute(
@@ -176,21 +203,44 @@ fun DeckRoute(
                     if (rootState.selectedAudioEngineMode == AudioEngineMode.SPLIT) {
                         SplitCueControlsCard(
                             showsRightDeck = isTablet || screenState.isRightDeckVisible,
+                            leftTrackUri = screenState.leftDeck.selectedTrackUri,
+                            rightTrackUri = screenState.rightDeck.selectedTrackUri,
+                            leftRole = screenState.leftDeck.splitDeckRole,
+                            rightRole = screenState.rightDeck.splitDeckRole,
+                            isLeftDeckCueEnabled = rootState.isLeftDeckCueEnabled,
+                            isRightDeckCueEnabled = rootState.isRightDeckCueEnabled,
+                            cueMixValue = cueMixModeToValue(rootState.cueMixMode),
                             cueMixCode = rootState.cueMixMode.shortCode,
                             cueLevelPercent = rootState.cueLevelPercent,
+                            onToggleLeftCue = viewModel::toggleLeftDeckCue,
+                            onToggleRightCue = viewModel::toggleRightDeckCue,
+                            onCueMixChange = viewModel::setCueMixFromFader,
+                            onCueLevelChange = viewModel::setCueLevelPercent,
                         )
                     } else {
-                        StandardPanControlsCard(
-                            showsRightDeck = isTablet || screenState.isRightDeckVisible,
-                            leftPan = screenState.leftDeck.pan,
-                            rightPan = screenState.rightDeck.pan,
-                            leftRange = screenState.leftDeck.panControlRange,
-                            rightRange = screenState.rightDeck.panControlRange,
-                            leftRoleBadge = null,
-                            rightRoleBadge = null,
-                            onLeftPanChange = viewModel::setLeftDeckPan,
-                            onRightPanChange = viewModel::setRightDeckPan,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            StandardPanControlsCard(
+                                pan = screenState.leftDeck.pan,
+                                range = screenState.leftDeck.panControlRange,
+                                roleBadge = null,
+                                artworkTrackUri = screenState.leftDeck.selectedTrackUri,
+                                onPanChange = viewModel::setLeftDeckPan,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (isTablet || screenState.isRightDeckVisible) {
+                                StandardPanControlsCard(
+                                    pan = screenState.rightDeck.pan,
+                                    range = screenState.rightDeck.panControlRange,
+                                    roleBadge = null,
+                                    artworkTrackUri = screenState.rightDeck.selectedTrackUri,
+                                    onPanChange = viewModel::setRightDeckPan,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -221,6 +271,7 @@ fun DeckRoute(
                         DeckSurface(
                             title = "Deck A",
                             trackName = screenState.leftDeck.selectedTrackName,
+                            selectedTrackUri = screenState.leftDeck.selectedTrackUri,
                             playbackTimeText = screenState.leftDeck.playbackTimeText,
                             waveformText = screenState.leftDeck.waveformText,
                             waveformData = screenState.leftDeck.waveformData,
@@ -230,6 +281,7 @@ fun DeckRoute(
                             playbackStatusText = screenState.leftDeck.playbackStatusText,
                             isPlaying = screenState.leftDeck.isPlaybackActive,
                             bpmText = screenState.leftDeck.bpmText,
+                            targetBpm = screenState.leftDeck.targetBpm,
                             showExternalBpmBadge = true,
                             externalBpmBadgeText = micBadgeText(rootState),
                             showEqualizerOverlay = screenState.isEqualizerVisible,
@@ -251,17 +303,27 @@ fun DeckRoute(
                             onEndPlatterScratch = viewModel::endLeftDeckPlatterScratch,
                             onStartPause = viewModel::togglePlayPauseLeftDeck,
                             onStop = viewModel::stopLeftDeck,
+                            hasSelectedTrack = screenState.leftDeck.hasSelectedTrack,
                             volume = screenState.leftDeck.volume,
                             onVolumeChange = viewModel::setLeftDeckVolume,
                             pitchOffset = pitchOffset(screenState.leftDeck.targetBpm, screenState.leftDeck.originalBpm),
                             pitchSensitivityPercent = screenState.leftDeck.pitchSensitivityPercent,
                             onPitchOffsetChange = viewModel::setLeftDeckPitchOffset,
+                            onIncreasePitchSensitivity = viewModel::increaseLeftDeckPitchSensitivity,
+                            onDecreasePitchSensitivity = viewModel::decreaseLeftDeckPitchSensitivity,
+                            eqLow = screenState.leftDeck.equalizerLow,
+                            eqMid = screenState.leftDeck.equalizerMid,
+                            eqHigh = screenState.leftDeck.equalizerHigh,
+                            onEqLowChange = viewModel::setLeftDeckEqualizerLow,
+                            onEqMidChange = viewModel::setLeftDeckEqualizerMid,
+                            onEqHighChange = viewModel::setLeftDeckEqualizerHigh,
                         )
 
                         if (isTablet || screenState.isRightDeckVisible) {
                             DeckSurface(
                                 title = "Deck B",
                                 trackName = screenState.rightDeck.selectedTrackName,
+                                selectedTrackUri = screenState.rightDeck.selectedTrackUri,
                                 playbackTimeText = screenState.rightDeck.playbackTimeText,
                                 waveformText = screenState.rightDeck.waveformText,
                                 waveformData = screenState.rightDeck.waveformData,
@@ -271,6 +333,7 @@ fun DeckRoute(
                                 playbackStatusText = screenState.rightDeck.playbackStatusText,
                                 isPlaying = screenState.rightDeck.isPlaybackActive,
                                 bpmText = screenState.rightDeck.bpmText,
+                                targetBpm = screenState.rightDeck.targetBpm,
                                 showExternalBpmBadge = false,
                                 externalBpmBadgeText = null,
                                 showEqualizerOverlay = screenState.isEqualizerVisible,
@@ -292,11 +355,20 @@ fun DeckRoute(
                                 onEndPlatterScratch = viewModel::endRightDeckPlatterScratch,
                                 onStartPause = viewModel::togglePlayPauseRightDeck,
                                 onStop = viewModel::stopRightDeck,
+                                hasSelectedTrack = screenState.rightDeck.hasSelectedTrack,
                                 volume = screenState.rightDeck.volume,
                                 onVolumeChange = viewModel::setRightDeckVolume,
                                 pitchOffset = pitchOffset(screenState.rightDeck.targetBpm, screenState.rightDeck.originalBpm),
                                 pitchSensitivityPercent = screenState.rightDeck.pitchSensitivityPercent,
                                 onPitchOffsetChange = viewModel::setRightDeckPitchOffset,
+                                onIncreasePitchSensitivity = viewModel::increaseRightDeckPitchSensitivity,
+                                onDecreasePitchSensitivity = viewModel::decreaseRightDeckPitchSensitivity,
+                                eqLow = screenState.rightDeck.equalizerLow,
+                                eqMid = screenState.rightDeck.equalizerMid,
+                                eqHigh = screenState.rightDeck.equalizerHigh,
+                                onEqLowChange = viewModel::setRightDeckEqualizerLow,
+                                onEqMidChange = viewModel::setRightDeckEqualizerMid,
+                                onEqHighChange = viewModel::setRightDeckEqualizerHigh,
                             )
                         }
                     }
@@ -512,42 +584,27 @@ private fun EqBar(height: androidx.compose.ui.unit.Dp) {
 
 @Composable
 private fun StandardPanControlsCard(
-    showsRightDeck: Boolean,
-    leftPan: Double,
-    rightPan: Double,
-    leftRange: PanControlRange,
-    rightRange: PanControlRange,
-    leftRoleBadge: String?,
-    rightRoleBadge: String?,
-    onLeftPanChange: (Double) -> Unit,
-    onRightPanChange: (Double) -> Unit,
+    pan: Double,
+    range: PanControlRange,
+    roleBadge: String?,
+    artworkTrackUri: String?,
+    onPanChange: (Double) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Row(
+        PanCard(
+            pan = pan,
+            range = range,
+            roleBadge = roleBadge,
+            artworkTrackUri = artworkTrackUri,
+            onPanChange = onPanChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            PanCard(
-                pan = leftPan,
-                range = leftRange,
-                roleBadge = leftRoleBadge,
-                onPanChange = onLeftPanChange,
-                modifier = Modifier.weight(1f),
-            )
-            if (showsRightDeck) {
-                PanCard(
-                    pan = rightPan,
-                    range = rightRange,
-                    roleBadge = rightRoleBadge,
-                    onPanChange = onRightPanChange,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        )
     }
 }
 
@@ -556,6 +613,7 @@ private fun PanCard(
     pan: Double,
     range: PanControlRange,
     roleBadge: String?,
+    artworkTrackUri: String?,
     onPanChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -570,7 +628,7 @@ private fun PanCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ArtworkBadge(roleBadge = roleBadge)
+            ArtworkBadge(roleBadge = roleBadge, artworkTrackUri = artworkTrackUri)
             HorizontalFader(
                 value = pan.toFloat(),
                 valueRange = range.lowerBound.toFloat()..range.upperBound.toFloat(),
@@ -585,42 +643,144 @@ private fun PanCard(
 @Composable
 private fun SplitCueControlsCard(
     showsRightDeck: Boolean,
+    leftTrackUri: String?,
+    rightTrackUri: String?,
+    leftRole: dev.manelix.mixer.core.common.model.SplitDeckRole?,
+    rightRole: dev.manelix.mixer.core.common.model.SplitDeckRole?,
+    isLeftDeckCueEnabled: Boolean,
+    isRightDeckCueEnabled: Boolean,
+    cueMixValue: Float,
     cueMixCode: String,
     cueLevelPercent: Int,
+    onToggleLeftCue: () -> Unit,
+    onToggleRightCue: () -> Unit,
+    onCueMixChange: (Double) -> Unit,
+    onCueLevelChange: (Int) -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CueBadge(deckName = "Deck A", modifier = Modifier.weight(1f))
-                if (showsRightDeck) {
-                    CueBadge(deckName = "Deck B", modifier = Modifier.weight(1f))
-                }
+            CueDeckButton(
+                title = splitCueDeckTitle(role = leftRole, fallback = "Master"),
+                isEnabled = isLeftDeckCueEnabled,
+                trackUri = leftTrackUri,
+                onClick = onToggleLeftCue,
+                modifier = Modifier.weight(1f),
+            )
+            if (showsRightDeck) {
+                CueDeckButton(
+                    title = splitCueDeckTitle(role = rightRole, fallback = "Cue Deck"),
+                    isEnabled = isRightDeckCueEnabled,
+                    trackUri = rightTrackUri,
+                    onClick = onToggleRightCue,
+                    modifier = Modifier.weight(1f),
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "Mix",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black.copy(alpha = 0.55f),
+                )
                 HorizontalFader(
-                    value = cueMixCodeToValue(cueMixCode),
+                    value = cueMixValue,
                     valueRange = -1f..1f,
                     thumbText = cueMixCode,
-                    onValueChange = {},
+                    onValueChange = { onCueMixChange(it.toDouble()) },
                     modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "Cue",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black.copy(alpha = 0.55f),
                 )
                 HorizontalFader(
                     value = cueLevelPercent.toFloat(),
                     valueRange = 0f..100f,
                     thumbText = "$cueLevelPercent%",
-                    onValueChange = {},
+                    onValueChange = { onCueLevelChange(it.toInt().coerceIn(0, 100)) },
                     modifier = Modifier.weight(1f),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun CueDeckButton(
+    title: String,
+    isEnabled: Boolean,
+    trackUri: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isEnabled) Color(0x240A84FF) else Color.Black.copy(alpha = 0.08f),
+            contentColor = Color.Black,
+        ),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ArtworkBadge(roleBadge = null, artworkTrackUri = trackUri)
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Start,
+            )
+            Surface(
+                color = if (isEnabled) Color(0xFF0A84FF) else Color.Gray.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Text(
+                    text = "CUE",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+private fun splitCueDeckTitle(
+    role: dev.manelix.mixer.core.common.model.SplitDeckRole?,
+    fallback: String,
+): String = when (role) {
+    dev.manelix.mixer.core.common.model.SplitDeckRole.MASTER -> "Master"
+    dev.manelix.mixer.core.common.model.SplitDeckRole.CUE -> "Cue Deck"
+    null -> fallback
 }
 
 @Composable
@@ -836,17 +996,34 @@ private fun RowScope.SegButton(
 
 @Composable
 private fun ArtworkBadge(roleBadge: String?) {
+    ArtworkBadge(roleBadge = roleBadge, artworkTrackUri = null)
+}
+
+@Composable
+private fun ArtworkBadge(
+    roleBadge: String?,
+    artworkTrackUri: String?,
+) {
+    val artworkBitmap = rememberTrackArtworkBitmap(artworkTrackUri)
     Box {
         Surface(
             shape = RoundedCornerShape(4.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
-            Icon(
-                imageVector = Icons.Filled.MusicNote,
-                contentDescription = null,
-                modifier = Modifier.padding(4.dp).size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (artworkBitmap != null) {
+                Image(
+                    bitmap = artworkBitmap,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.padding(4.dp).size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (!roleBadge.isNullOrBlank()) {
             Surface(
@@ -866,27 +1043,160 @@ private fun ArtworkBadge(roleBadge: String?) {
 }
 
 @Composable
-private fun VerticalFader(
+private fun VerticalPitchFader(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit,
     thumbText: String,
+    onValueChange: (Float) -> Unit,
+    isInverted: Boolean = false,
+    showPopoverOnLeft: Boolean = false,
+    onInteractionChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.width(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    val rangeSpan = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
+    val normalized = ((value - valueRange.start) / rangeSpan).coerceIn(0f, 1f)
+    val baselineNormalized = when {
+        valueRange.start <= 0f && valueRange.endInclusive >= 0f ->
+            ((0f - valueRange.start) / rangeSpan).coerceIn(0f, 1f)
+        valueRange.start >= 0f -> 0f
+        else -> 1f
+    }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragValueProgress by remember { mutableFloatStateOf(normalized) }
+    var trackHeightPx by remember { mutableFloatStateOf(1f) }
+    val thumbHeight = 26.dp
+    val thumbWidth = 34.dp
+    val density = LocalDensity.current
+    val thumbHeightPx = with(density) { thumbHeight.toPx() }
+    val usableHeightPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(1f)
+    val valueProgress = if (isDragging) dragValueProgress else normalized
+    val displayProgress = if (isInverted) 1f - valueProgress else valueProgress
+    val baselineDisplayProgress = if (isInverted) 1f - baselineNormalized else baselineNormalized
+    val selectedHeightFraction = abs(displayProgress - baselineDisplayProgress).coerceAtLeast(0.01f)
+    val selectedCenter = (displayProgress + baselineDisplayProgress) * 0.5f
+    val thumbCenterY = (1f - displayProgress) * usableHeightPx + (thumbHeightPx * 0.5f)
+
+    LaunchedEffect(normalized, isDragging) {
+        if (!isDragging) dragValueProgress = normalized
+    }
+
+    Box(
+        modifier = modifier
+            .width(52.dp)
+            .onSizeChanged { trackHeightPx = it.height.toFloat() }
+            .pointerInput(valueRange, isInverted, trackHeightPx) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val safeHeight = trackHeightPx.coerceAtLeast(1f)
+                        val clampedY = offset.y.coerceIn(0f, safeHeight)
+                        val startDisplayProgress = (1f - (clampedY / safeHeight)).coerceIn(0f, 1f)
+                        val startValueProgress = if (isInverted) 1f - startDisplayProgress else startDisplayProgress
+                        isDragging = true
+                        dragValueProgress = startValueProgress
+                        onValueChange(valueRange.start + (startValueProgress * rangeSpan))
+                        onInteractionChanged?.invoke(true)
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        onInteractionChanged?.invoke(false)
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        onInteractionChanged?.invoke(false)
+                    },
+                ) { _, dragAmount ->
+                    if (!isDragging) return@detectDragGestures
+                    val displayDelta = dragAmount.y / usableHeightPx
+                    val currentDisplayProgress = if (isInverted) 1f - dragValueProgress else dragValueProgress
+                    val updatedDisplayProgress = (currentDisplayProgress - displayDelta).coerceIn(0f, 1f)
+                    val updatedValueProgress = if (isInverted) 1f - updatedDisplayProgress else updatedDisplayProgress
+                    dragValueProgress = updatedValueProgress
+                    onValueChange(valueRange.start + (updatedValueProgress * rangeSpan))
+                }
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(thumbText, fontSize = 9.sp, maxLines = 1)
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .graphicsLayer { rotationZ = -90f },
+                .align(Alignment.Center)
+                .width(12.dp)
+                .fillMaxSize()
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color(0xFFE1E3E7))
+                .border(1.dp, Color.Black.copy(alpha = 0.2f), RoundedCornerShape(999.dp)),
         )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(12.dp)
+                .height(with(density) { (trackHeightPx * selectedHeightFraction).toDp() })
+                .offset(y = with(density) { ((0.5f - selectedCenter) * trackHeightPx).toDp() })
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color(0xFF8FB1DA)),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(20.dp)
+                .height(1.dp)
+                .background(Color.Black.copy(alpha = 0.35f)),
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = with(density) { (thumbCenterY - (thumbHeightPx * 0.5f)).toDp() })
+                .width(thumbWidth)
+                .height(thumbHeight),
+            shape = RoundedCornerShape(7.dp),
+            color = Color(0xFFF4F4F4),
+            tonalElevation = 2.dp,
+            shadowElevation = 2.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = thumbText,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black.copy(alpha = 0.86f),
+                )
+            }
+        }
+        if (showPopoverOnLeft && isDragging) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(x = (-90).dp, y = with(density) { (thumbCenterY - 23f).toDp() }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.requiredWidth(124.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF9F9F9),
+                    shadowElevation = 2.dp,
+                ) {
+                    Text(
+                        text = thumbText,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        color = Color.Black,
+                    )
+                }
+                Canvas(modifier = Modifier.size(width = 8.dp, height = 12.dp)) {
+                    drawPath(
+                        path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(0f, 0f)
+                            lineTo(size.width, size.height / 2f)
+                            lineTo(0f, size.height)
+                            close()
+                        },
+                        color = Color(0xFFF9F9F9),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -894,13 +1204,58 @@ private fun VerticalFader(
 private fun TechnicsButtonLabel(
     text: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
+    isStartButton: Boolean = false,
+    isPlaying: Boolean = false,
 ) {
-    OutlinedButton(
+    val transition = rememberInfiniteTransition(label = "startGlow")
+    val pulse by transition.animateFloat(
+        initialValue = 0.22f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 480, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "startGlowPulse",
+    )
+    val glowAlpha = when {
+        !enabled -> 0f
+        isStartButton && isPlaying -> 0.90f
+        isStartButton -> pulse
+        else -> 0f
+    }
+    Button(
         onClick = onClick,
-        modifier = Modifier.widthIn(min = 72.dp),
+        enabled = enabled,
+        modifier = Modifier
+            .widthIn(min = 72.dp)
+            .height(30.dp)
+            .shadow(
+                elevation = if (glowAlpha > 0f) 8.dp else 0.dp,
+                shape = RoundedCornerShape(2.dp),
+                ambientColor = Color(0xFFFFE56E).copy(alpha = glowAlpha),
+                spotColor = Color(0xFFFFE56E).copy(alpha = glowAlpha),
+            ),
         shape = RoundedCornerShape(2.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFFF3F3F3),
+            contentColor = Color.Black.copy(alpha = 0.92f),
+            disabledContainerColor = Color(0xFFE3E3E3),
+            disabledContentColor = Color.Black.copy(alpha = 0.4f),
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Black.copy(alpha = 0.9f)),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
     ) {
-        Text(text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = text,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.7.sp,
+            modifier = Modifier.graphicsLayer {
+                shadowElevation = if (glowAlpha > 0f) 6f else 0f
+            },
+            color = Color.Black.copy(alpha = 0.92f),
+        )
     }
 }
 
@@ -908,6 +1263,7 @@ private fun TechnicsButtonLabel(
 private fun DeckSurface(
     title: String,
     trackName: String?,
+    selectedTrackUri: String?,
     playbackTimeText: String,
     waveformText: String,
     waveformData: FloatArray,
@@ -917,6 +1273,7 @@ private fun DeckSurface(
     playbackStatusText: String,
     isPlaying: Boolean,
     bpmText: String,
+    targetBpm: Double,
     showExternalBpmBadge: Boolean,
     externalBpmBadgeText: String?,
     showEqualizerOverlay: Boolean,
@@ -934,13 +1291,23 @@ private fun DeckSurface(
     onEndPlatterScratch: () -> Unit,
     onStartPause: () -> Unit,
     onStop: () -> Unit,
+    hasSelectedTrack: Boolean,
     volume: Double,
     onVolumeChange: (Double) -> Unit,
     pitchOffset: Double,
     pitchSensitivityPercent: Int,
     onPitchOffsetChange: (Double) -> Unit,
+    onIncreasePitchSensitivity: () -> Unit,
+    onDecreasePitchSensitivity: () -> Unit,
+    eqLow: Double,
+    eqMid: Double,
+    eqHigh: Double,
+    onEqLowChange: (Double) -> Unit,
+    onEqMidChange: (Double) -> Unit,
+    onEqHighChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var isPitchAdjusting by remember { mutableStateOf(false) }
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -1073,6 +1440,24 @@ private fun DeckSurface(
                                 zoom = waveformZoom,
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            if (isPitchAdjusting) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .zIndex(3f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color(0xAA616161)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = String.format("%.1f BPM", if (targetBpm > 0.0) targetBpm else 120.0),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.White,
+                                    )
+                                }
+                            }
                             if (isWaveformLoading && waveformText.isNotBlank()) {
                                 Text(
                                     text = waveformText,
@@ -1083,37 +1468,39 @@ private fun DeckSurface(
                                         .padding(horizontal = 8.dp, vertical = 5.dp),
                                 )
                             }
-                            Button(
-                                onClick = { onSetWaveformZoom(waveformZoom + 0.25) },
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .padding(start = 8.dp)
-                                    .zIndex(2f)
-                                    .size(width = 46.dp, height = 40.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xCC191B20),
-                                    contentColor = Color.White,
-                                ),
-                                contentPadding = PaddingValues(0.dp),
-                            ) {
-                                Icon(Icons.Filled.ZoomIn, contentDescription = null, modifier = Modifier.size(23.dp))
-                            }
-                            Button(
-                                onClick = { onSetWaveformZoom(waveformZoom - 0.25) },
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 8.dp)
-                                    .zIndex(2f)
-                                    .size(width = 46.dp, height = 40.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xCC191B20),
-                                    contentColor = Color.White,
-                                ),
-                                contentPadding = PaddingValues(0.dp),
-                            ) {
-                                Icon(Icons.Filled.ZoomOut, contentDescription = null, modifier = Modifier.size(23.dp))
+                            if (!isPitchAdjusting) {
+                                Button(
+                                    onClick = { onSetWaveformZoom(waveformZoom + 0.25) },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 8.dp)
+                                        .zIndex(2f)
+                                        .size(width = 46.dp, height = 40.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xCC191B20),
+                                        contentColor = Color.White,
+                                    ),
+                                    contentPadding = PaddingValues(0.dp),
+                                ) {
+                                    Icon(Icons.Filled.ZoomIn, contentDescription = null, modifier = Modifier.size(23.dp))
+                                }
+                                Button(
+                                    onClick = { onSetWaveformZoom(waveformZoom - 0.25) },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 8.dp)
+                                        .zIndex(2f)
+                                        .size(width = 46.dp, height = 40.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xCC191B20),
+                                        contentColor = Color.White,
+                                    ),
+                                    contentPadding = PaddingValues(0.dp),
+                                ) {
+                                    Icon(Icons.Filled.ZoomOut, contentDescription = null, modifier = Modifier.size(23.dp))
+                                }
                             }
                         }
                     }
@@ -1144,64 +1531,109 @@ private fun DeckSurface(
                 }
             }
 
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF2D2D2D),
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(Color(0xFFD2D7DE), Color(0xFFB8BEC6), Color(0xFFA7ADB5)),
+                        ),
+                    )
+                    .border(1.dp, Color.Black.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                    .padding(8.dp),
             ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Box(
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val platterVerticalSize = (maxHeight - 8.dp).coerceAtLeast(120.dp)
+                    val platterWidthLimit = (maxWidth - 176.dp).coerceAtLeast(120.dp)
+                    val clampedPlatterSize = minOf(platterVerticalSize, platterWidthLimit)
+
+                    TurntablePlatter(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(190.dp)
-                            .graphicsLayer { rotationZ = platterRotationDegrees }
-                            .clip(CircleShape)
-                            .border(2.dp, Color(0xFFB8B8B8), CircleShape)
-                            .background(Color(0xFF161616))
+                            .size(clampedPlatterSize)
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
                             .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragStart = { onBeginPlatterScratch() },
                                     onDragEnd = { onEndPlatterScratch() },
                                     onDragCancel = { onEndPlatterScratch() },
                                 ) { _, dragAmount ->
-                                    onPlatterScratchDelta(
-                                        dragAmount.x.toDouble(),
-                                        dragAmount.y.toDouble(),
-                                    )
+                                    onPlatterScratchDelta(dragAmount.x.toDouble(), dragAmount.y.toDouble())
                                 }
                             },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("PLATTER", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                        platterRotationDegrees = platterRotationDegrees,
+                        isPlaying = isPlaying,
+                        artworkTrackUri = selectedTrackUri,
+                    )
+
+                    DecorativeTonearm(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(clampedPlatterSize),
+                    )
 
                     Row(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(12.dp),
+                            .fillMaxSize()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            VerticalFader(
+                        Column(
+                            modifier = Modifier.fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                        ) {
+                            VerticalPitchFader(
                                 value = volume.toFloat(),
                                 valueRange = 0f..1f,
-                                onValueChange = { onVolumeChange(it.toDouble()) },
                                 thumbText = "${(volume * 100.0).toInt()}%",
-                                modifier = Modifier.height(120.dp),
+                                onValueChange = { onVolumeChange(it.toDouble()) },
+                                modifier = Modifier
+                                    .weight(1f, fill = true)
+                                    .padding(top = 4.dp, bottom = 4.dp),
                             )
-                            TechnicsButtonLabel(text = if (isPlaying) "PAUSE" else "START", onClick = onStartPause)
+                            TechnicsButtonLabel(
+                                text = if (isPlaying) "PAUSE" else "START",
+                                onClick = onStartPause,
+                                enabled = hasSelectedTrack,
+                                isStartButton = true,
+                                isPlaying = isPlaying,
+                            )
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            VerticalFader(
+                        Column(
+                            modifier = Modifier.fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                        ) {
+                            VerticalPitchFader(
                                 value = pitchOffset.toFloat(),
                                 valueRange = (-(pitchSensitivityPercent / 100f))..(pitchSensitivityPercent / 100f),
-                                onValueChange = { onPitchOffsetChange(it.toDouble()) },
                                 thumbText = String.format("%+.1f%%", pitchOffset * 100.0),
-                                modifier = Modifier.height(120.dp),
+                                onValueChange = { onPitchOffsetChange(it.toDouble()) },
+                                isInverted = true,
+                                showPopoverOnLeft = true,
+                                onInteractionChanged = { isPitchAdjusting = it },
+                                modifier = Modifier
+                                    .weight(1f, fill = true)
+                                    .padding(top = 4.dp, bottom = 4.dp),
                             )
-                            TechnicsButtonLabel(text = "STOP", onClick = onStop)
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                TechnicsPitchSensitivityButton(text = "+", onClick = onIncreasePitchSensitivity)
+                                TechnicsPitchSensitivityButton(text = "-", onClick = onDecreasePitchSensitivity)
+                            }
+                            Text(
+                                text = "±${pitchSensitivityPercent}%",
+                                fontSize = 11.sp,
+                                color = Color.Black,
+                            )
+                            TechnicsButtonLabel(
+                                text = "STOP",
+                                onClick = onStop,
+                                enabled = hasSelectedTrack,
+                            )
                         }
                     }
 
@@ -1209,9 +1641,9 @@ private fun DeckSurface(
                         Surface(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .padding(top = 10.dp),
+                                .padding(top = 8.dp),
                             shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            color = Color.White.copy(alpha = 0.5f),
                         ) {
                             Text(
                                 text = externalBpmBadgeText,
@@ -1221,24 +1653,47 @@ private fun DeckSurface(
                         }
                     }
 
-                    if (showEqualizerOverlay) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showEqualizerOverlay,
+                        modifier = Modifier.matchParentSize(),
+                        enter = fadeIn(animationSpec = tween(durationMillis = 220)),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 220)),
+                    ) {
                         Surface(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .padding(8.dp),
+                            modifier = Modifier.matchParentSize(),
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                         ) {
                             Row(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp),
+                                    .fillMaxSize(),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Bottom,
                             ) {
-                                EqBand("LOW")
-                                EqBand("MID")
-                                EqBand("HIGH")
+                                EqFader(
+                                    label = "LOW",
+                                    value = eqLow,
+                                    onValueChange = onEqLowChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                                )
+                                EqFader(
+                                    label = "MID",
+                                    value = eqMid,
+                                    onValueChange = onEqMidChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                                )
+                                EqFader(
+                                    label = "HIGH",
+                                    value = eqHigh,
+                                    onValueChange = onEqHighChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                                )
                             }
                         }
                     }
@@ -1250,16 +1705,248 @@ private fun DeckSurface(
 }
 
 @Composable
-private fun EqBand(label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TechnicsPitchSensitivityButton(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.size(width = 28.dp, height = 22.dp),
+        shape = RoundedCornerShape(2.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFFF3F3F3),
+            contentColor = Color.Black,
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Black.copy(alpha = 0.9f)),
+        contentPadding = PaddingValues(0.dp),
+    ) {
+        Text(text = text, fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp)
+    }
+}
+
+@Composable
+private fun TurntablePlatter(
+    platterRotationDegrees: Float,
+    isPlaying: Boolean,
+    artworkTrackUri: String?,
+    modifier: Modifier = Modifier,
+) {
+    val techniksFontFamily = FontFamily(Font(R.font.microgramma_d_extended_bold))
+    val artworkBitmap = rememberTrackArtworkBitmap(artworkTrackUri)
+    BoxWithConstraints(
+        modifier = modifier
+            .aspectRatio(1f, matchHeightConstraintsFirst = true),
+    ) {
+        val platterDp = minOf(maxWidth, maxHeight)
+        val techniksFontSize = (platterDp.value * 0.11f).coerceIn(16f, 27f).sp
+        val techniksLineHeight = techniksFontSize
+
         Box(
             modifier = Modifier
-                .width(22.dp)
-                .height(96.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .fillMaxSize()
+                .graphicsLayer { rotationZ = platterRotationDegrees }
+                .clip(CircleShape)
+                .background(Color(0xFF050505))
+                .border(2.dp, Color(0xFF3D3D3D), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val radius = size.minDimension / 2f
+                val playingGlowAlpha = if (isPlaying) 0.16f else 0.08f
+
+                drawCircle(color = Color(0xFF090909), radius = radius)
+                drawCircle(color = Color(0xFF4E4E4E), radius = radius * 0.96f, style = Stroke(width = radius * 0.03f))
+                drawCircle(color = Color(0xFF101010), radius = radius * 0.91f, style = Stroke(width = radius * 0.06f))
+
+                val dottedStrokeOuter = Stroke(
+                    width = radius * 0.040f,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, radius * 0.06f), 0f),
+                )
+                val dottedStrokeMid = Stroke(
+                    width = radius * 0.028f,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, radius * 0.05f), 0f),
+                )
+                drawCircle(color = Color(0xFFB5B5B5), radius = radius * 0.87f, style = dottedStrokeOuter)
+                drawCircle(color = Color(0xFF868686), radius = radius * 0.80f, style = dottedStrokeMid)
+
+                for (index in 1..20) {
+                    val grooveRadius = radius * (0.12f + (index / 22f) * 0.62f)
+                    drawCircle(
+                        color = if (index % 2 == 0) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.04f),
+                        radius = grooveRadius,
+                        style = Stroke(width = 1f),
+                    )
+                }
+
+                drawCircle(color = Color(0xFF141C27), radius = radius * 0.27f)
+                drawCircle(color = Color.White.copy(alpha = 0.14f), radius = radius * 0.21f, style = Stroke(width = 1.2f))
+                drawCircle(color = Color(0xFFBFC3C8), radius = radius * 0.05f)
+
+                drawArc(
+                    color = Color.White.copy(alpha = playingGlowAlpha),
+                    startAngle = -30f,
+                    sweepAngle = 70f,
+                    useCenter = false,
+                    topLeft = Offset(radius * 0.18f, radius * 0.18f),
+                    size = Size(radius * 1.64f, radius * 1.64f),
+                    style = Stroke(width = radius * 0.12f),
+                )
+            }
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "Techniks",
+                    fontSize = techniksFontSize,
+                    lineHeight = techniksLineHeight,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = techniksFontFamily,
+                    letterSpacing = (-0.7).sp,
+                    color = Color(0xFF7E8FA5).copy(alpha = 0.78f),
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "Techniks",
+                    fontSize = techniksFontSize,
+                    lineHeight = techniksLineHeight,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = techniksFontFamily,
+                    letterSpacing = (-0.7).sp,
+                    color = Color(0xFF7E8FA5).copy(alpha = 0.60f),
+                    modifier = Modifier.graphicsLayer { rotationZ = 180f },
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            if (artworkBitmap != null) {
+                Surface(
+                    modifier = Modifier
+                        .size(platterDp * 0.78f)
+                        .clip(CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                ) {
+                    Image(
+                        bitmap = artworkBitmap,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberTrackArtworkBitmap(trackUri: String?): ImageBitmap? {
+    val context = LocalContext.current
+    val imageBitmap by produceState<ImageBitmap?>(initialValue = null, trackUri) {
+        value = null
+        if (trackUri.isNullOrBlank()) return@produceState
+        val parsedUri = runCatching { Uri.parse(trackUri) }.getOrNull() ?: return@produceState
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, parsedUri)
+            val embeddedBytes = retriever.embeddedPicture
+            if (embeddedBytes != null && embeddedBytes.isNotEmpty()) {
+                val bitmap = BitmapFactory.decodeByteArray(embeddedBytes, 0, embeddedBytes.size)
+                value = bitmap?.asImageBitmap()
+            }
+        } catch (_: Throwable) {
+            value = null
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+    return imageBitmap
+}
+
+@Composable
+private fun DecorativeTonearm(
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val unit = minOf(w, h)
+        val baseCenter = Offset(w * 0.80f, h * 0.16f)
+        val armStart = Offset(baseCenter.x + (unit * 0.03f), baseCenter.y + (unit * 0.02f))
+        val armEnd = Offset(w * 0.78f, h * 0.72f)
+
+        drawCircle(
+            color = Color(0xFFB7C0C9),
+            radius = unit * 0.11f,
+            center = baseCenter,
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        drawCircle(
+            color = Color(0xFF5C646D),
+            radius = unit * 0.082f,
+            center = baseCenter,
+            style = Stroke(width = unit * 0.018f),
+        )
+        drawCircle(
+            color = Color(0xFF1E2328),
+            radius = unit * 0.022f,
+            center = baseCenter,
+        )
+
+        drawLine(
+            color = Color(0xFFC7CED5),
+            start = armStart,
+            end = armEnd,
+            strokeWidth = unit * 0.020f,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = Color.Black.copy(alpha = 0.35f),
+            start = Offset(armStart.x + unit * 0.004f, armStart.y + unit * 0.004f),
+            end = Offset(armEnd.x + unit * 0.004f, armEnd.y + unit * 0.004f),
+            strokeWidth = unit * 0.009f,
+            cap = StrokeCap.Round,
+        )
+        drawRect(
+            color = Color(0xFFE8D84B),
+            topLeft = Offset(armEnd.x - (unit * 0.015f), armEnd.y - (unit * 0.015f)),
+            size = Size(unit * 0.026f, unit * 0.04f),
+        )
+    }
+}
+
+@Composable
+private fun EqFader(
+    label: String,
+    value: Double,
+    onValueChange: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Bottom,
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            VerticalPitchFader(
+                value = value.toFloat().coerceIn(0f, 1f),
+                valueRange = 0f..1f,
+                thumbText = "${(value.coerceIn(0.0, 1.0) * 100.0).toInt()}%",
+                onValueChange = { onValueChange(it.toDouble()) },
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(top = 4.dp, bottom = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
         Text(text = label, fontSize = 11.sp)
     }
 }
@@ -1274,6 +1961,12 @@ private fun cueMixCodeToValue(code: String): Float = when (code.uppercase()) {
     "C" -> -1f
     "M" -> 1f
     else -> 0f
+}
+
+private fun cueMixModeToValue(mode: dev.manelix.mixer.core.common.model.CueMixMode): Float = when (mode) {
+    dev.manelix.mixer.core.common.model.CueMixMode.CUE -> -1f
+    dev.manelix.mixer.core.common.model.CueMixMode.BLEND -> 0f
+    dev.manelix.mixer.core.common.model.CueMixMode.MASTER -> 1f
 }
 
 private fun pitchOffset(
