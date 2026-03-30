@@ -1,5 +1,6 @@
 package dev.manelix.mixer.feature.deck
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -71,8 +72,8 @@ class DeckViewModel : ViewModel() {
         private val ALLOWED_PITCH_SENSITIVITY_PERCENTS = listOf(2, 4, 8, 16)
     }
 
-    private val leftEngine: AudioEngineController = SkeletonAudioEngineController()
-    private val rightEngine: AudioEngineController = SkeletonAudioEngineController()
+    private var leftEngine: AudioEngineController = SkeletonAudioEngineController()
+    private var rightEngine: AudioEngineController = SkeletonAudioEngineController()
     private val waveformAnalyzer: WaveformAnalyzer = ProceduralWaveformAnalyzer()
     private val tempoDetector: TempoDetector = FallbackTempoDetector()
     private val microphoneBpmPipeline = MicrophoneBpmPipeline(detector = tempoDetector)
@@ -83,6 +84,7 @@ class DeckViewModel : ViewModel() {
     private var latestExternalBpm: Double? = null
     private val leftRuntime = DeckRuntime()
     private val rightRuntime = DeckRuntime()
+    private var hasBoundContextBackedEngines = false
 
     private val _screenState = MutableStateFlow(DeckScreenState())
     val screenState: StateFlow<DeckScreenState> = _screenState
@@ -98,7 +100,9 @@ class DeckViewModel : ViewModel() {
         isTablet: Boolean,
         restoredMode: AudioEngineMode? = null,
         restoredLayout: SplitDeckLayout? = null,
+        context: Context? = null,
     ) {
+        bindContextBackedEnginesIfNeeded(context)
         _screenState.update { current ->
             if (current.isInitializedForDevice) {
                 current
@@ -125,6 +129,22 @@ class DeckViewModel : ViewModel() {
                 isSettingsVisible = if (nextVisibility) state.isSettingsVisible else false,
             )
         }
+    }
+
+    private fun bindContextBackedEnginesIfNeeded(context: Context?) {
+        val appContext = context?.applicationContext ?: return
+        if (hasBoundContextBackedEngines) return
+        hasBoundContextBackedEngines = true
+
+        leftEngine.stopMicrophoneCapture()
+        rightEngine.stopMicrophoneCapture()
+        leftEngine.stopEngine()
+        rightEngine.stopEngine()
+
+        leftEngine = SkeletonAudioEngineController(appContext = appContext)
+        rightEngine = SkeletonAudioEngineController(appContext = appContext)
+        leftEngine.startEngine()
+        rightEngine.startEngine()
     }
 
     fun toggleSettings() {
@@ -348,6 +368,8 @@ class DeckViewModel : ViewModel() {
         uri: String,
     ) {
         val engine = engineForDeck(isLeft)
+        cancelScratchState(isLeft)
+        runtimeForDeck(isLeft).blockAutoplayUntilManualStart = true
         val trackName = extractTrackName(uri)
         updateDeckState(isLeft) { deck ->
             deck.copy(
@@ -371,6 +393,9 @@ class DeckViewModel : ViewModel() {
 
         val loadResult = engine.loadFile(uri)
         if (loadResult.isSuccess) {
+            // Loading a track must never auto-start playback.
+            engine.pause()
+            engine.seekTo(0.0)
             syncDeckFromEngine(isLeft)
             updateDeckState(isLeft) { deck ->
                 deck.copy(playbackStatusText = "")
@@ -392,6 +417,7 @@ class DeckViewModel : ViewModel() {
 
     private fun togglePlayPauseDeck(isLeft: Boolean) {
         val engine = engineForDeck(isLeft)
+        val runtime = runtimeForDeck(isLeft)
         val deckState = currentDeckState(isLeft)
         if (!deckState.hasSelectedTrack) {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
@@ -402,6 +428,7 @@ class DeckViewModel : ViewModel() {
             engine.pause()
             Result.success(Unit)
         } else {
+            runtime.blockAutoplayUntilManualStart = false
             engine.play()
         }
 
@@ -418,12 +445,14 @@ class DeckViewModel : ViewModel() {
 
     private fun stopDeck(isLeft: Boolean) {
         val engine = engineForDeck(isLeft)
+        val runtime = runtimeForDeck(isLeft)
         val deckState = currentDeckState(isLeft)
         if (!deckState.hasSelectedTrack) {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
             return
         }
 
+        cancelScratchState(isLeft)
         engine.pause()
         val seekResult = engine.seekTo(0.0)
         if (seekResult.isFailure) {
@@ -432,14 +461,43 @@ class DeckViewModel : ViewModel() {
             }
             return
         }
+        engine.pause()
+        runtime.blockAutoplayUntilManualStart = true
 
         syncDeckFromEngine(isLeft)
         updateDeckState(isLeft) { deck -> deck.copy(playbackStatusText = "Stopped") }
     }
 
+    private fun cancelScratchState(isLeft: Boolean) {
+        val runtime = runtimeForDeck(isLeft)
+        if (runtime.isScrubbing) {
+            engineForDeck(isLeft).endScratch(resumePlayback = false)
+        }
+        runtime.isScrubbing = false
+        runtime.wasPlayingBeforeScrub = false
+        runtime.lastScratchUpdateNanos = 0L
+        runtime.lastScratchCommitNanos = 0L
+        runtime.smoothedScratchAngularVelocity = 0.0
+        runtime.latestScratchAngularVelocity = 0.0
+        runtime.latestScratchDirection = 1.0
+        runtime.scratchMode = ScratchMode.SCRUB
+        updateDeckState(isLeft) { deck ->
+            deck.copy(scratchInteractionState = ScratchInteractionState.IDLE)
+        }
+    }
+
     private fun syncDeckFromEngine(isLeft: Boolean) {
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
+        val rawCurrentTime = engine.currentTimeSeconds
+        if (
+            runtime.blockAutoplayUntilManualStart &&
+            (engine.playbackState == AudioPlaybackState.PLAYING || rawCurrentTime > 0.01 || runtime.isScrubbing)
+        ) {
+            cancelScratchState(isLeft)
+            engine.pause()
+            engine.seekTo(0.0)
+        }
         stepTurntablePhysics(isLeft)
         val currentTime = engine.currentTimeSeconds
         val totalDuration = engine.totalDurationSeconds
@@ -1023,15 +1081,32 @@ class DeckViewModel : ViewModel() {
                     )
                 }
                 is BpmResult.Unavailable -> {
-                    updateDeckState(isLeft) { deck ->
-                        val original = deck.originalBpm
-                        val target = if (original > 0.0) original else 120.0
-                        deck.copy(
-                            isBpmLoading = false,
-                            bpmDetectionStatusText = "BPM detection unavailable (${result.reason}). Manual control active.",
-                            targetBpm = target,
-                            bpmText = formatDeckBpmText(target = target, original = target),
+                    val estimated = estimateBpmFromWaveform(waveform)
+                    if (estimated != null) {
+                        applyDetectedDeckBpm(
+                            isLeft = isLeft,
+                            bpm = estimated,
+                            confidence = 0.35,
                         )
+                        updateDeckState(isLeft) { deck ->
+                            deck.copy(
+                                bpmDetectionStatusText = String.format(
+                                    "Estimated %.1f BPM (fallback)",
+                                    estimated,
+                                ),
+                            )
+                        }
+                    } else {
+                        updateDeckState(isLeft) { deck ->
+                            val original = deck.originalBpm
+                            val target = if (original > 0.0) original else 120.0
+                            deck.copy(
+                                isBpmLoading = false,
+                                bpmDetectionStatusText = "BPM detection unavailable (${result.reason}). Manual control active.",
+                                targetBpm = target,
+                                bpmText = formatDeckBpmText(target = target, original = target),
+                            )
+                        }
                     }
                 }
             }
@@ -1097,6 +1172,7 @@ class DeckViewModel : ViewModel() {
         if (_screenState.value.root.isMicrophoneBpmDetectionActive) return
 
         microphoneBpmPipeline.reset()
+        latestExternalBpm = null
         _screenState.update { state ->
             state.copy(
                 root = state.root.copy(
@@ -1126,6 +1202,7 @@ class DeckViewModel : ViewModel() {
     private fun stopMicrophoneBpmDetection() {
         leftEngine.stopMicrophoneCapture()
         microphoneBpmPipeline.reset()
+        latestExternalBpm = null
         _screenState.update { state ->
             state.copy(
                 root = state.root.copy(
@@ -1140,13 +1217,20 @@ class DeckViewModel : ViewModel() {
     private fun handleMicrophoneBpmResult(result: BpmResult) {
         when (result) {
             is BpmResult.Detected -> {
+                if (latestExternalBpm != null) {
+                    return
+                }
                 val bpm = result.bpm.coerceIn(MIN_BPM, MAX_BPM)
                 latestExternalBpm = bpm
                 _screenState.update { state ->
                     state.copy(
                         root = state.root.copy(
                             externalBpmText = String.format("%.1f BPM", bpm),
-                            externalBpmStatusText = String.format("Mic BPM (acc. %.2f)", result.confidence),
+                            externalBpmStatusText = String.format(
+                                "Detected %.1f BPM (acc. %.2f)",
+                                bpm,
+                                result.confidence,
+                            ),
                             isExternalBpmLoading = false,
                         ),
                     )
@@ -1157,13 +1241,21 @@ class DeckViewModel : ViewModel() {
             }
             is BpmResult.Unavailable -> {
                 _screenState.update { state ->
-                    val keepLoading = state.root.externalBpmText == "-- BPM"
-                    state.copy(
-                        root = state.root.copy(
-                            externalBpmStatusText = "Listening... no stable tempo yet",
-                            isExternalBpmLoading = keepLoading,
-                        ),
-                    )
+                    val hasDetectedBpm = state.root.externalBpmText != "-- BPM"
+                    if (hasDetectedBpm) {
+                        state.copy(
+                            root = state.root.copy(
+                                isExternalBpmLoading = false,
+                            ),
+                        )
+                    } else {
+                        state.copy(
+                            root = state.root.copy(
+                                externalBpmStatusText = "Listening... no stable tempo yet",
+                                isExternalBpmLoading = true,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -1262,10 +1354,30 @@ class DeckViewModel : ViewModel() {
         return "%02d:%02d".format(minutes, remainingSeconds)
     }
 
+    private fun estimateBpmFromWaveform(waveform: FloatArray): Double? {
+        if (waveform.size < 32) return null
+        var peakCount = 0
+        var index = 1
+        while (index < waveform.lastIndex) {
+            val previous = waveform[index - 1]
+            val current = waveform[index]
+            val next = waveform[index + 1]
+            if (current > 0.72f && current > previous && current >= next) {
+                peakCount += 1
+            }
+            index += 1
+        }
+        if (peakCount <= 0) return null
+        val ratio = peakCount.toDouble() / waveform.size.toDouble()
+        val estimated = (60.0 + (ratio * 7800.0)).coerceIn(MIN_BPM, MAX_BPM)
+        return estimated
+    }
+
     private data class DeckRuntime(
         var physics: TurntablePhysicsState = TurntablePhysicsState(),
         var isScrubbing: Boolean = false,
         var wasPlayingBeforeScrub: Boolean = false,
+        var blockAutoplayUntilManualStart: Boolean = false,
         var scratchCurrentTime: Double = 0.0,
         var lastScratchUpdateNanos: Long = 0L,
         var lastScratchCommitNanos: Long = 0L,

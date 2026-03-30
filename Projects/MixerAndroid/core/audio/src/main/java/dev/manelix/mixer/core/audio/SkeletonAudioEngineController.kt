@@ -1,5 +1,9 @@
 package dev.manelix.mixer.core.audio
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.net.Uri
 import dev.manelix.mixer.core.audio.model.AudioEngineError
 import dev.manelix.mixer.core.audio.model.AudioPerformanceMetrics
 import dev.manelix.mixer.core.audio.model.MicrophoneCaptureFrame
@@ -18,6 +22,7 @@ import kotlin.concurrent.thread
  * Real decoding/output routing is added in later phases.
  */
 class SkeletonAudioEngineController(
+    private val appContext: Context? = null,
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val defaultDurationSeconds: Double = 180.0,
 ) : AudioEngineController, AudioEngineRoutingProvider, AudioEnginePerformanceProvider {
@@ -45,6 +50,7 @@ class SkeletonAudioEngineController(
     private var micCallbackLastNanos: Long = 0L
     private var playbackStartOffsetSeconds = 0.0
     private var playbackStartMonotonicNanos = 0L
+    private var mediaPlayer: MediaPlayer? = null
 
     override val isRunning: Boolean
         get() = stateLock.withLock { running }
@@ -86,6 +92,7 @@ class SkeletonAudioEngineController(
             if (!running) {
                 return
             }
+            mediaPlayer?.runCatching { pause() }
             lastKnownCurrentTimeSeconds = resolvedCurrentTimeLocked()
             running = false
             internalPlaybackState = if (loadedSourceUri == null) {
@@ -101,13 +108,33 @@ class SkeletonAudioEngineController(
             return failure(AudioEngineError.FileLoadFailed("Blank source URI"))
         }
 
+        val playerResult = prepareMediaPlayerLocked(sourceUri)
+        if (playerResult.isFailure) {
+            return failure(
+                AudioEngineError.FileLoadFailed(
+                    playerResult.exceptionOrNull()?.message ?: "Unable to load media source.",
+                ),
+            )
+        }
+
         loadedSourceUri = sourceUri
-        internalTotalDurationSeconds = max(1.0, defaultDurationSeconds)
+        playerResult.getOrNull()?.runCatching {
+            if (isPlaying) {
+                pause()
+            }
+            seekTo(0)
+        }
+        val resolvedDuration = playerResult.getOrNull()
+            ?.duration
+            ?.takeIf { it > 0 }
+            ?.let { it / 1000.0 }
+            ?: defaultDurationSeconds
+        internalTotalDurationSeconds = max(1.0, resolvedDuration)
         playbackStartOffsetSeconds = 0.0
         lastKnownCurrentTimeSeconds = 0.0
         isScratchModeActive = false
         scratchWasPlayingBeforeGesture = false
-        internalPlaybackState = AudioPlaybackState.FILE_LOADED
+        internalPlaybackState = AudioPlaybackState.PAUSED
         Result.success(Unit)
     }
 
@@ -117,6 +144,26 @@ class SkeletonAudioEngineController(
         }
 
         running = true
+        val player = mediaPlayer
+        if (player != null) {
+            if (internalTotalDurationSeconds > 0.0 && resolvedCurrentTimeLocked() >= internalTotalDurationSeconds - 0.01) {
+                runCatching { player.seekTo(0) }
+            }
+            val rateResult = runCatching {
+                val playbackParams = player.playbackParams
+                player.playbackParams = playbackParams.setSpeed(internalPlaybackRate)
+            }
+            if (rateResult.isFailure) {
+                return failure(AudioEngineError.StartFailed("Unable to set playback speed"))
+            }
+            val startResult = runCatching { player.start() }
+            if (startResult.isFailure) {
+                return failure(AudioEngineError.StartFailed("Unable to start playback"))
+            }
+            internalPlaybackState = AudioPlaybackState.PLAYING
+            return Result.success(Unit)
+        }
+
         val current = resolvedCurrentTimeLocked()
         if (internalTotalDurationSeconds > 0.0 && current >= internalTotalDurationSeconds - 0.01) {
             lastKnownCurrentTimeSeconds = 0.0
@@ -134,11 +181,11 @@ class SkeletonAudioEngineController(
                 return
             }
 
-            if (internalPlaybackState != AudioPlaybackState.PLAYING) {
-                internalPlaybackState = AudioPlaybackState.PAUSED
-                return
+            mediaPlayer?.runCatching {
+                if (isPlaying) {
+                    pause()
+                }
             }
-
             lastKnownCurrentTimeSeconds = resolvedCurrentTimeLocked()
             playbackStartOffsetSeconds = lastKnownCurrentTimeSeconds
             internalPlaybackState = AudioPlaybackState.PAUSED
@@ -152,6 +199,7 @@ class SkeletonAudioEngineController(
 
         val clamped = clampTime(timeSeconds)
         lastKnownCurrentTimeSeconds = clamped
+        mediaPlayer?.runCatching { seekTo((clamped * 1000.0).toInt()) }
         if (internalPlaybackState == AudioPlaybackState.PLAYING) {
             startPlaybackClockLocked(clamped)
         } else {
@@ -190,9 +238,12 @@ class SkeletonAudioEngineController(
         val clamped = clampTime(timeSeconds)
         lastKnownCurrentTimeSeconds = clamped
         playbackStartOffsetSeconds = clamped
+        mediaPlayer?.runCatching { seekTo((clamped * 1000.0).toInt()) }
         internalPlaybackState = if (angularVelocity == 0.0) {
+            mediaPlayer?.runCatching { pause() }
             AudioPlaybackState.PAUSED
         } else {
+            mediaPlayer?.runCatching { start() }
             startPlaybackClockLocked(clamped)
             AudioPlaybackState.PLAYING
         }
@@ -213,9 +264,11 @@ class SkeletonAudioEngineController(
         val shouldResume = resumePlayback && scratchWasPlayingBeforeGesture
         scratchWasPlayingBeforeGesture = false
         if (shouldResume) {
+            mediaPlayer?.runCatching { start() }
             startPlaybackClockLocked(finalTime)
             internalPlaybackState = AudioPlaybackState.PLAYING
         } else {
+            mediaPlayer?.runCatching { pause() }
             lastKnownCurrentTimeSeconds = finalTime
             playbackStartOffsetSeconds = finalTime
             internalPlaybackState = AudioPlaybackState.PAUSED
@@ -226,12 +279,14 @@ class SkeletonAudioEngineController(
     override fun setVolume(value: Float) {
         stateLock.withLock {
             internalVolume = clampVolume(value)
+            applyVolumeAndPanLocked()
         }
     }
 
     override fun setPan(value: Float) {
         stateLock.withLock {
             internalPan = clampPanForRange(value, internalPanControlRange)
+            applyVolumeAndPanLocked()
         }
     }
 
@@ -243,6 +298,7 @@ class SkeletonAudioEngineController(
             internalSplitDeckRole = role
             internalPanControlRange = panRange
             internalPan = clampPanForRange(internalPan, panRange)
+            applyVolumeAndPanLocked()
         }
     }
 
@@ -250,6 +306,12 @@ class SkeletonAudioEngineController(
         stateLock.withLock {
             val current = resolvedCurrentTimeLocked()
             internalPlaybackRate = clampPlaybackRate(value)
+            mediaPlayer?.let { player ->
+                runCatching {
+                    val playbackParams = player.playbackParams
+                    player.playbackParams = playbackParams.setSpeed(internalPlaybackRate)
+                }
+            }
             if (internalPlaybackState == AudioPlaybackState.PLAYING) {
                 startPlaybackClockLocked(current)
             } else {
@@ -377,6 +439,19 @@ class SkeletonAudioEngineController(
     }
 
     private fun resolvedCurrentTimeLocked(): Double {
+        val player = mediaPlayer
+        if (player != null) {
+            val position = runCatching { player.currentPosition / 1000.0 }
+                .getOrDefault(lastKnownCurrentTimeSeconds)
+            val duration = internalTotalDurationSeconds
+            val clamped = if (duration > 0.0) position.coerceIn(0.0, duration) else max(0.0, position)
+            if (duration > 0.0 && clamped >= duration - 0.01) {
+                internalPlaybackState = AudioPlaybackState.PAUSED
+            }
+            lastKnownCurrentTimeSeconds = clamped
+            return clamped
+        }
+
         val duration = internalTotalDurationSeconds
         if (internalPlaybackState != AudioPlaybackState.PLAYING || duration <= 0.0) {
             return clampTime(lastKnownCurrentTimeSeconds)
@@ -425,6 +500,46 @@ class SkeletonAudioEngineController(
     private fun clampPlaybackRate(value: Float): Float = min(max(value, 0.5f), 2.0f)
 
     private fun clampNormalizedEq(value: Float): Float = min(max(value, 0.0f), 1.0f)
+
+    private fun prepareMediaPlayerLocked(sourceUri: String): Result<MediaPlayer?> {
+        val context = appContext ?: return Result.success(null)
+        val createdPlayer = runCatching {
+            val player = MediaPlayer()
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build(),
+            )
+            player.setDataSource(context, Uri.parse(sourceUri))
+            player.isLooping = false
+            player.prepare()
+            player.setOnCompletionListener {
+                stateLock.withLock {
+                    internalPlaybackState = AudioPlaybackState.PAUSED
+                    lastKnownCurrentTimeSeconds = internalTotalDurationSeconds
+                    playbackStartOffsetSeconds = internalTotalDurationSeconds
+                }
+            }
+            player
+        }
+        if (createdPlayer.isFailure) {
+            return Result.failure(createdPlayer.exceptionOrNull() ?: IllegalStateException("Media load failed"))
+        }
+
+        mediaPlayer?.runCatching { release() }
+        mediaPlayer = createdPlayer.getOrNull()
+        applyVolumeAndPanLocked()
+        return Result.success(mediaPlayer)
+    }
+
+    private fun applyVolumeAndPanLocked() {
+        val player = mediaPlayer ?: return
+        val pan = internalPan.coerceIn(-1.0f, 1.0f)
+        val leftGain = internalVolume * if (pan > 0f) (1f - pan) else 1f
+        val rightGain = internalVolume * if (pan < 0f) (1f + pan) else 1f
+        runCatching { player.setVolume(leftGain.coerceIn(0f, 1f), rightGain.coerceIn(0f, 1f)) }
+    }
 }
 
 interface MonotonicClock {

@@ -16,6 +16,11 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -79,16 +84,12 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -175,6 +176,7 @@ fun DeckRoute(
             isTablet = isTablet,
             restoredMode = restoredAudioMode,
             restoredLayout = restoredSplitLayout,
+            context = context,
         )
     }
     val screenState by viewModel.screenState.collectAsStateWithLifecycle()
@@ -309,6 +311,7 @@ fun DeckRoute(
                             playbackStatusText = screenState.leftDeck.playbackStatusText,
                             isPlaying = screenState.leftDeck.isPlaybackActive,
                             bpmText = screenState.leftDeck.bpmText,
+                            bpmStatusText = screenState.leftDeck.bpmDetectionStatusText,
                             targetBpm = screenState.leftDeck.targetBpm,
                             showExternalBpmBadge = true,
                             externalBpmBadgeText = micBadgeText(rootState),
@@ -361,6 +364,7 @@ fun DeckRoute(
                                 playbackStatusText = screenState.rightDeck.playbackStatusText,
                                 isPlaying = screenState.rightDeck.isPlaybackActive,
                                 bpmText = screenState.rightDeck.bpmText,
+                                bpmStatusText = screenState.rightDeck.bpmDetectionStatusText,
                                 targetBpm = screenState.rightDeck.targetBpm,
                                 showExternalBpmBadge = false,
                                 externalBpmBadgeText = null,
@@ -1238,52 +1242,68 @@ private fun TechnicsButtonLabel(
 ) {
     val transition = rememberInfiniteTransition(label = "startGlow")
     val pulse by transition.animateFloat(
-        initialValue = 0.22f,
+        initialValue = 0.28f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 480, easing = LinearEasing),
+            animation = tween(durationMillis = 560, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "startGlowPulse",
     )
+    val isBlinkingReadyState = isStartButton && enabled && !isPlaying
+    val isSteadyPlayingState = isStartButton && enabled && isPlaying
     val glowAlpha = when {
         !enabled -> 0f
-        isStartButton && isPlaying -> 0.90f
-        isStartButton -> pulse
+        isSteadyPlayingState -> 0.82f
+        isBlinkingReadyState -> pulse
         else -> 0f
     }
-    Button(
-        onClick = onClick,
-        enabled = enabled,
+    Box(
         modifier = Modifier
             .widthIn(min = 72.dp)
-            .height(30.dp)
-            .shadow(
-                elevation = if (glowAlpha > 0f) 8.dp else 0.dp,
-                shape = RoundedCornerShape(2.dp),
-                ambientColor = Color(0xFFFFE56E).copy(alpha = glowAlpha),
-                spotColor = Color(0xFFFFE56E).copy(alpha = glowAlpha),
-            ),
-        shape = RoundedCornerShape(2.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFFF3F3F3),
-            contentColor = Color.Black.copy(alpha = 0.92f),
-            disabledContainerColor = Color(0xFFE3E3E3),
-            disabledContentColor = Color.Black.copy(alpha = 0.4f),
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Black.copy(alpha = 0.9f)),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+            .height(30.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.7.sp,
-            modifier = Modifier.graphicsLayer {
-                shadowElevation = if (glowAlpha > 0f) 6f else 0f
-            },
-            color = Color.Black.copy(alpha = 0.92f),
-        )
+        if (glowAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        scaleX = 1.14f
+                        scaleY = 1.24f
+                    }
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFFFFE26D).copy(alpha = glowAlpha * 0.62f))
+                    .blur(7.dp),
+            )
+        }
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .matchParentSize()
+                .shadow(
+                    elevation = 0.dp,
+                    shape = RoundedCornerShape(2.dp),
+                ),
+            shape = RoundedCornerShape(2.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF3F3F3),
+                contentColor = Color.Black.copy(alpha = 0.92f),
+                disabledContainerColor = Color(0xFFE3E3E3),
+                disabledContentColor = Color.Black.copy(alpha = 0.4f),
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.Black.copy(alpha = 0.9f)),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+        ) {
+            Text(
+                text = text,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.7.sp,
+                color = Color.Black.copy(alpha = 0.92f),
+            )
+        }
     }
 }
 
@@ -1301,6 +1321,7 @@ private fun DeckSurface(
     playbackStatusText: String,
     isPlaying: Boolean,
     bpmText: String,
+    bpmStatusText: String?,
     targetBpm: Double,
     showExternalBpmBadge: Boolean,
     externalBpmBadgeText: String?,
@@ -1336,6 +1357,12 @@ private fun DeckSurface(
     modifier: Modifier = Modifier,
 ) {
     var isPitchAdjusting by remember { mutableStateOf(false) }
+    var latchedDeckBpmStatus by remember(selectedTrackUri) { mutableStateOf<String?>(null) }
+    val currentDeckBpmStatus = bpmStatusText?.trim().orEmpty()
+    val isMicListeningLikeDeckStatus = currentDeckBpmStatus.startsWith("Listening", ignoreCase = true)
+    if (currentDeckBpmStatus.isNotBlank() && !isMicListeningLikeDeckStatus) {
+        latchedDeckBpmStatus = currentDeckBpmStatus
+    }
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -1540,16 +1567,22 @@ private fun DeckSurface(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (showExternalBpmBadge && !externalBpmBadgeText.isNullOrBlank()) {
+                        val rightStatusText = latchedDeckBpmStatus.orEmpty()
+                        val shouldShowRightStatus = rightStatusText.isNotBlank()
+                        if (shouldShowRightStatus) {
                             Text(
-                                text = externalBpmBadgeText,
+                                text = rightStatusText,
                                 fontSize = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                    if (playbackStatusText.isNotBlank() && !playbackStatusText.equals("Stopped", ignoreCase = true)) {
+                    if (
+                        playbackStatusText.isNotBlank() &&
+                        !playbackStatusText.equals("Stopped", ignoreCase = true) &&
+                        !playbackStatusText.equals("Scratching", ignoreCase = true)
+                    ) {
                         Text(
                             text = playbackStatusText,
                             fontSize = 12.sp,
@@ -1668,15 +1701,34 @@ private fun DeckSurface(
                     if (showExternalBpmBadge && !externalBpmBadgeText.isNullOrBlank()) {
                         Surface(
                             modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 8.dp),
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 8.dp),
                             shape = RoundedCornerShape(20.dp),
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = Color.White,
+                            shadowElevation = 3.dp,
                         ) {
                             Text(
                                 text = externalBpmBadgeText,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 fontSize = 11.sp,
+                                color = Color.Black,
+                            )
+                        }
+                    }
+                    if (playbackStatusText.equals("Scratching", ignoreCase = true)) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 8.dp, end = 8.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White,
+                            shadowElevation = 3.dp,
+                        ) {
+                            Text(
+                                text = "Scratching",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                fontSize = 11.sp,
+                                color = Color.Black,
                             )
                         }
                     }
@@ -2006,9 +2058,17 @@ private fun pitchOffset(
 }
 
 private fun micBadgeText(rootState: DeckUiState): String? {
-    return if (rootState.isMicrophoneBpmDetectionActive || rootState.isExternalBpmLoading) {
-        rootState.externalBpmStatusText.ifBlank { rootState.externalBpmText }
-    } else {
-        null
+    if (rootState.isMicrophoneBpmDetectionActive) {
+        val status = rootState.externalBpmStatusText.trim()
+        if (status.isNotBlank()) return status
+        val bpm = rootState.externalBpmText.trim()
+        if (bpm.isNotBlank() && bpm != "-- BPM") return "Detected $bpm"
+        return "Listening to MIC..."
     }
+    if (rootState.isExternalBpmLoading) {
+        val status = rootState.externalBpmStatusText.trim()
+        if (status.isNotBlank()) return status
+        return "Listening to MIC..."
+    }
+    return null
 }
