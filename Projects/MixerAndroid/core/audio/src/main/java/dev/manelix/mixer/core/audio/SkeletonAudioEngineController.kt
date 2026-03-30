@@ -1,6 +1,7 @@
 package dev.manelix.mixer.core.audio
 
 import dev.manelix.mixer.core.audio.model.AudioEngineError
+import dev.manelix.mixer.core.audio.model.AudioPerformanceMetrics
 import dev.manelix.mixer.core.audio.model.MicrophoneCaptureFrame
 import dev.manelix.mixer.core.common.model.AudioPlaybackState
 import dev.manelix.mixer.core.common.model.PanControlRange
@@ -19,7 +20,7 @@ import kotlin.concurrent.thread
 class SkeletonAudioEngineController(
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val defaultDurationSeconds: Double = 180.0,
-) : AudioEngineController, AudioEngineRoutingProvider {
+) : AudioEngineController, AudioEngineRoutingProvider, AudioEnginePerformanceProvider {
     private val stateLock = ReentrantLock()
 
     private var running = false
@@ -37,6 +38,11 @@ class SkeletonAudioEngineController(
     private var isMicCaptureRunning = false
     private var micCallback: ((MicrophoneCaptureFrame) -> Unit)? = null
     private var micSimulationThread: Thread? = null
+    private var micFramesProcessed: Long = 0L
+    private var micCallbacksOverBudget: Long = 0L
+    private var micCallbackTotalNanos: Long = 0L
+    private var micCallbackMaxNanos: Long = 0L
+    private var micCallbackLastNanos: Long = 0L
     private var playbackStartOffsetSeconds = 0.0
     private var playbackStartMonotonicNanos = 0L
 
@@ -272,6 +278,11 @@ class SkeletonAudioEngineController(
         running = true
         isMicCaptureRunning = true
         micCallback = onBuffer
+        micFramesProcessed = 0L
+        micCallbacksOverBudget = 0L
+        micCallbackTotalNanos = 0L
+        micCallbackMaxNanos = 0L
+        micCallbackLastNanos = 0L
         startMicSimulationLocked()
         Result.success(Unit)
     }
@@ -298,7 +309,15 @@ class SkeletonAudioEngineController(
             val sampleRate = 44_100.0
             val frameSize = 1_024
             val frameDurationMs = ((frameSize / sampleRate) * 1_000.0).toLong().coerceAtLeast(5L)
+            val frameBudgetNanos = (frameDurationMs * 1_000_000L).coerceAtLeast(1_000_000L)
             var sampleCursor = 0L
+            val frame = FloatArray(frameSize)
+            val reusableCaptureFrame = MicrophoneCaptureFrame(
+                samples = frame,
+                sampleRate = sampleRate,
+                channelCount = 1,
+                isInterleaved = false,
+            )
 
             while (true) {
                 val callback = stateLock.withLock {
@@ -311,7 +330,6 @@ class SkeletonAudioEngineController(
                     continue
                 }
 
-                val frame = FloatArray(frameSize)
                 val bpm = 124.0
                 val beatIntervalSamples = (sampleRate * 60.0 / bpm).toInt().coerceAtLeast(1)
                 for (index in frame.indices) {
@@ -326,18 +344,36 @@ class SkeletonAudioEngineController(
                 }
                 sampleCursor += frameSize
 
-                callback(
-                    MicrophoneCaptureFrame(
-                        samples = frame,
-                        sampleRate = sampleRate,
-                        channelCount = 1,
-                        isInterleaved = false,
-                    ),
-                )
+                val callbackStart = clock.nowMonotonicNanos()
+                callback(reusableCaptureFrame)
+                val callbackNanos = (clock.nowMonotonicNanos() - callbackStart).coerceAtLeast(0L)
+                stateLock.withLock {
+                    micFramesProcessed += 1L
+                    micCallbackLastNanos = callbackNanos
+                    micCallbackTotalNanos += callbackNanos
+                    if (callbackNanos > micCallbackMaxNanos) micCallbackMaxNanos = callbackNanos
+                    if (callbackNanos > frameBudgetNanos) micCallbacksOverBudget += 1L
+                }
 
                 Thread.sleep(frameDurationMs)
             }
         }
+    }
+
+    override fun snapshotPerformanceMetrics(): AudioPerformanceMetrics = stateLock.withLock {
+        val processed = micFramesProcessed
+        val averageMillis = if (processed > 0L) {
+            (micCallbackTotalNanos.toDouble() / processed.toDouble()) / 1_000_000.0
+        } else {
+            0.0
+        }
+        AudioPerformanceMetrics(
+            micFramesProcessed = processed,
+            micCallbacksOverBudget = micCallbacksOverBudget,
+            micCallbackAverageMillis = averageMillis,
+            micCallbackMaxMillis = micCallbackMaxNanos.toDouble() / 1_000_000.0,
+            micCallbackLastMillis = micCallbackLastNanos.toDouble() / 1_000_000.0,
+        )
     }
 
     private fun resolvedCurrentTimeLocked(): Double {

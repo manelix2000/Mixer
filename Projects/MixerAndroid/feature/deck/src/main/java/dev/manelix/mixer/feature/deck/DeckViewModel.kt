@@ -1333,7 +1333,7 @@ private class MicrophoneBpmPipeline(
     private var onResult: ((BpmResult) -> Unit)? = null
 
     private var sampleRate: Double? = null
-    private val samples = ArrayList<Float>(48_000)
+    private val samples = FloatRingBuffer(capacity = MAX_RING_CAPACITY_SAMPLES)
     private var isAnalysisInFlight = false
     private var lastAnalysisNanos: Long = 0L
 
@@ -1367,24 +1367,20 @@ private class MicrophoneBpmPipeline(
                 lastAnalysisNanos = 0L
             }
 
-            samples.addAll(frameMono.asList())
+            samples.append(frameMono)
             val activeSampleRate = sampleRate ?: frame.sampleRate
             val maxStoredSamples = (activeSampleRate * MAX_STORED_SECONDS).toInt()
-            if (samples.size > maxStoredSamples) {
-                val trim = samples.size - maxStoredSamples
-                repeat(trim) { samples.removeAt(0) }
-            }
+            val availableSamples = min(samples.size, maxStoredSamples)
 
             val now = System.nanoTime()
             if (isAnalysisInFlight) return
             if (lastAnalysisNanos > 0L && now - lastAnalysisNanos < ANALYSIS_INTERVAL_NANOS) return
 
             val minRequired = (activeSampleRate * MIN_ANALYSIS_WINDOW_SECONDS).toInt()
-            if (samples.size < minRequired) return
+            if (availableSamples < minRequired) return
 
-            val analysisWindow = (activeSampleRate * MAX_ANALYSIS_WINDOW_SECONDS).toInt()
-            val fromIndex = (samples.size - analysisWindow).coerceAtLeast(0)
-            analysisSamples = samples.subList(fromIndex, samples.size).toFloatArray()
+            val analysisWindow = min((activeSampleRate * MAX_ANALYSIS_WINDOW_SECONDS).toInt(), maxStoredSamples)
+            analysisSamples = samples.toRecentFloatArray(analysisWindow)
             analysisSampleRate = activeSampleRate
             isAnalysisInFlight = true
             lastAnalysisNanos = now
@@ -1442,9 +1438,47 @@ private class MicrophoneBpmPipeline(
     }
 
     private companion object {
+        private const val MAX_RING_CAPACITY_SAMPLES = 44_100 * 16
         private const val MIN_ANALYSIS_WINDOW_SECONDS = 4.0
         private const val MAX_ANALYSIS_WINDOW_SECONDS = 8.0
         private const val MAX_STORED_SECONDS = 12.0
         private const val ANALYSIS_INTERVAL_NANOS = 1_000_000_000L
+    }
+}
+
+private class FloatRingBuffer(
+    capacity: Int,
+) {
+    private val buffer = FloatArray(capacity.coerceAtLeast(1))
+    private var head = 0
+    private var count = 0
+
+    val size: Int
+        get() = count
+
+    fun clear() {
+        head = 0
+        count = 0
+    }
+
+    fun append(values: FloatArray) {
+        for (value in values) {
+            buffer[head] = value
+            head = (head + 1) % buffer.size
+            if (count < buffer.size) count += 1
+        }
+    }
+
+    fun toRecentFloatArray(maxCount: Int): FloatArray {
+        if (count == 0 || maxCount <= 0) return FloatArray(0)
+        val actualCount = min(maxCount, count)
+        val start = (head - actualCount + buffer.size) % buffer.size
+        val output = FloatArray(actualCount)
+        var cursor = start
+        for (index in 0 until actualCount) {
+            output[index] = buffer[cursor]
+            cursor = (cursor + 1) % buffer.size
+        }
+        return output
     }
 }
