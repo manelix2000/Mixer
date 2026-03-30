@@ -1,10 +1,12 @@
 package dev.manelix.mixer.feature.deck
 
+import android.Manifest
 import android.os.Build
 import android.media.MediaMetadataRetriever
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -69,6 +71,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -114,6 +117,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import dev.manelix.mixer.core.common.model.AudioEngineMode
 import dev.manelix.mixer.core.common.model.PanControlRange
 import dev.manelix.mixer.core.common.model.SplitDeckLayout
@@ -170,6 +174,13 @@ fun DeckRoute(
     ) { uri ->
         uri?.let { viewModel.selectTrackForRightDeck(it.toString()) }
     }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.toggleMic()
+        }
+    }
     val audioMimeTypes = remember { arrayOf("audio/*") }
     LaunchedEffect(isTablet) {
         viewModel.initializeForDevice(
@@ -208,7 +219,15 @@ fun DeckRoute(
             onToggleSettings = viewModel::toggleSettings,
             onToggleRightDeck = viewModel::toggleRightDeck,
             onToggleEqualizer = viewModel::toggleEqualizer,
-            onToggleMic = viewModel::toggleMic,
+            onToggleMic = {
+                if (rootState.isMicrophoneBpmDetectionActive) {
+                    viewModel.toggleMic()
+                } else if (hasRecordAudioPermission(context)) {
+                    viewModel.toggleMic()
+                } else {
+                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
             onTogglePitchLock = viewModel::togglePitchLock,
         )
 
@@ -408,6 +427,11 @@ fun DeckRoute(
             }
         }
     }
+}
+
+private fun hasRecordAudioPermission(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 }
 
 @Composable
@@ -1513,15 +1537,37 @@ private fun DeckSurface(
                                     )
                                 }
                             }
-                            if (isWaveformLoading && waveformText.isNotBlank()) {
-                                Text(
-                                    text = waveformText,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 10.sp,
+                            if (isWaveformLoading) {
+                                val loadingPercent = parseWaveformLoadingPercent(waveformText)
+                                Column(
                                     modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                                )
+                                        .align(Alignment.Center)
+                                        .zIndex(3f),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    if (loadingPercent != null) {
+                                        CircularProgressIndicator(
+                                            progress = { loadingPercent.coerceIn(0f, 1f) },
+                                            color = Color.White,
+                                            trackColor = Color.White.copy(alpha = 0.25f),
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            text = "${(loadingPercent * 100f).toInt()}%",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            trackColor = Color.White.copy(alpha = 0.25f),
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
                             }
                             if (!isPitchAdjusting) {
                                 Button(
@@ -2035,6 +2081,14 @@ private fun panRoutingText(pan: Double): String = when {
     pan <= -0.1 -> "L"
     pan >= 0.1 -> "R"
     else -> "C"
+}
+
+private fun parseWaveformLoadingPercent(waveformText: String?): Float? {
+    val raw = waveformText?.trim().orEmpty()
+    if (raw.isBlank()) return null
+    val percentToken = raw.substringAfterLast(' ', missingDelimiterValue = raw)
+    val numeric = percentToken.removeSuffix("%").toFloatOrNull() ?: return null
+    return (numeric / 100f).coerceIn(0f, 1f)
 }
 
 private fun cueMixCodeToValue(code: String): Float = when (code.uppercase()) {

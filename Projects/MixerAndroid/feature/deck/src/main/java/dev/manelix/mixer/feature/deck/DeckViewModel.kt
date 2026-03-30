@@ -85,6 +85,7 @@ class DeckViewModel : ViewModel() {
     private val leftRuntime = DeckRuntime()
     private val rightRuntime = DeckRuntime()
     private var hasBoundContextBackedEngines = false
+    private var appContextForAnalysis: Context? = null
 
     private val _screenState = MutableStateFlow(DeckScreenState())
     val screenState: StateFlow<DeckScreenState> = _screenState
@@ -133,6 +134,7 @@ class DeckViewModel : ViewModel() {
 
     private fun bindContextBackedEnginesIfNeeded(context: Context?) {
         val appContext = context?.applicationContext ?: return
+        appContextForAnalysis = appContext
         if (hasBoundContextBackedEngines) return
         hasBoundContextBackedEngines = true
 
@@ -724,6 +726,12 @@ class DeckViewModel : ViewModel() {
                 EqBand.HIGH -> deck.copy(equalizerHigh = clamped)
             }
         }
+        val updated = currentDeckState(isLeft)
+        engineForDeck(isLeft).setEqualizer(
+            low = updated.equalizerLow.toFloat(),
+            mid = updated.equalizerMid.toFloat(),
+            high = updated.equalizerHigh.toFloat(),
+        )
     }
 
     private fun setDeckWaveformZoom(
@@ -1015,6 +1023,7 @@ class DeckViewModel : ViewModel() {
                     waveformAnalyzer.generateWaveform(
                         sourceUri = uri,
                         sampleCount = WAVEFORM_SAMPLE_COUNT,
+                        appContext = appContextForAnalysis,
                     ) { progress ->
                         updateDeckState(isLeft) { deck ->
                             deck.copy(

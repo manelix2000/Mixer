@@ -1,8 +1,14 @@
 package dev.manelix.mixer.core.audio
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.media.audiofx.Equalizer
 import android.net.Uri
 import dev.manelix.mixer.core.audio.model.AudioEngineError
 import dev.manelix.mixer.core.audio.model.AudioPerformanceMetrics
@@ -14,6 +20,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.concurrent.thread
 
@@ -43,6 +50,7 @@ class SkeletonAudioEngineController(
     private var isMicCaptureRunning = false
     private var micCallback: ((MicrophoneCaptureFrame) -> Unit)? = null
     private var micSimulationThread: Thread? = null
+    private var micAudioRecord: AudioRecord? = null
     private var micFramesProcessed: Long = 0L
     private var micCallbacksOverBudget: Long = 0L
     private var micCallbackTotalNanos: Long = 0L
@@ -51,6 +59,10 @@ class SkeletonAudioEngineController(
     private var playbackStartOffsetSeconds = 0.0
     private var playbackStartMonotonicNanos = 0L
     private var mediaPlayer: MediaPlayer? = null
+    private var mediaEqualizer: Equalizer? = null
+    private var equalizerLow = 0.5f
+    private var equalizerMid = 0.5f
+    private var equalizerHigh = 0.5f
 
     override val isRunning: Boolean
         get() = stateLock.withLock { running }
@@ -326,17 +338,23 @@ class SkeletonAudioEngineController(
         mid: Float,
         high: Float,
     ) {
-        // Stored as clamped values to keep state parity with iOS; no DSP hookup yet.
         stateLock.withLock {
-            clampNormalizedEq(low)
-            clampNormalizedEq(mid)
-            clampNormalizedEq(high)
+            equalizerLow = clampNormalizedEq(low)
+            equalizerMid = clampNormalizedEq(mid)
+            equalizerHigh = clampNormalizedEq(high)
+            applyEqualizerBandLevelsLocked()
         }
     }
 
     override fun startMicrophoneCapture(
         onBuffer: (MicrophoneCaptureFrame) -> Unit,
     ): Result<Unit> = stateLock.withLock {
+        if (appContext != null) {
+            val hasPermission = appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) {
+                return failure(AudioEngineError.MicrophonePermissionDenied)
+            }
+        }
         running = true
         isMicCaptureRunning = true
         micCallback = onBuffer
@@ -345,19 +363,113 @@ class SkeletonAudioEngineController(
         micCallbackTotalNanos = 0L
         micCallbackMaxNanos = 0L
         micCallbackLastNanos = 0L
-        startMicSimulationLocked()
+        val started = startMicrophoneCaptureLocked()
+        if (!started) {
+            isMicCaptureRunning = false
+            micCallback = null
+            return failure(AudioEngineError.MicrophoneUnavailable)
+        }
         Result.success(Unit)
     }
 
     override fun stopMicrophoneCapture() {
-        val threadToJoin = stateLock.withLock {
+        val (threadToJoin, recordToRelease) = stateLock.withLock {
             isMicCaptureRunning = false
             micCallback = null
             val existing = micSimulationThread
             micSimulationThread = null
-            existing
+            val record = micAudioRecord
+            micAudioRecord = null
+            existing to record
         }
+        runCatching { recordToRelease?.stop() }
+        runCatching { recordToRelease?.release() }
         threadToJoin?.join(250L)
+    }
+
+    private fun startMicrophoneCaptureLocked(): Boolean {
+        appContext ?: run {
+            startMicSimulationLocked()
+            return true
+        }
+        return startMicAudioRecordLocked()
+    }
+
+    private fun startMicAudioRecordLocked(): Boolean {
+        if (micSimulationThread?.isAlive == true) return true
+
+        val sampleRate = 44_100
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+        if (minBufferSize <= 0) return false
+
+        val targetFrameSize = 1_024
+        val recordBufferSize = max(minBufferSize, targetFrameSize * 4)
+        val audioRecord = runCatching {
+            AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                sampleRate,
+                channelConfig,
+                audioFormat,
+                recordBufferSize,
+            )
+        }.getOrNull() ?: return false
+
+        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+            runCatching { audioRecord.release() }
+            return false
+        }
+        val startResult = runCatching { audioRecord.startRecording() }
+        if (startResult.isFailure) {
+            runCatching { audioRecord.release() }
+            return false
+        }
+
+        micAudioRecord = audioRecord
+        micSimulationThread = thread(
+            start = true,
+            isDaemon = true,
+            name = "mixer-mic-audiorecord",
+        ) {
+            val frameSize = targetFrameSize
+            val frameBudgetNanos = (((frameSize / sampleRate.toDouble()) * 1_000_000_000.0).toLong()).coerceAtLeast(1_000_000L)
+            val pcmBuffer = ShortArray(frameSize)
+            while (true) {
+                val callback = stateLock.withLock {
+                    if (!isMicCaptureRunning) return@thread
+                    micCallback
+                } ?: continue
+
+                val readCount = runCatching {
+                    audioRecord.read(pcmBuffer, 0, pcmBuffer.size, AudioRecord.READ_BLOCKING)
+                }.getOrDefault(0)
+                if (readCount <= 0) continue
+
+                val frame = FloatArray(readCount)
+                for (index in 0 until readCount) {
+                    frame[index] = (pcmBuffer[index] / 32768f).coerceIn(-1f, 1f)
+                }
+                val captureFrame = MicrophoneCaptureFrame(
+                    samples = frame,
+                    sampleRate = sampleRate.toDouble(),
+                    channelCount = 1,
+                    isInterleaved = false,
+                )
+
+                val callbackStart = clock.nowMonotonicNanos()
+                callback(captureFrame)
+                val callbackNanos = (clock.nowMonotonicNanos() - callbackStart).coerceAtLeast(0L)
+                stateLock.withLock {
+                    micFramesProcessed += 1L
+                    micCallbackLastNanos = callbackNanos
+                    micCallbackTotalNanos += callbackNanos
+                    if (callbackNanos > micCallbackMaxNanos) micCallbackMaxNanos = callbackNanos
+                    if (callbackNanos > frameBudgetNanos) micCallbacksOverBudget += 1L
+                }
+            }
+        }
+        return true
     }
 
     private fun startMicSimulationLocked() {
@@ -527,9 +639,12 @@ class SkeletonAudioEngineController(
             return Result.failure(createdPlayer.exceptionOrNull() ?: IllegalStateException("Media load failed"))
         }
 
+        releaseEqualizerLocked()
         mediaPlayer?.runCatching { release() }
         mediaPlayer = createdPlayer.getOrNull()
         applyVolumeAndPanLocked()
+        attachEqualizerLocked()
+        applyEqualizerBandLevelsLocked()
         return Result.success(mediaPlayer)
     }
 
@@ -539,6 +654,79 @@ class SkeletonAudioEngineController(
         val leftGain = internalVolume * if (pan > 0f) (1f - pan) else 1f
         val rightGain = internalVolume * if (pan < 0f) (1f + pan) else 1f
         runCatching { player.setVolume(leftGain.coerceIn(0f, 1f), rightGain.coerceIn(0f, 1f)) }
+    }
+
+    private fun attachEqualizerLocked() {
+        val player = mediaPlayer ?: return
+        val sessionId = runCatching { player.audioSessionId }.getOrDefault(0)
+        if (sessionId == 0) return
+        val eq = runCatching { Equalizer(0, sessionId) }.getOrNull() ?: return
+        mediaEqualizer = eq
+        runCatching { eq.enabled = true }
+    }
+
+    private fun releaseEqualizerLocked() {
+        runCatching {
+            mediaEqualizer?.enabled = false
+            mediaEqualizer?.release()
+        }
+        mediaEqualizer = null
+    }
+
+    private fun applyEqualizerBandLevelsLocked() {
+        val eq = mediaEqualizer ?: return
+        val levels = runCatching { eq.bandLevelRange }.getOrNull() ?: return
+        val minLevel = levels.getOrNull(0)?.toInt() ?: return
+        val maxLevel = levels.getOrNull(1)?.toInt() ?: return
+        val numberOfBands = runCatching { eq.numberOfBands.toInt() }.getOrDefault(0)
+        if (numberOfBands <= 0) return
+
+        var lowBand: Short? = null
+        var midBand: Short? = null
+        var highBand: Short? = null
+        for (band in 0 until numberOfBands) {
+            val bandShort = band.toShort()
+            val centerHz = runCatching { eq.getCenterFreq(bandShort) / 1000 }.getOrDefault(0)
+            when {
+                centerHz < 400 -> lowBand = chooseClosest(eq, lowBand, bandShort, 120)
+                centerHz in 400..4000 -> midBand = chooseClosest(eq, midBand, bandShort, 1200)
+                centerHz > 4000 -> highBand = chooseClosest(eq, highBand, bandShort, 8000)
+            }
+        }
+        if (lowBand == null) lowBand = 0
+        if (midBand == null) midBand = ((numberOfBands - 1) / 2).toShort()
+        if (highBand == null) highBand = (numberOfBands - 1).toShort()
+
+        val lowLevel = normalizedToBandLevel(equalizerLow, minLevel, maxLevel)
+        val midLevel = normalizedToBandLevel(equalizerMid, minLevel, maxLevel)
+        val highLevel = normalizedToBandLevel(equalizerHigh, minLevel, maxLevel)
+        runCatching { eq.setBandLevel(lowBand, lowLevel) }
+        runCatching { eq.setBandLevel(midBand, midLevel) }
+        runCatching { eq.setBandLevel(highBand, highLevel) }
+    }
+
+    private fun normalizedToBandLevel(
+        value: Float,
+        minLevel: Int,
+        maxLevel: Int,
+    ): Short {
+        val clamped = clampNormalizedEq(value)
+        val mapped = minLevel + ((maxLevel - minLevel) * clamped).roundToInt()
+        return mapped.coerceIn(minLevel, maxLevel).toShort()
+    }
+
+    private fun chooseClosest(
+        eq: Equalizer,
+        existing: Short?,
+        candidate: Short,
+        targetHz: Int,
+    ): Short {
+        if (existing == null) return candidate
+        val existingFreq = runCatching { eq.getCenterFreq(existing) / 1000 }.getOrDefault(0)
+        val candidateFreq = runCatching { eq.getCenterFreq(candidate) / 1000 }.getOrDefault(0)
+        val existingDelta = kotlin.math.abs(existingFreq - targetHz)
+        val candidateDelta = kotlin.math.abs(candidateFreq - targetHz)
+        return if (candidateDelta < existingDelta) candidate else existing
     }
 }
 
