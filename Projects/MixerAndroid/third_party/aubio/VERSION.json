@@ -1,0 +1,9 @@
+{
+  "name": "aubio",
+  "version": "0.4.9",
+  "source": "https://aubio.org",
+  "upstream_archive": "aubio-0.4.9.tar.bz2",
+  "license": "GPL-3.0-or-later",
+  "pinned_on": "2026-03-30",
+  "notes": "Source is vendored under third_party/aubio/aubio-src before running scripts/build_aubio_android.sh"
+}

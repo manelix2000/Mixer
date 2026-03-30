@@ -3,10 +3,14 @@ package dev.manelix.mixer.core.audio
 import dev.manelix.mixer.core.audio.model.AudioEngineError
 import dev.manelix.mixer.core.audio.model.MicrophoneCaptureFrame
 import dev.manelix.mixer.core.common.model.AudioPlaybackState
+import dev.manelix.mixer.core.common.model.PanControlRange
+import dev.manelix.mixer.core.common.model.SplitDeckRole
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.concurrent.thread
 
 /**
  * Phase-4 Android playback skeleton that mirrors the iOS controller contract/state transitions.
@@ -15,7 +19,7 @@ import kotlin.math.min
 class SkeletonAudioEngineController(
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val defaultDurationSeconds: Double = 180.0,
-) : AudioEngineController {
+) : AudioEngineController, AudioEngineRoutingProvider {
     private val stateLock = ReentrantLock()
 
     private var running = false
@@ -26,10 +30,13 @@ class SkeletonAudioEngineController(
     private var internalVolume = 1.0f
     private var internalPan = 0.0f
     private var internalPlaybackRate = 1.0f
+    private var internalSplitDeckRole: SplitDeckRole? = null
+    private var internalPanControlRange: PanControlRange = PanControlRange.Standard
     private var isScratchModeActive = false
     private var scratchWasPlayingBeforeGesture = false
     private var isMicCaptureRunning = false
     private var micCallback: ((MicrophoneCaptureFrame) -> Unit)? = null
+    private var micSimulationThread: Thread? = null
     private var playbackStartOffsetSeconds = 0.0
     private var playbackStartMonotonicNanos = 0L
 
@@ -53,6 +60,12 @@ class SkeletonAudioEngineController(
 
     override val playbackRate: Float
         get() = stateLock.withLock { internalPlaybackRate }
+
+    override val splitDeckRole: SplitDeckRole?
+        get() = stateLock.withLock { internalSplitDeckRole }
+
+    override val panControlRange: PanControlRange
+        get() = stateLock.withLock { internalPanControlRange }
 
     override val isMicrophoneCaptureRunning: Boolean
         get() = stateLock.withLock { isMicCaptureRunning }
@@ -212,7 +225,18 @@ class SkeletonAudioEngineController(
 
     override fun setPan(value: Float) {
         stateLock.withLock {
-            internalPan = clampPan(value)
+            internalPan = clampPanForRange(value, internalPanControlRange)
+        }
+    }
+
+    fun setRoutingPolicy(
+        role: SplitDeckRole?,
+        panRange: PanControlRange,
+    ) {
+        stateLock.withLock {
+            internalSplitDeckRole = role
+            internalPanControlRange = panRange
+            internalPan = clampPanForRange(internalPan, panRange)
         }
     }
 
@@ -248,13 +272,71 @@ class SkeletonAudioEngineController(
         running = true
         isMicCaptureRunning = true
         micCallback = onBuffer
+        startMicSimulationLocked()
         Result.success(Unit)
     }
 
     override fun stopMicrophoneCapture() {
-        stateLock.withLock {
+        val threadToJoin = stateLock.withLock {
             isMicCaptureRunning = false
             micCallback = null
+            val existing = micSimulationThread
+            micSimulationThread = null
+            existing
+        }
+        threadToJoin?.join(250L)
+    }
+
+    private fun startMicSimulationLocked() {
+        if (micSimulationThread?.isAlive == true) return
+
+        micSimulationThread = thread(
+            start = true,
+            isDaemon = true,
+            name = "mixer-mic-sim",
+        ) {
+            val sampleRate = 44_100.0
+            val frameSize = 1_024
+            val frameDurationMs = ((frameSize / sampleRate) * 1_000.0).toLong().coerceAtLeast(5L)
+            var sampleCursor = 0L
+
+            while (true) {
+                val callback = stateLock.withLock {
+                    if (!isMicCaptureRunning) return@thread
+                    micCallback
+                }
+
+                if (callback == null) {
+                    Thread.sleep(frameDurationMs)
+                    continue
+                }
+
+                val frame = FloatArray(frameSize)
+                val bpm = 124.0
+                val beatIntervalSamples = (sampleRate * 60.0 / bpm).toInt().coerceAtLeast(1)
+                for (index in frame.indices) {
+                    val absoluteSample = sampleCursor + index
+                    val beatPhase = (absoluteSample % beatIntervalSamples).toInt()
+                    val clickEnvelope = when {
+                        beatPhase < 40 -> (1.0 - (beatPhase / 40.0))
+                        else -> 0.0
+                    }
+                    val carrier = sin((absoluteSample / sampleRate) * Math.PI * 2.0 * 880.0)
+                    frame[index] = ((carrier * clickEnvelope) * 0.7).toFloat()
+                }
+                sampleCursor += frameSize
+
+                callback(
+                    MicrophoneCaptureFrame(
+                        samples = frame,
+                        sampleRate = sampleRate,
+                        channelCount = 1,
+                        isInterleaved = false,
+                    ),
+                )
+
+                Thread.sleep(frameDurationMs)
+            }
         }
     }
 
@@ -298,6 +380,11 @@ class SkeletonAudioEngineController(
     private fun clampVolume(value: Float): Float = min(max(value, 0.0f), 1.0f)
 
     private fun clampPan(value: Float): Float = min(max(value, -1.0f), 1.0f)
+
+    private fun clampPanForRange(
+        value: Float,
+        range: PanControlRange,
+    ): Float = min(max(value, range.lowerBound.toFloat()), range.upperBound.toFloat())
 
     private fun clampPlaybackRate(value: Float): Float = min(max(value, 0.5f), 2.0f)
 

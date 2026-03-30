@@ -4,6 +4,7 @@ import android.os.Build
 import android.media.MediaMetadataRetriever
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -128,6 +129,23 @@ fun DeckRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val settingsPrefs = remember(context) {
+        context.getSharedPreferences("mixer_deck_prefs", Context.MODE_PRIVATE)
+    }
+    val restoredAudioMode = remember(settingsPrefs) {
+        runCatching {
+            settingsPrefs.getString("audio_engine_mode", AudioEngineMode.STANDARD.name)
+                ?.let(AudioEngineMode::valueOf)
+                ?: AudioEngineMode.STANDARD
+        }.getOrDefault(AudioEngineMode.STANDARD)
+    }
+    val restoredSplitLayout = remember(settingsPrefs) {
+        runCatching {
+            settingsPrefs.getString("split_deck_layout", SplitDeckLayout.LEFT_MASTER_RIGHT_CUE.name)
+                ?.let(SplitDeckLayout::valueOf)
+                ?: SplitDeckLayout.LEFT_MASTER_RIGHT_CUE
+        }.getOrDefault(SplitDeckLayout.LEFT_MASTER_RIGHT_CUE)
+    }
     val isEmulator = remember {
         Build.FINGERPRINT.startsWith("generic") ||
             Build.FINGERPRINT.lowercase().contains("emulator") ||
@@ -153,10 +171,20 @@ fun DeckRoute(
     }
     val audioMimeTypes = remember { arrayOf("audio/*") }
     LaunchedEffect(isTablet) {
-        viewModel.initializeForDevice(isTablet = isTablet)
+        viewModel.initializeForDevice(
+            isTablet = isTablet,
+            restoredMode = restoredAudioMode,
+            restoredLayout = restoredSplitLayout,
+        )
     }
     val screenState by viewModel.screenState.collectAsStateWithLifecycle()
     val rootState = screenState.root
+    LaunchedEffect(rootState.selectedAudioEngineMode, rootState.selectedSplitDeckLayout) {
+        settingsPrefs.edit()
+            .putString("audio_engine_mode", rootState.selectedAudioEngineMode.name)
+            .putString("split_deck_layout", rootState.selectedSplitDeckLayout.name)
+            .apply()
+    }
 
     Row(
         modifier = modifier

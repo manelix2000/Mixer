@@ -18,3 +18,5 @@ Projects/MixerAndroid/core/dsp/build
 Projects/MixerAndroid/core/ui/build
 Projects/MixerAndroid/core/waveform/build
 Projects/MixerAndroid/feature/deck/build
+Projects/MixerAndroid/third_party/aubio/aubio-src/waflib/__pycache__
+Projects/MixerAndroid/third_party/aubio/build
