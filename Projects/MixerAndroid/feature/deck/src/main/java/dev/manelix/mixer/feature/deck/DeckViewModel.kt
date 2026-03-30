@@ -261,9 +261,9 @@ class DeckViewModel : ViewModel() {
 
     fun beginRightDeckPlatterScratch() = beginDeckScratch(isLeft = false)
 
-    fun updateLeftDeckPlatterScratch(deltaX: Double, deltaY: Double) = updatePlatterScratch(isLeft = true, deltaX = deltaX, deltaY = deltaY)
+    fun updateLeftDeckPlatterScratch(angleDelta: Double) = updatePlatterScratch(isLeft = true, angleDelta = angleDelta)
 
-    fun updateRightDeckPlatterScratch(deltaX: Double, deltaY: Double) = updatePlatterScratch(isLeft = false, deltaX = deltaX, deltaY = deltaY)
+    fun updateRightDeckPlatterScratch(angleDelta: Double) = updatePlatterScratch(isLeft = false, angleDelta = angleDelta)
 
     fun endLeftDeckPlatterScratch() = endDeckScratch(isLeft = true)
 
@@ -816,13 +816,8 @@ class DeckViewModel : ViewModel() {
 
     private fun updatePlatterScratch(
         isLeft: Boolean,
-        deltaX: Double,
-        deltaY: Double,
-    ) {
-        val projectedDelta = deltaX - deltaY
-        val angleDelta = -(projectedDelta / PLATTER_POINTS_PER_REVOLUTION) * (Math.PI * 2.0)
-        updateDeckScratch(isLeft = isLeft, angleDelta = angleDelta)
-    }
+        angleDelta: Double,
+    ) = updateDeckScratch(isLeft = isLeft, angleDelta = angleDelta)
 
     private fun updateDeckScratch(
         isLeft: Boolean,

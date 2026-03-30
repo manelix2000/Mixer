@@ -126,6 +126,9 @@ import dev.manelix.mixer.feature.deck.model.DeckUiState
 import dev.manelix.mixer.feature.deck.model.hasSelectedTrack
 import dev.manelix.mixer.feature.deck.model.isPlaybackActive
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
+import kotlin.math.min
 
 @Composable
 fun DeckRoute(
@@ -1360,7 +1363,7 @@ private fun DeckSurface(
     onEndWaveformScratch: () -> Unit,
     platterRotationDegrees: Float,
     onBeginPlatterScratch: () -> Unit,
-    onPlatterScratchDelta: (Double, Double) -> Unit,
+    onPlatterScratchDelta: (Double) -> Unit,
     onEndPlatterScratch: () -> Unit,
     onStartPause: () -> Unit,
     onStop: () -> Unit,
@@ -1381,6 +1384,9 @@ private fun DeckSurface(
     modifier: Modifier = Modifier,
 ) {
     var isPitchAdjusting by remember { mutableStateOf(false) }
+    var platterLastAngle by remember { mutableStateOf<Double?>(null) }
+    var platterTouchStartPoint by remember { mutableStateOf<Offset?>(null) }
+    var isPlatterScratching by remember { mutableStateOf(false) }
     var latchedDeckBpmStatus by remember(selectedTrackUri) { mutableStateOf<String?>(null) }
     val currentDeckBpmStatus = bpmStatusText?.trim().orEmpty()
     val isMicListeningLikeDeckStatus = currentDeckBpmStatus.startsWith("Listening", ignoreCase = true)
@@ -1663,11 +1669,88 @@ private fun DeckSurface(
                             .aspectRatio(1f, matchHeightConstraintsFirst = true)
                             .pointerInput(Unit) {
                                 detectDragGestures(
-                                    onDragStart = { onBeginPlatterScratch() },
-                                    onDragEnd = { onEndPlatterScratch() },
-                                    onDragCancel = { onEndPlatterScratch() },
-                                ) { _, dragAmount ->
-                                    onPlatterScratchDelta(dragAmount.x.toDouble(), dragAmount.y.toDouble())
+                                    onDragStart = { startOffset ->
+                                        val touchSide = min(size.width.toFloat(), size.height.toFloat())
+                                        if (touchSide <= 0f) {
+                                            platterTouchStartPoint = null
+                                            platterLastAngle = null
+                                            isPlatterScratching = false
+                                            return@detectDragGestures
+                                        }
+                                        val normalized = normalizedPlatterPoint(
+                                            point = startOffset,
+                                            widthPx = size.width.toFloat(),
+                                            heightPx = size.height.toFloat(),
+                                        )
+                                        val angle = normalized?.let {
+                                            platterAngleForPoint(
+                                                point = it,
+                                                sidePx = touchSide,
+                                                visualInsetPx = TURNTABLE_VISUAL_OUTER_INSET_DP.dp.toPx(),
+                                            )
+                                        }
+                                        platterTouchStartPoint = normalized
+                                        platterLastAngle = angle
+                                        isPlatterScratching = false
+                                    },
+                                    onDragEnd = {
+                                        platterLastAngle = null
+                                        platterTouchStartPoint = null
+                                        if (isPlatterScratching) {
+                                            onEndPlatterScratch()
+                                        }
+                                        isPlatterScratching = false
+                                    },
+                                    onDragCancel = {
+                                        platterLastAngle = null
+                                        platterTouchStartPoint = null
+                                        if (isPlatterScratching) {
+                                            onEndPlatterScratch()
+                                        }
+                                        isPlatterScratching = false
+                                    },
+                                ) { change, _ ->
+                                    val touchSide = min(size.width.toFloat(), size.height.toFloat())
+                                    if (touchSide <= 0f) return@detectDragGestures
+                                    val normalized = normalizedPlatterPoint(
+                                        point = change.position,
+                                        widthPx = size.width.toFloat(),
+                                        heightPx = size.height.toFloat(),
+                                    )
+                                    val angle = normalized?.let {
+                                        platterAngleForPoint(
+                                            point = it,
+                                            sidePx = touchSide,
+                                            visualInsetPx = TURNTABLE_VISUAL_OUTER_INSET_DP.dp.toPx(),
+                                        )
+                                    }
+                                    if (normalized == null || angle == null) {
+                                        platterLastAngle = null
+                                        return@detectDragGestures
+                                    }
+
+                                    val movement = platterTouchStartPoint?.let { start ->
+                                        hypot(
+                                            (normalized.x - start.x).toDouble(),
+                                            (normalized.y - start.y).toDouble(),
+                                        ).toFloat()
+                                    } ?: 0f
+                                    val movedEnoughForScratch = movement >= (touchSide * PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO)
+
+                                    val previousAngle = platterLastAngle
+                                    if (previousAngle != null) {
+                                        val delta = normalizedAngleDelta(previousAngle, angle)
+                                        if (!isPlatterScratching &&
+                                            (abs(delta) >= PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD || movedEnoughForScratch)
+                                        ) {
+                                            onBeginPlatterScratch()
+                                            isPlatterScratching = true
+                                        }
+                                        if (isPlatterScratching) {
+                                            onPlatterScratchDelta(delta)
+                                        }
+                                    }
+                                    platterLastAngle = angle
                                 }
                             },
                         platterRotationDegrees = platterRotationDegrees,
@@ -2126,3 +2209,53 @@ private fun micBadgeText(rootState: DeckUiState): String? {
     }
     return null
 }
+
+private fun normalizedPlatterPoint(point: Offset, widthPx: Float, heightPx: Float): Offset? {
+    val side = min(widthPx, heightPx)
+    if (side <= 0f) return null
+    val xOffset = (widthPx - side) * 0.5f
+    val yOffset = (heightPx - side) * 0.5f
+    val normalized = Offset(point.x - xOffset, point.y - yOffset)
+    return if (
+        normalized.x >= 0f &&
+        normalized.y >= 0f &&
+        normalized.x <= side &&
+        normalized.y <= side
+    ) {
+        normalized
+    } else {
+        null
+    }
+}
+
+private fun platterAngleForPoint(
+    point: Offset,
+    sidePx: Float,
+    visualInsetPx: Float,
+): Double? {
+    val center = Offset(sidePx * 0.5f, sidePx * 0.5f)
+    val dx = point.x - center.x
+    val dy = point.y - center.y
+    val radius = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+    val visiblePlatterDiameter = (sidePx - (visualInsetPx * 2f)).coerceAtLeast(0f)
+    val minRadius = visiblePlatterDiameter * PLATTER_MIN_TOUCH_RADIUS_RATIO
+    val maxRadius = visiblePlatterDiameter * PLATTER_MAX_TOUCH_RADIUS_RATIO
+    if (radius < minRadius || radius > maxRadius) return null
+    return atan2(dy.toDouble(), dx.toDouble())
+}
+
+private fun normalizedAngleDelta(previous: Double, current: Double): Double {
+    var delta = current - previous
+    if (delta > Math.PI) {
+        delta -= (Math.PI * 2.0)
+    } else if (delta < -Math.PI) {
+        delta += (Math.PI * 2.0)
+    }
+    return delta
+}
+
+private const val PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD = 0.002
+private const val TURNTABLE_VISUAL_OUTER_INSET_DP = 10f
+private const val PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO = 0.035f
+private const val PLATTER_MIN_TOUCH_RADIUS_RATIO = 0.12f
+private const val PLATTER_MAX_TOUCH_RADIUS_RATIO = 0.5f
