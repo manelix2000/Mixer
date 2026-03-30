@@ -40,6 +40,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 class DeckViewModel : ViewModel() {
     companion object {
@@ -69,6 +70,11 @@ class DeckViewModel : ViewModel() {
         private const val MIN_BPM = 60.0
         private const val MAX_BPM = 200.0
         private const val OFFLINE_BPM_ANALYSIS_SECONDS = 12.0
+        private const val MAX_PRESSURE_SLOWDOWN_FRACTION = 0.9
+        private const val MIN_PRESSURE_SLOWDOWN_MULTIPLIER = 0.08
+        private const val MAX_PRESSURE_ACCELERATION_FRACTION = 0.9
+        private const val MAX_PRESSURE_ACCELERATION_MULTIPLIER = 1.92
+        private const val PRESSURE_CURVE_EXPONENT = 1.6
         private val ALLOWED_PITCH_SENSITIVITY_PERCENTS = listOf(2, 4, 8, 16)
     }
 
@@ -268,6 +274,16 @@ class DeckViewModel : ViewModel() {
     fun endLeftDeckPlatterScratch() = endDeckScratch(isLeft = true)
 
     fun endRightDeckPlatterScratch() = endDeckScratch(isLeft = false)
+
+    fun updateLeftDeckPressureTouch(pressure: Double, direction: Double) =
+        updateDeckPressureTouch(isLeft = true, pressure = pressure, direction = direction)
+
+    fun updateRightDeckPressureTouch(pressure: Double, direction: Double) =
+        updateDeckPressureTouch(isLeft = false, pressure = pressure, direction = direction)
+
+    fun endLeftDeckPressureTouch() = endDeckPressureTouch(isLeft = true)
+
+    fun endRightDeckPressureTouch() = endDeckPressureTouch(isLeft = false)
 
     fun increaseBpmForLeftDeck() = adjustDeckBpm(isLeft = true, delta = 1.0)
 
@@ -548,6 +564,7 @@ class DeckViewModel : ViewModel() {
                 state.copy(rightDeck = state.rightDeck.bumpTargetBpm(delta))
             }
         }
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
     }
 
     private fun setDeckVolume(
@@ -572,10 +589,9 @@ class DeckViewModel : ViewModel() {
         updateDeckState(isLeft) {
             it.copy(
                 targetBpm = target,
-                bpmText = String.format("BPM %.1f | %.3fx", target, target / original),
             )
         }
-        engineForDeck(isLeft).setPlaybackRate((target / original).toFloat())
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
     }
 
     private fun adjustDeckPitchSensitivity(
@@ -606,14 +622,7 @@ class DeckViewModel : ViewModel() {
         }
 
         val deck = currentDeckState(isLeft)
-        val original = if (deck.originalBpm > 0.0) deck.originalBpm else 120.0
-        val playbackRate = (deck.targetBpm / original).coerceIn(0.5, 2.0)
-        engineForDeck(isLeft).setPlaybackRate(playbackRate.toFloat())
-        updateDeckState(isLeft) {
-            it.copy(
-                bpmText = String.format("BPM %.1f | %.3fx", it.targetBpm, it.targetBpm / original),
-            )
-        }
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
     }
 
     private fun setDeckPan(
@@ -786,6 +795,9 @@ class DeckViewModel : ViewModel() {
         }
 
         runtime.isScrubbing = true
+        if (runtime.pressureStartTargetBpm != null) {
+            endDeckPressureTouch(isLeft = isLeft)
+        }
         runtime.wasPlayingBeforeScrub = deck.isPlaybackActive
         runtime.scratchCurrentTime = engine.currentTimeSeconds
         runtime.lastCommittedScratchTime = runtime.scratchCurrentTime
@@ -904,7 +916,36 @@ class DeckViewModel : ViewModel() {
                 playbackStatusText = if (isAtTrackEnd) "Stopped" else "",
             )
         }
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
         syncDeckFromEngine(isLeft)
+    }
+
+    private fun updateDeckPressureTouch(
+        isLeft: Boolean,
+        pressure: Double,
+        direction: Double,
+    ) {
+        val runtime = runtimeForDeck(isLeft)
+        val deck = currentDeckState(isLeft)
+        if (!deck.hasSelectedTrack || runtime.isScrubbing) return
+        if (runtime.pressureStartTargetBpm == null) {
+            runtime.pressureStartTargetBpm = deck.targetBpm
+        }
+        runtime.pressureIntensity = pressure.coerceIn(0.0, 1.0)
+        runtime.pressureDirection = if (direction >= 0.0) 1.0 else -1.0
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
+    }
+
+    private fun endDeckPressureTouch(isLeft: Boolean) {
+        val runtime = runtimeForDeck(isLeft)
+        val startBpm = runtime.pressureStartTargetBpm ?: return
+        runtime.pressureStartTargetBpm = null
+        runtime.pressureIntensity = 0.0
+        runtime.pressureDirection = -1.0
+        updateDeckState(isLeft) { deck ->
+            deck.copy(targetBpm = startBpm.coerceIn(MIN_BPM, MAX_BPM))
+        }
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
     }
 
     private fun commitScratchAudio(
@@ -1164,12 +1205,7 @@ class DeckViewModel : ViewModel() {
         }
 
         val deck = currentDeckState(isLeft)
-        val playbackRate = if (deck.originalBpm > 0.0) {
-            (deck.targetBpm / deck.originalBpm).coerceIn(0.5, 2.0)
-        } else {
-            1.0
-        }
-        engineForDeck(isLeft).setPlaybackRate(playbackRate.toFloat())
+        applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
     }
 
     private fun startMicrophoneBpmDetection() {
@@ -1300,10 +1336,7 @@ class DeckViewModel : ViewModel() {
             )
         }
 
-        val deck = currentDeckState(true)
-        val original = if (deck.originalBpm > 0.0) deck.originalBpm else clamped
-        val playbackRate = (clamped / original).coerceIn(0.5, 2.0)
-        leftEngine.setPlaybackRate(playbackRate.toFloat())
+        applyDeckPlaybackRateAndBpmText(isLeft = true)
     }
 
     private fun extractTrackName(uri: String): String {
@@ -1340,6 +1373,36 @@ class DeckViewModel : ViewModel() {
     ): String {
         val safeOriginal = if (original > 0.0) original else target.coerceAtLeast(1.0)
         return String.format("BPM %.1f | %.3fx", target, (target / safeOriginal))
+    }
+
+    private fun applyDeckPlaybackRateAndBpmText(isLeft: Boolean) {
+        val deck = currentDeckState(isLeft)
+        val runtime = runtimeForDeck(isLeft)
+        val original = if (deck.originalBpm > 0.0) deck.originalBpm else 120.0
+        val effectiveTarget = effectiveTargetBpmForCurrentState(deck = deck, runtime = runtime)
+        val playbackRate = (effectiveTarget / original).coerceIn(0.5, 2.0)
+        engineForDeck(isLeft).setPlaybackRate(playbackRate.toFloat())
+        updateDeckState(isLeft) {
+            it.copy(bpmText = String.format("BPM %.1f | %.3fx", it.targetBpm, playbackRate))
+        }
+    }
+
+    private fun effectiveTargetBpmForCurrentState(
+        deck: TurntableDeckUiState,
+        runtime: DeckRuntime,
+    ): Double {
+        val pressureStartBpm = runtime.pressureStartTargetBpm ?: return deck.targetBpm
+        val normalizedPressure = runtime.pressureIntensity.coerceIn(0.0, 1.0)
+        val pressureCurve = normalizedPressure.pow(PRESSURE_CURVE_EXPONENT)
+        return if (runtime.pressureDirection < 0.0) {
+            val slowdown = pressureCurve * MAX_PRESSURE_SLOWDOWN_FRACTION
+            val multiplier = (1.0 - slowdown).coerceAtLeast(MIN_PRESSURE_SLOWDOWN_MULTIPLIER)
+            pressureStartBpm * multiplier
+        } else {
+            val acceleration = pressureCurve * MAX_PRESSURE_ACCELERATION_FRACTION
+            val multiplier = (1.0 + acceleration).coerceAtMost(MAX_PRESSURE_ACCELERATION_MULTIPLIER)
+            pressureStartBpm * multiplier
+        }
     }
 
     private fun formatPlaybackTime(
@@ -1390,6 +1453,9 @@ class DeckViewModel : ViewModel() {
         var latestScratchAngularVelocity: Double = 0.0,
         var latestScratchDirection: Double = 1.0,
         var scratchMode: ScratchMode = ScratchMode.SCRUB,
+        var pressureStartTargetBpm: Double? = null,
+        var pressureIntensity: Double = 0.0,
+        var pressureDirection: Double = -1.0,
         var lastPhysicsStepNanos: Long = 0L,
         var lastWrappedPlatterDegrees: Double? = null,
         var unwrappedPlatterDegrees: Double = 0.0,

@@ -30,6 +30,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -104,6 +106,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -129,6 +132,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun DeckRoute(
@@ -354,6 +358,8 @@ fun DeckRoute(
                             onBeginPlatterScratch = viewModel::beginLeftDeckPlatterScratch,
                             onPlatterScratchDelta = viewModel::updateLeftDeckPlatterScratch,
                             onEndPlatterScratch = viewModel::endLeftDeckPlatterScratch,
+                            onPlatterPressureUpdate = viewModel::updateLeftDeckPressureTouch,
+                            onPlatterPressureEnd = viewModel::endLeftDeckPressureTouch,
                             onStartPause = viewModel::togglePlayPauseLeftDeck,
                             onStop = viewModel::stopLeftDeck,
                             hasSelectedTrack = screenState.leftDeck.hasSelectedTrack,
@@ -407,6 +413,8 @@ fun DeckRoute(
                                 onBeginPlatterScratch = viewModel::beginRightDeckPlatterScratch,
                                 onPlatterScratchDelta = viewModel::updateRightDeckPlatterScratch,
                                 onEndPlatterScratch = viewModel::endRightDeckPlatterScratch,
+                                onPlatterPressureUpdate = viewModel::updateRightDeckPressureTouch,
+                                onPlatterPressureEnd = viewModel::endRightDeckPressureTouch,
                                 onStartPause = viewModel::togglePlayPauseRightDeck,
                                 onStop = viewModel::stopRightDeck,
                                 hasSelectedTrack = screenState.rightDeck.hasSelectedTrack,
@@ -1365,6 +1373,8 @@ private fun DeckSurface(
     onBeginPlatterScratch: () -> Unit,
     onPlatterScratchDelta: (Double) -> Unit,
     onEndPlatterScratch: () -> Unit,
+    onPlatterPressureUpdate: (Double, Double) -> Unit,
+    onPlatterPressureEnd: () -> Unit,
     onStartPause: () -> Unit,
     onStop: () -> Unit,
     hasSelectedTrack: Boolean,
@@ -1387,6 +1397,7 @@ private fun DeckSurface(
     var platterLastAngle by remember { mutableStateOf<Double?>(null) }
     var platterTouchStartPoint by remember { mutableStateOf<Offset?>(null) }
     var isPlatterScratching by remember { mutableStateOf(false) }
+    var isPlatterPressureActive by remember { mutableStateOf(false) }
     var latchedDeckBpmStatus by remember(selectedTrackUri) { mutableStateOf<String?>(null) }
     val currentDeckBpmStatus = bpmStatusText?.trim().orEmpty()
     val isMicListeningLikeDeckStatus = currentDeckBpmStatus.startsWith("Listening", ignoreCase = true)
@@ -1668,89 +1679,146 @@ private fun DeckSurface(
                             .size(clampedPlatterSize)
                             .aspectRatio(1f, matchHeightConstraintsFirst = true)
                             .pointerInput(Unit) {
-                                detectDragGestures(
-                                    onDragStart = { startOffset ->
-                                        val touchSide = min(size.width.toFloat(), size.height.toFloat())
-                                        if (touchSide <= 0f) {
-                                            platterTouchStartPoint = null
-                                            platterLastAngle = null
-                                            isPlatterScratching = false
-                                            return@detectDragGestures
-                                        }
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val pointerId = down.id
+                                    val touchWidth = size.width.toFloat()
+                                    val touchHeight = size.height.toFloat()
+                                    val touchSide = min(touchWidth, touchHeight)
+                                    val visualInsetPx = TURNTABLE_VISUAL_OUTER_INSET_DP.dp.toPx()
+                                    val startNanos = System.nanoTime()
+                                    var lastPosition = down.position
+                                    var latestRawPressure = runCatching { down.pressure }.getOrDefault(0f)
+
+                                    val initialNormalized = normalizedPlatterPoint(
+                                        point = lastPosition,
+                                        widthPx = touchWidth,
+                                        heightPx = touchHeight,
+                                    )
+                                    platterTouchStartPoint = initialNormalized
+                                    platterLastAngle = initialNormalized?.let {
+                                        platterAngleForPoint(
+                                            point = it,
+                                            sidePx = touchSide,
+                                            visualInsetPx = visualInsetPx,
+                                        )
+                                    }
+                                    isPlatterScratching = false
+                                    isPlatterPressureActive = false
+
+                                    fun processTouchPoint(currentPosition: Offset, rawPressure: Float) {
+                                        if (touchSide <= 0f) return
                                         val normalized = normalizedPlatterPoint(
-                                            point = startOffset,
-                                            widthPx = size.width.toFloat(),
-                                            heightPx = size.height.toFloat(),
+                                            point = currentPosition,
+                                            widthPx = touchWidth,
+                                            heightPx = touchHeight,
                                         )
                                         val angle = normalized?.let {
                                             platterAngleForPoint(
                                                 point = it,
                                                 sidePx = touchSide,
-                                                visualInsetPx = TURNTABLE_VISUAL_OUTER_INSET_DP.dp.toPx(),
+                                                visualInsetPx = visualInsetPx,
                                             )
                                         }
-                                        platterTouchStartPoint = normalized
-                                        platterLastAngle = angle
-                                        isPlatterScratching = false
-                                    },
-                                    onDragEnd = {
-                                        platterLastAngle = null
-                                        platterTouchStartPoint = null
-                                        if (isPlatterScratching) {
-                                            onEndPlatterScratch()
+                                        if (normalized == null || angle == null) {
+                                            platterLastAngle = null
+                                            if (isPlatterPressureActive) {
+                                                onPlatterPressureEnd()
+                                                isPlatterPressureActive = false
+                                            }
+                                            return
                                         }
-                                        isPlatterScratching = false
-                                    },
-                                    onDragCancel = {
-                                        platterLastAngle = null
-                                        platterTouchStartPoint = null
-                                        if (isPlatterScratching) {
-                                            onEndPlatterScratch()
-                                        }
-                                        isPlatterScratching = false
-                                    },
-                                ) { change, _ ->
-                                    val touchSide = min(size.width.toFloat(), size.height.toFloat())
-                                    if (touchSide <= 0f) return@detectDragGestures
-                                    val normalized = normalizedPlatterPoint(
-                                        point = change.position,
-                                        widthPx = size.width.toFloat(),
-                                        heightPx = size.height.toFloat(),
-                                    )
-                                    val angle = normalized?.let {
-                                        platterAngleForPoint(
-                                            point = it,
-                                            sidePx = touchSide,
-                                            visualInsetPx = TURNTABLE_VISUAL_OUTER_INSET_DP.dp.toPx(),
+
+                                        val elapsedSeconds = ((System.nanoTime() - startNanos).coerceAtLeast(0L)) / 1_000_000_000.0
+                                        val fallbackPressure = (elapsedSeconds / PRESSURE_FALLBACK_RAMP_SECONDS).toFloat().coerceIn(0f, 1f)
+                                        val currentPressure = resolvePressureInput(
+                                            rawPressure = rawPressure,
+                                            fallbackPressure = fallbackPressure,
                                         )
-                                    }
-                                    if (normalized == null || angle == null) {
-                                        platterLastAngle = null
-                                        return@detectDragGestures
-                                    }
+                                        val movement = platterTouchStartPoint?.let { start ->
+                                            hypot(
+                                                (normalized.x - start.x).toDouble(),
+                                                (normalized.y - start.y).toDouble(),
+                                            ).toFloat()
+                                        } ?: 0f
+                                        val movedEnoughForScratch =
+                                            movement >= (touchSide * PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO)
 
-                                    val movement = platterTouchStartPoint?.let { start ->
-                                        hypot(
-                                            (normalized.x - start.x).toDouble(),
-                                            (normalized.y - start.y).toDouble(),
-                                        ).toFloat()
-                                    } ?: 0f
-                                    val movedEnoughForScratch = movement >= (touchSide * PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO)
+                                        if (isPlatterPressureActive) {
+                                            if (isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx)) {
+                                                onPlatterPressureUpdate(
+                                                    currentPressure,
+                                                    pressureDirection(normalized, touchSide),
+                                                )
+                                            } else {
+                                                onPlatterPressureEnd()
+                                                isPlatterPressureActive = false
+                                            }
+                                            platterLastAngle = angle
+                                            return
+                                        }
 
-                                    val previousAngle = platterLastAngle
-                                    if (previousAngle != null) {
-                                        val delta = normalizedAngleDelta(previousAngle, angle)
                                         if (!isPlatterScratching &&
-                                            (abs(delta) >= PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD || movedEnoughForScratch)
+                                            isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx) &&
+                                            !movedEnoughForScratch &&
+                                            currentPressure >= PRESSURE_START_MIN_VALUE
                                         ) {
-                                            onBeginPlatterScratch()
-                                            isPlatterScratching = true
+                                            onPlatterPressureUpdate(
+                                                currentPressure,
+                                                pressureDirection(normalized, touchSide),
+                                            )
+                                            isPlatterPressureActive = true
+                                            platterLastAngle = angle
+                                            return
                                         }
-                                        if (isPlatterScratching) {
-                                            onPlatterScratchDelta(delta)
+
+                                        val previousAngle = platterLastAngle
+                                        if (previousAngle != null) {
+                                            val delta = normalizedAngleDelta(previousAngle, angle)
+                                            if (!isPlatterScratching &&
+                                                (abs(delta) >= PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD || movedEnoughForScratch)
+                                            ) {
+                                                if (isPlatterPressureActive) {
+                                                    onPlatterPressureEnd()
+                                                    isPlatterPressureActive = false
+                                                }
+                                                onBeginPlatterScratch()
+                                                isPlatterScratching = true
+                                            }
+                                            if (isPlatterScratching) {
+                                                onPlatterScratchDelta(delta)
+                                            }
+                                        }
+                                        platterLastAngle = angle
+                                    }
+
+                                    while (true) {
+                                        val event = withTimeoutOrNull(16L) { awaitPointerEvent() }
+                                        if (event == null) {
+                                            processTouchPoint(lastPosition, latestRawPressure)
+                                            continue
+                                        }
+                                        val change = event.changes.firstOrNull { it.id == pointerId }
+                                            ?: event.changes.firstOrNull()
+                                            ?: break
+                                        lastPosition = change.position
+                                        latestRawPressure = runCatching { change.pressure }.getOrDefault(latestRawPressure)
+                                        processTouchPoint(lastPosition, latestRawPressure)
+                                        if (change.changedToUpIgnoreConsumed()) {
+                                            break
                                         }
                                     }
-                                    platterLastAngle = angle
+
+                                    platterLastAngle = null
+                                    platterTouchStartPoint = null
+                                    if (isPlatterPressureActive) {
+                                        onPlatterPressureEnd()
+                                    }
+                                    if (isPlatterScratching) {
+                                        onEndPlatterScratch()
+                                    }
+                                    isPlatterPressureActive = false
+                                    isPlatterScratching = false
                                 }
                             },
                         platterRotationDegrees = platterRotationDegrees,
@@ -2254,8 +2322,27 @@ private fun normalizedAngleDelta(previous: Double, current: Double): Double {
     return delta
 }
 
+private fun pressureDirection(point: Offset, sidePx: Float): Double =
+    if (point.x < (sidePx * 0.5f)) -1.0 else 1.0
+
+private fun isAbovePressureBottomThreshold(point: Offset, sidePx: Float, visualInsetPx: Float): Boolean {
+    val visiblePlatterBottomY = sidePx - visualInsetPx
+    val threshold = visiblePlatterBottomY - (sidePx * PRESSURE_BOTTOM_BLOCKED_ZONE_RATIO)
+    return point.y <= threshold
+}
+
+private fun resolvePressureInput(rawPressure: Float, fallbackPressure: Float): Double {
+    val normalizedRaw = rawPressure.coerceIn(0f, 1f)
+    val looksLikeUnsupportedConstantPressure = normalizedRaw >= 0.995f || normalizedRaw <= 0.005f
+    val effective = if (looksLikeUnsupportedConstantPressure) fallbackPressure else normalizedRaw
+    return effective.coerceIn(0f, 1f).toDouble()
+}
+
 private const val PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD = 0.002
 private const val TURNTABLE_VISUAL_OUTER_INSET_DP = 10f
 private const val PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO = 0.035f
 private const val PLATTER_MIN_TOUCH_RADIUS_RATIO = 0.12f
 private const val PLATTER_MAX_TOUCH_RADIUS_RATIO = 0.5f
+private const val PRESSURE_BOTTOM_BLOCKED_ZONE_RATIO = 0.18f
+private const val PRESSURE_START_MIN_VALUE = 0.10
+private const val PRESSURE_FALLBACK_RAMP_SECONDS = 2.2
