@@ -122,11 +122,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import dev.manelix.mixer.core.common.model.AudioEngineMode
+import dev.manelix.mixer.core.common.model.AudioPlaybackState
 import dev.manelix.mixer.core.common.model.PanControlRange
 import dev.manelix.mixer.core.common.model.SplitDeckLayout
 import dev.manelix.mixer.core.ui.WaveformView
 import dev.manelix.mixer.feature.deck.model.DeckUiState
-import dev.manelix.mixer.feature.deck.model.hasSelectedTrack
 import dev.manelix.mixer.feature.deck.model.isPlaybackActive
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -351,18 +351,19 @@ fun DeckRoute(
                             showSampleImport = isEmulator,
                             onTapSeek = viewModel::seekLeftDeckFromWaveformTap,
                             onSetWaveformZoom = viewModel::setLeftDeckWaveformZoom,
-                            onBeginWaveformScratch = viewModel::beginLeftDeckWaveformScratch,
+                            onBeginWaveformScratch = { viewModel.beginLeftDeckWaveformScratch(screenState.leftDeck.isPlaybackActive) },
                             onWaveformScratchDelta = viewModel::updateLeftDeckWaveformScratch,
                             onEndWaveformScratch = viewModel::endLeftDeckWaveformScratch,
                             platterRotationDegrees = screenState.leftDeck.platterRotationDegrees.toFloat(),
-                            onBeginPlatterScratch = viewModel::beginLeftDeckPlatterScratch,
+                            onBeginPlatterScratch = { viewModel.beginLeftDeckPlatterScratch(screenState.leftDeck.isPlaybackActive) },
                             onPlatterScratchDelta = viewModel::updateLeftDeckPlatterScratch,
                             onEndPlatterScratch = viewModel::endLeftDeckPlatterScratch,
                             onPlatterPressureUpdate = viewModel::updateLeftDeckPressureTouch,
                             onPlatterPressureEnd = viewModel::endLeftDeckPressureTouch,
                             onStartPause = viewModel::togglePlayPauseLeftDeck,
                             onStop = viewModel::stopLeftDeck,
-                            hasSelectedTrack = screenState.leftDeck.hasSelectedTrack,
+                            isTransportReady = screenState.leftDeck.playbackState != AudioPlaybackState.IDLE &&
+                                !screenState.leftDeck.isWaveformLoading,
                             volume = screenState.leftDeck.volume,
                             onVolumeChange = viewModel::setLeftDeckVolume,
                             pitchOffset = pitchOffset(screenState.leftDeck.targetBpm, screenState.leftDeck.originalBpm),
@@ -406,18 +407,19 @@ fun DeckRoute(
                                 showSampleImport = isEmulator,
                                 onTapSeek = viewModel::seekRightDeckFromWaveformTap,
                                 onSetWaveformZoom = viewModel::setRightDeckWaveformZoom,
-                                onBeginWaveformScratch = viewModel::beginRightDeckWaveformScratch,
+                                onBeginWaveformScratch = { viewModel.beginRightDeckWaveformScratch(screenState.rightDeck.isPlaybackActive) },
                                 onWaveformScratchDelta = viewModel::updateRightDeckWaveformScratch,
                                 onEndWaveformScratch = viewModel::endRightDeckWaveformScratch,
                                 platterRotationDegrees = screenState.rightDeck.platterRotationDegrees.toFloat(),
-                                onBeginPlatterScratch = viewModel::beginRightDeckPlatterScratch,
+                                onBeginPlatterScratch = { viewModel.beginRightDeckPlatterScratch(screenState.rightDeck.isPlaybackActive) },
                                 onPlatterScratchDelta = viewModel::updateRightDeckPlatterScratch,
                                 onEndPlatterScratch = viewModel::endRightDeckPlatterScratch,
                                 onPlatterPressureUpdate = viewModel::updateRightDeckPressureTouch,
                                 onPlatterPressureEnd = viewModel::endRightDeckPressureTouch,
                                 onStartPause = viewModel::togglePlayPauseRightDeck,
                                 onStop = viewModel::stopRightDeck,
-                                hasSelectedTrack = screenState.rightDeck.hasSelectedTrack,
+                                isTransportReady = screenState.rightDeck.playbackState != AudioPlaybackState.IDLE &&
+                                    !screenState.rightDeck.isWaveformLoading,
                                 volume = screenState.rightDeck.volume,
                                 onVolumeChange = viewModel::setRightDeckVolume,
                                 pitchOffset = pitchOffset(screenState.rightDeck.targetBpm, screenState.rightDeck.originalBpm),
@@ -1377,7 +1379,7 @@ private fun DeckSurface(
     onPlatterPressureEnd: () -> Unit,
     onStartPause: () -> Unit,
     onStop: () -> Unit,
-    hasSelectedTrack: Boolean,
+    isTransportReady: Boolean,
     volume: Double,
     onVolumeChange: (Double) -> Unit,
     pitchOffset: Double,
@@ -1856,7 +1858,7 @@ private fun DeckSurface(
                             TechnicsButtonLabel(
                                 text = if (isPlaying) "PAUSE" else "START",
                                 onClick = onStartPause,
-                                enabled = hasSelectedTrack,
+                                enabled = isTransportReady,
                                 isStartButton = true,
                                 isPlaying = isPlaying,
                             )
@@ -1890,7 +1892,7 @@ private fun DeckSurface(
                             TechnicsButtonLabel(
                                 text = "STOP",
                                 onClick = onStop,
-                                enabled = hasSelectedTrack,
+                                enabled = isTransportReady,
                             )
                         }
                     }

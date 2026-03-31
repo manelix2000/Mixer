@@ -251,9 +251,19 @@ class DeckViewModel : ViewModel() {
 
     fun setRightDeckWaveformZoom(value: Double) = setDeckWaveformZoom(isLeft = false, value = value)
 
-    fun beginLeftDeckWaveformScratch() = beginDeckScratch(isLeft = true)
+    fun beginLeftDeckWaveformScratch(wasPlayingAtGestureStart: Boolean) =
+        beginDeckScratch(
+            isLeft = true,
+            wasPlayingAtGestureStart = wasPlayingAtGestureStart,
+            allowEngineScratch = false,
+        )
 
-    fun beginRightDeckWaveformScratch() = beginDeckScratch(isLeft = false)
+    fun beginRightDeckWaveformScratch(wasPlayingAtGestureStart: Boolean) =
+        beginDeckScratch(
+            isLeft = false,
+            wasPlayingAtGestureStart = wasPlayingAtGestureStart,
+            allowEngineScratch = false,
+        )
 
     fun updateLeftDeckWaveformScratch(deltaX: Double) = updateWaveformScratch(isLeft = true, deltaX = deltaX)
 
@@ -263,9 +273,19 @@ class DeckViewModel : ViewModel() {
 
     fun endRightDeckWaveformScratch() = endDeckScratch(isLeft = false)
 
-    fun beginLeftDeckPlatterScratch() = beginDeckScratch(isLeft = true)
+    fun beginLeftDeckPlatterScratch(wasPlayingAtGestureStart: Boolean) =
+        beginDeckScratch(
+            isLeft = true,
+            wasPlayingAtGestureStart = wasPlayingAtGestureStart,
+            allowEngineScratch = true,
+        )
 
-    fun beginRightDeckPlatterScratch() = beginDeckScratch(isLeft = false)
+    fun beginRightDeckPlatterScratch(wasPlayingAtGestureStart: Boolean) =
+        beginDeckScratch(
+            isLeft = false,
+            wasPlayingAtGestureStart = wasPlayingAtGestureStart,
+            allowEngineScratch = true,
+        )
 
     fun updateLeftDeckPlatterScratch(angleDelta: Double) = updatePlatterScratch(isLeft = true, angleDelta = angleDelta)
 
@@ -387,7 +407,9 @@ class DeckViewModel : ViewModel() {
     ) {
         val engine = engineForDeck(isLeft)
         cancelScratchState(isLeft)
+        runtimeForDeck(isLeft).userWantsPlayback = false
         runtimeForDeck(isLeft).blockAutoplayUntilManualStart = true
+        runtimeForDeck(isLeft).forceStayPausedAfterManualPause = true
         val trackName = extractTrackName(uri)
         updateDeckState(isLeft) { deck ->
             deck.copy(
@@ -441,16 +463,27 @@ class DeckViewModel : ViewModel() {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
             return
         }
+        if (deckState.isWaveformLoading) {
+            updateDeckState(isLeft) { it.copy(playbackStatusText = "Loading track...") }
+            return
+        }
 
         val result = if (deckState.isPlaybackActive) {
+            runtime.userWantsPlayback = false
+            runtime.forceStayPausedAfterManualPause = true
             engine.pause()
             Result.success(Unit)
         } else {
+            runtime.userWantsPlayback = true
             runtime.blockAutoplayUntilManualStart = false
+            runtime.forceStayPausedAfterManualPause = false
             engine.play()
         }
 
         if (result.isFailure) {
+            if (!deckState.isPlaybackActive) {
+                runtime.userWantsPlayback = false
+            }
             updateDeckState(isLeft) { deck ->
                 deck.copy(playbackStatusText = statusForError(result.exceptionOrNull(), "Unable to start playback"))
             }
@@ -469,6 +502,10 @@ class DeckViewModel : ViewModel() {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
             return
         }
+        if (deckState.isWaveformLoading) {
+            updateDeckState(isLeft) { it.copy(playbackStatusText = "Loading track...") }
+            return
+        }
 
         cancelScratchState(isLeft)
         engine.pause()
@@ -480,7 +517,9 @@ class DeckViewModel : ViewModel() {
             return
         }
         engine.pause()
-        runtime.blockAutoplayUntilManualStart = true
+        runtime.blockAutoplayUntilManualStart = false
+        runtime.userWantsPlayback = false
+        runtime.forceStayPausedAfterManualPause = true
 
         syncDeckFromEngine(isLeft)
         updateDeckState(isLeft) { deck -> deck.copy(playbackStatusText = "Stopped") }
@@ -488,11 +527,12 @@ class DeckViewModel : ViewModel() {
 
     private fun cancelScratchState(isLeft: Boolean) {
         val runtime = runtimeForDeck(isLeft)
-        if (runtime.isScrubbing) {
+        if (runtime.isScrubbing && runtime.isEngineScratchActive) {
             engineForDeck(isLeft).endScratch(resumePlayback = false)
         }
         runtime.isScrubbing = false
         runtime.wasPlayingBeforeScrub = false
+        runtime.isEngineScratchActive = false
         runtime.lastScratchUpdateNanos = 0L
         runtime.lastScratchCommitNanos = 0L
         runtime.smoothedScratchAngularVelocity = 0.0
@@ -507,14 +547,26 @@ class DeckViewModel : ViewModel() {
     private fun syncDeckFromEngine(isLeft: Boolean) {
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
-        val rawCurrentTime = engine.currentTimeSeconds
+        val deckSnapshot = currentDeckState(isLeft)
+        if (deckSnapshot.isWaveformLoading) {
+            runtime.userWantsPlayback = false
+            engine.pause()
+            if (engine.currentTimeSeconds > 0.01) {
+                engine.seekTo(0.0)
+            }
+        }
         if (
             runtime.blockAutoplayUntilManualStart &&
-            (engine.playbackState == AudioPlaybackState.PLAYING || rawCurrentTime > 0.01 || runtime.isScrubbing)
+            !runtime.isScrubbing
         ) {
             cancelScratchState(isLeft)
             engine.pause()
-            engine.seekTo(0.0)
+            if (engine.currentTimeSeconds > 0.01) {
+                engine.seekTo(0.0)
+            }
+        }
+        if (!runtime.isScrubbing && !runtime.userWantsPlayback) {
+            engine.pause()
         }
         stepTurntablePhysics(isLeft)
         val currentTime = engine.currentTimeSeconds
@@ -782,23 +834,45 @@ class DeckViewModel : ViewModel() {
         HIGH,
     }
 
-    private fun beginDeckScratch(isLeft: Boolean) {
+    private fun beginDeckScratch(
+        isLeft: Boolean,
+        wasPlayingAtGestureStart: Boolean? = null,
+        allowEngineScratch: Boolean = true,
+    ) {
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
+        syncDeckFromEngine(isLeft)
         val deck = currentDeckState(isLeft)
         if (!deck.hasSelectedTrack || runtime.isScrubbing) return
 
-        val beginResult = engine.beginScratch()
-        if (beginResult.isFailure) {
-            updateDeckState(isLeft) { it.copy(playbackStatusText = statusForError(beginResult.exceptionOrNull(), "Scratch unavailable")) }
-            return
-        }
-
-        runtime.isScrubbing = true
         if (runtime.pressureStartTargetBpm != null) {
             endDeckPressureTouch(isLeft = isLeft)
         }
-        runtime.wasPlayingBeforeScrub = deck.isPlaybackActive
+        runtime.isScrubbing = true
+        val wasPlayingFromUi = wasPlayingAtGestureStart ?: deck.isPlaybackActive
+        if (!wasPlayingFromUi) {
+            runtime.userWantsPlayback = false
+            engine.pause()
+        }
+        runtime.wasPlayingBeforeScrub =
+            wasPlayingFromUi &&
+                runtime.userWantsPlayback &&
+                !runtime.forceStayPausedAfterManualPause
+        if (runtime.wasPlayingBeforeScrub && allowEngineScratch) {
+            val beginResult = engine.beginScratch()
+            if (beginResult.isFailure) {
+                runtime.isScrubbing = false
+                runtime.wasPlayingBeforeScrub = false
+                updateDeckState(isLeft) {
+                    it.copy(playbackStatusText = statusForError(beginResult.exceptionOrNull(), "Scratch unavailable"))
+                }
+                return
+            }
+            runtime.isEngineScratchActive = true
+        } else {
+            runtime.isEngineScratchActive = false
+            engine.pause()
+        }
         runtime.scratchCurrentTime = engine.currentTimeSeconds
         runtime.lastCommittedScratchTime = runtime.scratchCurrentTime
         runtime.lastScratchUpdateNanos = 0L
@@ -823,22 +897,35 @@ class DeckViewModel : ViewModel() {
         val zoom = currentDeckState(isLeft).waveformZoom
         val pointsPerRevolution = max(MIN_WAVEFORM_POINTS_PER_REVOLUTION, WAVEFORM_POINTS_PER_REVOLUTION * zoom)
         val angleDelta = -(deltaX / pointsPerRevolution) * (Math.PI * 2.0)
-        updateDeckScratch(isLeft = isLeft, angleDelta = angleDelta)
+        updateDeckScratch(
+            isLeft = isLeft,
+            angleDelta = angleDelta,
+            allowEngineScratchIfBeginNeeded = false,
+        )
     }
 
     private fun updatePlatterScratch(
         isLeft: Boolean,
         angleDelta: Double,
-    ) = updateDeckScratch(isLeft = isLeft, angleDelta = angleDelta)
+    ) = updateDeckScratch(
+        isLeft = isLeft,
+        angleDelta = angleDelta,
+        allowEngineScratchIfBeginNeeded = true,
+    )
 
     private fun updateDeckScratch(
         isLeft: Boolean,
         angleDelta: Double,
+        allowEngineScratchIfBeginNeeded: Boolean,
     ) {
         val runtime = runtimeForDeck(isLeft)
         val engine = engineForDeck(isLeft)
         if (!runtime.isScrubbing) {
-            beginDeckScratch(isLeft)
+            beginDeckScratch(
+                isLeft = isLeft,
+                wasPlayingAtGestureStart = currentDeckState(isLeft).isPlaybackActive,
+                allowEngineScratch = allowEngineScratchIfBeginNeeded,
+            )
             if (!runtimeForDeck(isLeft).isScrubbing) return
         }
 
@@ -892,22 +979,39 @@ class DeckViewModel : ViewModel() {
         commitScratchAudio(isLeft = isLeft, force = true)
         val totalDuration = engine.totalDurationSeconds
         val isAtTrackEnd = runtime.scratchCurrentTime >= (totalDuration - TRACK_END_TOLERANCE)
-        val shouldResumePlayback = runtime.wasPlayingBeforeScrub && !isAtTrackEnd
-        val endResult = engine.endScratch(resumePlayback = shouldResumePlayback)
-        if (endResult.isFailure) {
-            updateDeckState(isLeft) { it.copy(playbackStatusText = statusForError(endResult.exceptionOrNull(), "Scratch release failed")) }
+        val shouldResumePlayback =
+            runtime.wasPlayingBeforeScrub &&
+                !runtime.forceStayPausedAfterManualPause &&
+                !isAtTrackEnd
+        if (runtime.isEngineScratchActive) {
+            val endResult = engine.endScratch(resumePlayback = false)
+            if (endResult.isFailure) {
+                updateDeckState(isLeft) { it.copy(playbackStatusText = statusForError(endResult.exceptionOrNull(), "Scratch release failed")) }
+            }
+        } else {
+            engine.seekTo(runtime.scratchCurrentTime)
+            engine.pause()
         }
 
         runtime.isScrubbing = false
         runtime.wasPlayingBeforeScrub = false
+        runtime.isEngineScratchActive = false
         runtime.lastScratchUpdateNanos = 0L
         runtime.smoothedScratchAngularVelocity = 0.0
         runtime.latestScratchAngularVelocity = 0.0
         runtime.latestScratchDirection = 1.0
         runtime.scratchMode = ScratchMode.SCRUB
 
-        if (!shouldResumePlayback && !isAtTrackEnd) {
+        if (shouldResumePlayback) {
+            runtime.userWantsPlayback = true
+            engine.play()
+        } else if (!isAtTrackEnd) {
+            runtime.userWantsPlayback = false
             engine.pause()
+            engine.seekTo(runtime.scratchCurrentTime)
+            engine.pause()
+        } else {
+            runtime.userWantsPlayback = false
         }
 
         updateDeckState(isLeft) {
@@ -964,7 +1068,23 @@ class DeckViewModel : ViewModel() {
             if (runtime.lastScratchCommitNanos > 0L && elapsed < minIntervalNanos && moved < minDelta) return
         }
 
-        val signedVelocity = max(kotlin.math.abs(runtime.latestScratchAngularVelocity), 0.001) * runtime.latestScratchDirection
+        if (!runtime.isEngineScratchActive) {
+            val seekResult = engine.seekTo(runtime.scratchCurrentTime)
+            if (seekResult.isSuccess) {
+                engine.pause()
+                runtime.lastScratchCommitNanos = nowNanos
+                runtime.lastCommittedScratchTime = runtime.scratchCurrentTime
+            } else if (!force) {
+                updateDeckState(isLeft) { it.copy(playbackStatusText = statusForError(seekResult.exceptionOrNull(), "Scrub unavailable")) }
+            }
+            return
+        }
+
+        val signedVelocity = if (runtime.wasPlayingBeforeScrub && !runtime.forceStayPausedAfterManualPause) {
+            max(kotlin.math.abs(runtime.latestScratchAngularVelocity), 0.001) * runtime.latestScratchDirection
+        } else {
+            0.0
+        }
         val result = engine.scratchTo(runtime.scratchCurrentTime, signedVelocity)
         if (result.isSuccess) {
             runtime.lastScratchCommitNanos = nowNanos
@@ -1444,7 +1564,10 @@ class DeckViewModel : ViewModel() {
         var physics: TurntablePhysicsState = TurntablePhysicsState(),
         var isScrubbing: Boolean = false,
         var wasPlayingBeforeScrub: Boolean = false,
+        var isEngineScratchActive: Boolean = false,
+        var userWantsPlayback: Boolean = false,
         var blockAutoplayUntilManualStart: Boolean = false,
+        var forceStayPausedAfterManualPause: Boolean = false,
         var scratchCurrentTime: Double = 0.0,
         var lastScratchUpdateNanos: Long = 0L,
         var lastScratchCommitNanos: Long = 0L,

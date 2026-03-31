@@ -227,8 +227,10 @@ class SkeletonAudioEngineController(
 
         running = true
         if (!isScratchModeActive) {
-            scratchWasPlayingBeforeGesture = internalPlaybackState == AudioPlaybackState.PLAYING
+            val playerWasPlaying = mediaPlayer?.isPlaying == true
+            scratchWasPlayingBeforeGesture = playerWasPlaying || (internalPlaybackState == AudioPlaybackState.PLAYING)
         }
+        mediaPlayer?.runCatching { pause() }
         lastKnownCurrentTimeSeconds = resolvedCurrentTimeLocked()
         playbackStartOffsetSeconds = lastKnownCurrentTimeSeconds
         isScratchModeActive = true
@@ -251,13 +253,14 @@ class SkeletonAudioEngineController(
         lastKnownCurrentTimeSeconds = clamped
         playbackStartOffsetSeconds = clamped
         mediaPlayer?.runCatching { seekTo((clamped * 1000.0).toInt()) }
-        internalPlaybackState = if (angularVelocity == 0.0) {
-            mediaPlayer?.runCatching { pause() }
-            AudioPlaybackState.PAUSED
-        } else {
+        val shouldPlayDuringScratch = scratchWasPlayingBeforeGesture && angularVelocity != 0.0
+        internalPlaybackState = if (shouldPlayDuringScratch) {
             mediaPlayer?.runCatching { start() }
             startPlaybackClockLocked(clamped)
             AudioPlaybackState.PLAYING
+        } else {
+            mediaPlayer?.runCatching { pause() }
+            AudioPlaybackState.PAUSED
         }
         Result.success(Unit)
     }
