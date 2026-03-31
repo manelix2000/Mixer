@@ -1557,35 +1557,17 @@ private fun DeckSurface(
                                 }
                             }
                             if (isWaveformLoading) {
-                                val loadingPercent = parseWaveformLoadingPercent(waveformText)
-                                Column(
+                                Box(
                                     modifier = Modifier
                                         .align(Alignment.Center)
                                         .zIndex(3f),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
-                                    if (loadingPercent != null) {
-                                        CircularProgressIndicator(
-                                            progress = { loadingPercent.coerceIn(0f, 1f) },
-                                            color = Color.White,
-                                            trackColor = Color.White.copy(alpha = 0.25f),
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                        Text(
-                                            text = "${(loadingPercent * 100f).toInt()}%",
-                                            color = Color.White,
-                                            fontSize = 10.sp,
-                                        )
-                                    } else {
-                                        CircularProgressIndicator(
-                                            color = Color.White,
-                                            trackColor = Color.White.copy(alpha = 0.25f),
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        trackColor = Color.White.copy(alpha = 0.25f),
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(20.dp),
+                                    )
                                 }
                             }
                             if (!isPitchAdjusting) {
@@ -2234,14 +2216,6 @@ private fun panRoutingText(pan: Double): String = when {
     pan <= -0.1 -> "L"
     pan >= 0.1 -> "R"
     else -> "C"
-}
-
-private fun parseWaveformLoadingPercent(waveformText: String?): Float? {
-    val raw = waveformText?.trim().orEmpty()
-    if (raw.isBlank()) return null
-    val percentToken = raw.substringAfterLast(' ', missingDelimiterValue = raw)
-    val numeric = percentToken.removeSuffix("%").toFloatOrNull() ?: return null
-    return (numeric / 100f).coerceIn(0f, 1f)
 }
 
 private fun cueMixCodeToValue(code: String): Float = when (code.uppercase()) {

@@ -10,8 +10,10 @@ import dev.manelix.mixer.core.waveform.model.WaveformProgress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.pow
+import kotlin.math.sqrt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -51,14 +53,20 @@ class ProceduralWaveformAnalyzer : WaveformAnalyzer {
             extractor.selectTrack(trackIndex)
             val inputFormat = extractor.getTrackFormat(trackIndex)
             val mime = inputFormat.getString(MediaFormat.KEY_MIME) ?: return FloatArray(0)
+            val sampleRateHz = inputFormat.getIntegerOrElse(MediaFormat.KEY_SAMPLE_RATE, 44_100).coerceAtLeast(1)
+            val durationUs = inputFormat.getLongOrElse(MediaFormat.KEY_DURATION, 0L).coerceAtLeast(0L)
+            val estimatedTotalFrames = if (durationUs > 0L) {
+                ((durationUs / 1_000_000.0) * sampleRateHz.toDouble()).toLong().coerceAtLeast(1L)
+            } else {
+                sampleCount.toLong()
+            }
+            val framesPerBucket = max(ceil(estimatedTotalFrames.toDouble() / sampleCount.toDouble()).toInt(), 1)
             codec = MediaCodec.createDecoderByType(mime)
             codec.configure(inputFormat, null, null, 0)
             codec.start()
 
-            val peaks = decodeToWindowPeaks(codec, extractor)
-            if (peaks.isEmpty()) return FloatArray(0)
-
-            val rawBuckets = maxPoolToSampleCount(peaks, sampleCount)
+            val rawBuckets = decodeToBuckets(codec, extractor, sampleCount, framesPerBucket, onProgress)
+            if (rawBuckets.isEmpty()) return FloatArray(0)
             val normalized = normalizeBuckets(rawBuckets)
             onProgress(
                 WaveformProgress(
@@ -99,28 +107,58 @@ class ProceduralWaveformAnalyzer : WaveformAnalyzer {
         return null
     }
 
-    private fun decodeToWindowPeaks(
+    private fun decodeToBuckets(
         codec: MediaCodec,
         extractor: MediaExtractor,
+        sampleCount: Int,
+        framesPerBucket: Int,
+        onProgress: (WaveformProgress) -> Unit,
     ): FloatArray {
         val bufferInfo = MediaCodec.BufferInfo()
-        val peaks = ArrayList<Float>(2048)
+        val buckets = FloatArray(sampleCount)
+        var bucketIndex = 0
+        var runningMax = 0.000001f
         var inputDone = false
         var outputDone = false
         var channelCount = 1
         var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
 
-        var windowPeak = 0f
-        var samplesInWindow = 0
-        val windowSize = 512
+        var currentBucketPeak = 0f
+        var currentBucketSquareSum = 0f
+        var framesInBucket = 0
 
         fun appendAmplitude(amplitude: Float) {
-            if (amplitude > windowPeak) windowPeak = amplitude
-            samplesInWindow += 1
-            if (samplesInWindow >= windowSize) {
-                peaks.add(windowPeak.coerceIn(0f, 1f))
-                windowPeak = 0f
-                samplesInWindow = 0
+            if (bucketIndex >= sampleCount) return
+            if (amplitude > currentBucketPeak) currentBucketPeak = amplitude
+            currentBucketSquareSum += amplitude * amplitude
+            framesInBucket += 1
+            if (framesInBucket >= framesPerBucket) {
+                val bucketValue = finalizeBucketValue(
+                    peak = currentBucketPeak,
+                    squareSum = currentBucketSquareSum,
+                    frameCount = framesInBucket,
+                )
+                buckets[bucketIndex] = bucketValue
+                runningMax = max(runningMax, bucketValue)
+                bucketIndex += 1
+                currentBucketPeak = 0f
+                currentBucketSquareSum = 0f
+                framesInBucket = 0
+
+                if (bucketIndex % 64 == 0 || bucketIndex == sampleCount) {
+                    onProgress(
+                        WaveformProgress(
+                            samples = makeProgressSnapshot(
+                                buckets = buckets,
+                                completed = bucketIndex,
+                                sampleCount = sampleCount,
+                                runningMax = runningMax,
+                            ),
+                            completedBuckets = bucketIndex,
+                            totalBuckets = sampleCount,
+                        ),
+                    )
+                }
             }
         }
 
@@ -180,8 +218,53 @@ class ProceduralWaveformAnalyzer : WaveformAnalyzer {
             }
         }
 
-        if (samplesInWindow > 0) peaks.add(windowPeak.coerceIn(0f, 1f))
-        return peaks.toFloatArray()
+        if (framesInBucket > 0 && bucketIndex < sampleCount) {
+            val bucketValue = finalizeBucketValue(
+                peak = currentBucketPeak,
+                squareSum = currentBucketSquareSum,
+                frameCount = framesInBucket,
+            )
+            buckets[bucketIndex] = bucketValue
+            runningMax = max(runningMax, bucketValue)
+            bucketIndex += 1
+        }
+        if (bucketIndex <= 0) return FloatArray(0)
+        return buckets
+    }
+
+    private fun normalizeBuckets(samples: FloatArray): FloatArray {
+        val floorAndScale = normalizationWindow(samples)
+        val normalized = FloatArray(samples.size)
+        for (i in samples.indices) {
+            normalized[i] = ((samples[i] - floorAndScale.floor) / floorAndScale.scale).coerceIn(0.0f, 1.0f)
+        }
+        return normalized
+    }
+
+    private fun finalizeBucketValue(
+        peak: Float,
+        squareSum: Float,
+        frameCount: Int,
+    ): Float {
+        if (frameCount <= 0) return 0f
+        val rms = sqrt(squareSum / frameCount.toFloat())
+        val blended = (rms * 0.82f) + (peak * 0.18f)
+        return max(blended, 0f).pow(0.95f)
+    }
+
+    private fun makeProgressSnapshot(
+        buckets: FloatArray,
+        completed: Int,
+        sampleCount: Int,
+        runningMax: Float,
+    ): FloatArray {
+        val normalization = max(runningMax, 0.000001f)
+        val snapshot = FloatArray(sampleCount)
+        val safeCompleted = completed.coerceIn(0, sampleCount)
+        for (i in 0 until safeCompleted) {
+            snapshot[i] = (buckets[i] / normalization).coerceIn(0f, 1f)
+        }
+        return snapshot
     }
 
     private fun consumePcm(
@@ -221,34 +304,6 @@ class ProceduralWaveformAnalyzer : WaveformAnalyzer {
                 }
             }
         }
-    }
-
-    private fun maxPoolToSampleCount(
-        peaks: FloatArray,
-        sampleCount: Int,
-    ): FloatArray {
-        if (peaks.isEmpty()) return FloatArray(sampleCount)
-        val output = FloatArray(sampleCount)
-        for (bucket in 0 until sampleCount) {
-            val start = (bucket.toLong() * peaks.size.toLong() / sampleCount.toLong()).toInt().coerceIn(0, peaks.lastIndex)
-            val exclusiveEnd = (((bucket + 1).toLong() * peaks.size.toLong() / sampleCount.toLong()).toInt())
-                .coerceIn(start + 1, peaks.size)
-            var localMax = 0f
-            for (index in start until exclusiveEnd) {
-                if (peaks[index] > localMax) localMax = peaks[index]
-            }
-            output[bucket] = localMax
-        }
-        return output
-    }
-
-    private fun normalizeBuckets(samples: FloatArray): FloatArray {
-        val floorAndScale = normalizationWindow(samples)
-        val normalized = FloatArray(samples.size)
-        for (i in samples.indices) {
-            normalized[i] = ((samples[i] - floorAndScale.floor) / floorAndScale.scale).coerceIn(0.0f, 1.0f)
-        }
-        return normalized
     }
 
     private fun generateProceduralWaveform(
@@ -312,3 +367,8 @@ private fun MediaFormat.getIntegerOrElse(
     key: String,
     fallback: Int,
 ): Int = runCatching { getInteger(key) }.getOrDefault(fallback)
+
+private fun MediaFormat.getLongOrElse(
+    key: String,
+    fallback: Long,
+): Long = runCatching { getLong(key) }.getOrDefault(fallback)

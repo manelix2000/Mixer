@@ -44,7 +44,7 @@ import kotlin.math.pow
 
 class DeckViewModel : ViewModel() {
     companion object {
-        private const val WAVEFORM_SAMPLE_COUNT = 512
+        private const val WAVEFORM_SAMPLE_COUNT = 4096 * 4
         private const val WAVEFORM_MIN_ZOOM = 0.2
         private const val WAVEFORM_MAX_ZOOM = 8.0
         private const val WAVEFORM_BASE_SAMPLE_SPACING = 2.0
