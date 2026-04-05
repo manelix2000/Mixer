@@ -73,6 +73,9 @@ class DeckViewModel : ViewModel() {
         private const val MIN_BPM = 60.0
         private const val MAX_BPM = 200.0
         private const val OFFLINE_BPM_ANALYSIS_SECONDS = 12.0
+        private const val PROGRESSIVE_BPM_MIN_FRACTION = 0.10
+        private const val PROGRESSIVE_BPM_STEP_FRACTION = 0.12
+        private const val PROGRESSIVE_BPM_MIN_SAMPLES = 2048
         private const val LIVE_MIC_BPM_SMOOTHING = 0.22
         private const val MAX_TRACK_ANALYSIS_CACHE_ENTRIES = 24
         private const val MAX_PRESSURE_SLOWDOWN_FRACTION = 0.9
@@ -90,8 +93,14 @@ class DeckViewModel : ViewModel() {
     private val microphoneBpmPipeline = MicrophoneBpmPipeline(detector = tempoDetector)
     private var leftWaveformJob: Job? = null
     private var rightWaveformJob: Job? = null
+    private var leftProgressiveBpmJob: Job? = null
+    private var rightProgressiveBpmJob: Job? = null
     private var leftOfflineBpmJob: Job? = null
     private var rightOfflineBpmJob: Job? = null
+    private var leftWaveformGeneration: Long = 0L
+    private var rightWaveformGeneration: Long = 0L
+    private var leftNextProgressiveBpmFraction: Double = PROGRESSIVE_BPM_MIN_FRACTION
+    private var rightNextProgressiveBpmFraction: Double = PROGRESSIVE_BPM_MIN_FRACTION
     private var latestExternalBpm: Double? = null
     private val analysisCacheLock = ReentrantLock()
     private val trackAnalysisCache =
@@ -393,6 +402,8 @@ class DeckViewModel : ViewModel() {
     override fun onCleared() {
         leftWaveformJob?.cancel()
         rightWaveformJob?.cancel()
+        leftProgressiveBpmJob?.cancel()
+        rightProgressiveBpmJob?.cancel()
         leftOfflineBpmJob?.cancel()
         rightOfflineBpmJob?.cancel()
         microphoneBpmPipeline.reset()
@@ -488,10 +499,6 @@ class DeckViewModel : ViewModel() {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
             return
         }
-        if (deckState.isWaveformLoading) {
-            updateDeckState(isLeft) { it.copy(playbackStatusText = "Loading track...") }
-            return
-        }
 
         val result = if (deckState.isPlaybackActive) {
             runtime.userWantsPlayback = false
@@ -530,10 +537,6 @@ class DeckViewModel : ViewModel() {
         val deckState = currentDeckState(isLeft)
         if (!deckState.hasSelectedTrack) {
             updateDeckState(isLeft) { it.copy(playbackStatusText = "Select a track first") }
-            return
-        }
-        if (deckState.isWaveformLoading) {
-            updateDeckState(isLeft) { it.copy(playbackStatusText = "Loading track...") }
             return
         }
 
@@ -578,16 +581,6 @@ class DeckViewModel : ViewModel() {
     private fun syncDeckFromEngine(isLeft: Boolean) {
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
-        val deckSnapshot = currentDeckState(isLeft)
-        if (deckSnapshot.isWaveformLoading) {
-            runtime.userWantsPlayback = false
-            if (engine.playbackState == AudioPlaybackState.PLAYING) {
-                engine.pause()
-            }
-            if (engine.currentTimeSeconds > 0.01) {
-                engine.seekTo(0.0)
-            }
-        }
         if (
             runtime.blockAutoplayUntilManualStart &&
             !runtime.isScrubbing
@@ -1236,6 +1229,9 @@ class DeckViewModel : ViewModel() {
         uri: String,
     ) {
         waveformJobForDeck(isLeft)?.cancel()
+        progressiveBpmJobForDeck(isLeft)?.cancel()
+        setNextProgressiveBpmFractionForDeck(isLeft = isLeft, fraction = PROGRESSIVE_BPM_MIN_FRACTION)
+        val waveformGeneration = nextWaveformGenerationForDeck(isLeft)
         val job = viewModelScope.launch {
             try {
                 val finalWaveform = withContext(Dispatchers.Default) {
@@ -1255,6 +1251,13 @@ class DeckViewModel : ViewModel() {
                                 },
                             )
                         }
+                        maybeRunProgressiveBpmDetection(
+                            isLeft = isLeft,
+                            uri = uri,
+                            waveform = progress.samples,
+                            fraction = progress.fraction,
+                            waveformGeneration = waveformGeneration,
+                        )
                     }
                 }
                 updateDeckState(isLeft) { deck ->
@@ -1306,6 +1309,7 @@ class DeckViewModel : ViewModel() {
             return
         }
 
+        progressiveBpmJobForDeck(isLeft)?.cancel()
         if (isLeft) {
             leftOfflineBpmJob?.cancel()
         } else {
@@ -1362,6 +1366,113 @@ class DeckViewModel : ViewModel() {
             leftOfflineBpmJob = job
         } else {
             rightOfflineBpmJob = job
+        }
+    }
+
+    private fun maybeRunProgressiveBpmDetection(
+        isLeft: Boolean,
+        uri: String,
+        waveform: FloatArray,
+        fraction: Double,
+        waveformGeneration: Long,
+    ) {
+        if (waveform.isEmpty()) return
+        if (waveformGeneration != currentWaveformGenerationForDeck(isLeft)) return
+
+        val clampedFraction = fraction.coerceIn(0.0, 1.0)
+        val nextFraction = nextProgressiveBpmFractionForDeck(isLeft)
+        if (clampedFraction < nextFraction) return
+
+        val usableSamples = max(
+            PROGRESSIVE_BPM_MIN_SAMPLES,
+            (waveform.size * clampedFraction).toInt(),
+        ).coerceAtMost(waveform.size)
+        if (usableSamples <= 0) return
+        val waveformSlice = waveform.copyOf(usableSamples)
+        val analysisFraction = (usableSamples.toDouble() / waveform.size.toDouble()).coerceIn(0.0, 1.0)
+
+        setNextProgressiveBpmFractionForDeck(
+            isLeft = isLeft,
+            fraction = (analysisFraction + PROGRESSIVE_BPM_STEP_FRACTION).coerceAtMost(1.0),
+        )
+        progressiveBpmJobForDeck(isLeft)?.cancel()
+        val deckAtSchedule = currentDeckState(isLeft)
+        if (deckAtSchedule.selectedTrackUri != uri) return
+
+        val job = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                val input = synthesizeTempoInputFromWaveform(waveform = waveformSlice)
+                tempoDetector.detectTempo(input)
+            }
+            if (waveformGeneration != currentWaveformGenerationForDeck(isLeft)) return@launch
+            val deckAtApply = currentDeckState(isLeft)
+            if (deckAtApply.selectedTrackUri != uri) return@launch
+
+            when (result) {
+                is BpmResult.Detected -> {
+                    val clampedBpm = result.bpm.coerceIn(MIN_BPM, MAX_BPM)
+                    applyDetectedDeckBpm(
+                        isLeft = isLeft,
+                        uri = uri,
+                        bpm = clampedBpm,
+                        confidence = result.confidence,
+                    )
+                    if (analysisFraction < 0.999) {
+                        updateDeckState(isLeft) { deck ->
+                            deck.copy(
+                                bpmDetectionStatusText = String.format(
+                                    "Detected %.1f BPM (acc. %.2f) - refining...",
+                                    clampedBpm,
+                                    result.confidence,
+                                ),
+                            )
+                        }
+                    }
+                }
+                is BpmResult.Unavailable -> {
+                    // Keep waiting for more waveform data and run the final offline pass on completion.
+                }
+            }
+        }
+        setProgressiveBpmJobForDeck(isLeft, job)
+    }
+
+    private fun progressiveBpmJobForDeck(isLeft: Boolean): Job? = if (isLeft) leftProgressiveBpmJob else rightProgressiveBpmJob
+
+    private fun setProgressiveBpmJobForDeck(
+        isLeft: Boolean,
+        job: Job?,
+    ) {
+        if (isLeft) {
+            leftProgressiveBpmJob = job
+        } else {
+            rightProgressiveBpmJob = job
+        }
+    }
+
+    private fun nextWaveformGenerationForDeck(isLeft: Boolean): Long {
+        return if (isLeft) {
+            leftWaveformGeneration += 1
+            leftWaveformGeneration
+        } else {
+            rightWaveformGeneration += 1
+            rightWaveformGeneration
+        }
+    }
+
+    private fun currentWaveformGenerationForDeck(isLeft: Boolean): Long = if (isLeft) leftWaveformGeneration else rightWaveformGeneration
+
+    private fun nextProgressiveBpmFractionForDeck(isLeft: Boolean): Double =
+        if (isLeft) leftNextProgressiveBpmFraction else rightNextProgressiveBpmFraction
+
+    private fun setNextProgressiveBpmFractionForDeck(
+        isLeft: Boolean,
+        fraction: Double,
+    ) {
+        if (isLeft) {
+            leftNextProgressiveBpmFraction = fraction
+        } else {
+            rightNextProgressiveBpmFraction = fraction
         }
     }
 

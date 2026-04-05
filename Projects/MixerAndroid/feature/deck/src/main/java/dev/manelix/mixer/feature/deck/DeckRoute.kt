@@ -367,8 +367,7 @@ fun DeckRoute(
                             onPlatterPressureEnd = viewModel::endLeftDeckPressureTouch,
                             onStartPause = viewModel::togglePlayPauseLeftDeck,
                             onStop = viewModel::stopLeftDeck,
-                            isTransportReady = screenState.leftDeck.playbackState != AudioPlaybackState.IDLE &&
-                                !screenState.leftDeck.isWaveformLoading,
+                            isTransportReady = screenState.leftDeck.playbackState != AudioPlaybackState.IDLE,
                             volume = screenState.leftDeck.volume,
                             onVolumeChange = viewModel::setLeftDeckVolume,
                             pitchOffset = pitchOffset(
@@ -432,8 +431,7 @@ fun DeckRoute(
                                 onPlatterPressureEnd = viewModel::endRightDeckPressureTouch,
                                 onStartPause = viewModel::togglePlayPauseRightDeck,
                                 onStop = viewModel::stopRightDeck,
-                                isTransportReady = screenState.rightDeck.playbackState != AudioPlaybackState.IDLE &&
-                                    !screenState.rightDeck.isWaveformLoading,
+                                isTransportReady = screenState.rightDeck.playbackState != AudioPlaybackState.IDLE,
                                 volume = screenState.rightDeck.volume,
                                 onVolumeChange = viewModel::setRightDeckVolume,
                                 pitchOffset = pitchOffset(
