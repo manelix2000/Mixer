@@ -89,6 +89,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -1177,6 +1178,11 @@ private fun VerticalPitchFader(
     val selectedHeightFraction = abs(displayProgress - baselineDisplayProgress).coerceAtLeast(0.01f)
     val selectedCenter = (displayProgress + baselineDisplayProgress) * 0.5f
     val thumbCenterY = (1f - displayProgress) * usableHeightPx + (thumbHeightPx * 0.5f)
+    val latestThumbCenterY by rememberUpdatedState(thumbCenterY)
+    val latestTrackWidthPx by rememberUpdatedState(trackWidthPx)
+    val latestThumbWidthPx by rememberUpdatedState(thumbWidthPx)
+    val latestThumbHeightPx by rememberUpdatedState(thumbHeightPx)
+    val latestUsableHeightPx by rememberUpdatedState(usableHeightPx)
     val isInteracting = isDragging || isThumbPressed
 
     LaunchedEffect(normalized, isDragging) {
@@ -1194,14 +1200,14 @@ private fun VerticalPitchFader(
                 trackWidthPx = it.width.toFloat()
                 trackHeightPx = it.height.toFloat()
             }
-            .pointerInput(enabled, trackWidthPx, thumbCenterY, thumbHeightPx, thumbWidthPx) {
+            .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val thumbLeft = ((trackWidthPx - thumbWidthPx) * 0.5f).coerceAtLeast(0f)
-                    val thumbRight = (thumbLeft + thumbWidthPx).coerceAtMost(trackWidthPx)
-                    val thumbTop = thumbCenterY - (thumbHeightPx * 0.5f)
-                    val thumbBottom = thumbCenterY + (thumbHeightPx * 0.5f)
+                    val thumbLeft = ((latestTrackWidthPx - latestThumbWidthPx) * 0.5f).coerceAtLeast(0f)
+                    val thumbRight = (thumbLeft + latestThumbWidthPx).coerceAtMost(latestTrackWidthPx)
+                    val thumbTop = latestThumbCenterY - (latestThumbHeightPx * 0.5f)
+                    val thumbBottom = latestThumbCenterY + (latestThumbHeightPx * 0.5f)
                     val pressedThumb = down.position.x in thumbLeft..thumbRight &&
                         down.position.y in thumbTop..thumbBottom
                     if (!pressedThumb) return@awaitEachGesture
@@ -1218,32 +1224,48 @@ private fun VerticalPitchFader(
                     }
                 }
             }
-            .pointerInput(valueRange, isInverted, trackHeightPx, enabled) {
+            .pointerInput(valueRange, isInverted, enabled) {
                 if (!enabled) return@pointerInput
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val safeHeight = trackHeightPx.coerceAtLeast(1f)
-                        val clampedY = offset.y.coerceIn(0f, safeHeight)
-                        val startDisplayProgress = (1f - (clampedY / safeHeight)).coerceIn(0f, 1f)
-                        val startValueProgress = if (isInverted) 1f - startDisplayProgress else startDisplayProgress
-                        isDragging = true
-                        dragValueProgress = startValueProgress
-                        onValueChange(valueRange.start + (startValueProgress * rangeSpan))
-                    },
-                    onDragEnd = {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val thumbLeft = ((latestTrackWidthPx - latestThumbWidthPx) * 0.5f).coerceAtLeast(0f)
+                    val thumbRight = (thumbLeft + latestThumbWidthPx).coerceAtMost(latestTrackWidthPx)
+                    val thumbTop = latestThumbCenterY - (latestThumbHeightPx * 0.5f)
+                    val thumbBottom = latestThumbCenterY + (latestThumbHeightPx * 0.5f)
+                    val pressedThumb = down.position.x in thumbLeft..thumbRight &&
+                        down.position.y in thumbTop..thumbBottom
+                    if (!pressedThumb) return@awaitEachGesture
+
+                    val safeUsableHeight = latestUsableHeightPx.coerceAtLeast(1f)
+                    var activePointerId = down.id
+                    var lastPointerY = down.position.y
+                    val startValueProgress = dragValueProgress
+
+                    isDragging = true
+                    dragValueProgress = startValueProgress
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val activeChange = event.changes.firstOrNull { it.id == activePointerId }
+                            if (activeChange != null) {
+                                val deltaY = activeChange.position.y - lastPointerY
+                                lastPointerY = activeChange.position.y
+                                val displayDelta = deltaY / safeUsableHeight
+                                val currentDisplayProgress = if (isInverted) 1f - dragValueProgress else dragValueProgress
+                                val updatedDisplayProgress = (currentDisplayProgress - displayDelta).coerceIn(0f, 1f)
+                                val updatedValueProgress = if (isInverted) 1f - updatedDisplayProgress else updatedDisplayProgress
+                                dragValueProgress = updatedValueProgress
+                                onValueChange(valueRange.start + (updatedValueProgress * rangeSpan))
+                                if (!activeChange.pressed) break
+                                continue
+                            }
+                            val replacementPointer = event.changes.firstOrNull { it.pressed } ?: break
+                            activePointerId = replacementPointer.id
+                            lastPointerY = replacementPointer.position.y
+                        }
+                    } finally {
                         isDragging = false
-                    },
-                    onDragCancel = {
-                        isDragging = false
-                    },
-                ) { _, dragAmount ->
-                    if (!isDragging) return@detectDragGestures
-                    val displayDelta = dragAmount.y / usableHeightPx
-                    val currentDisplayProgress = if (isInverted) 1f - dragValueProgress else dragValueProgress
-                    val updatedDisplayProgress = (currentDisplayProgress - displayDelta).coerceIn(0f, 1f)
-                    val updatedValueProgress = if (isInverted) 1f - updatedDisplayProgress else updatedDisplayProgress
-                    dragValueProgress = updatedValueProgress
-                    onValueChange(valueRange.start + (updatedValueProgress * rangeSpan))
+                    }
                 }
             },
         contentAlignment = Alignment.Center,
@@ -2422,6 +2444,7 @@ private fun pitchOffset(
     targetBpm: Double,
     originalBpm: Double,
 ): Double {
+    if (targetBpm <= 0.0) return 0.0
     val safeOriginal = if (originalBpm > 0.0) originalBpm else 120.0
     return ((targetBpm / safeOriginal) - 1.0).coerceIn(-0.16, 0.16)
 }
