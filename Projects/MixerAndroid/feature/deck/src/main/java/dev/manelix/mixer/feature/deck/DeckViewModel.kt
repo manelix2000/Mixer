@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import dev.manelix.mixer.core.audio.AudioEngineController
 import dev.manelix.mixer.core.audio.AudioEngineException
 import dev.manelix.mixer.core.audio.AudioEngineRoutingProvider
-import dev.manelix.mixer.core.audio.SkeletonAudioEngineController
+import dev.manelix.mixer.core.audio.MediaPlayerAudioEngineController
 import dev.manelix.mixer.core.audio.model.MicrophoneCaptureFrame
 import dev.manelix.mixer.core.common.model.AudioEngineMode
 import dev.manelix.mixer.core.common.model.AudioPlaybackState
@@ -78,8 +78,8 @@ class DeckViewModel : ViewModel() {
         private val ALLOWED_PITCH_SENSITIVITY_PERCENTS = listOf(2, 4, 8, 16)
     }
 
-    private var leftEngine: AudioEngineController = SkeletonAudioEngineController()
-    private var rightEngine: AudioEngineController = SkeletonAudioEngineController()
+    private var leftEngine: AudioEngineController = MediaPlayerAudioEngineController()
+    private var rightEngine: AudioEngineController = MediaPlayerAudioEngineController()
     private val waveformAnalyzer: WaveformAnalyzer = ProceduralWaveformAnalyzer()
     private val tempoDetector: TempoDetector = FallbackTempoDetector()
     private val microphoneBpmPipeline = MicrophoneBpmPipeline(detector = tempoDetector)
@@ -149,8 +149,8 @@ class DeckViewModel : ViewModel() {
         leftEngine.stopEngine()
         rightEngine.stopEngine()
 
-        leftEngine = SkeletonAudioEngineController(appContext = appContext)
-        rightEngine = SkeletonAudioEngineController(appContext = appContext)
+        leftEngine = MediaPlayerAudioEngineController(appContext = appContext)
+        rightEngine = MediaPlayerAudioEngineController(appContext = appContext)
         leftEngine.startEngine()
         rightEngine.startEngine()
     }
@@ -729,9 +729,7 @@ class DeckViewModel : ViewModel() {
         }
 
         val engine = engineForDeck(isLeft)
-        if (engine is SkeletonAudioEngineController) {
-            engine.setRoutingPolicy(role = role, panRange = panRange)
-        }
+        (engine as? AudioEngineRoutingProvider)?.setRoutingPolicy(role = role, panRange = panRange)
         engine.setPan(targetPan.toFloat())
         updateDeckState(isLeft) {
             it.copy(

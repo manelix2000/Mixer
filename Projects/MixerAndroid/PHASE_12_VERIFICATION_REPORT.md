@@ -57,17 +57,17 @@ Status:
 
 ### D) Audio playback parity
 
-- Status: **Not fully aligned**
+- Status: **Mostly aligned**
 - Notes:
-  - Current audio engine implementation is still `SkeletonAudioEngineController` (contract parity, simulated clock/state).
-  - Real decode/output routing is not fully complete yet.
+  - Runtime playback path uses `MediaPlayerAudioEngineController` for load/play/pause/seek/rate/pan/volume/EQ.
+  - Split/cue routing remains app-level mix logic and still needs device-level route verification.
 
 ### E) Waveform data parity
 
-- Status: **Not fully aligned**
+- Status: **Mostly aligned**
 - Notes:
-  - `ProceduralWaveformAnalyzer` still generates deterministic synthetic waveform data.
-  - Real PCM-driven waveform extraction pipeline is still pending.
+  - `ProceduralWaveformAnalyzer` includes PCM decode + bucket analysis and renders decoded waveform data.
+  - When decode/context is unavailable the analyzer now returns no waveform instead of synthetic placeholder output.
 
 ## 4) QA Matrix (Current)
 
@@ -86,8 +86,8 @@ Not yet fully validated (needs hardware/manual pass):
 
 ## 5) Known Non-Parity Items (Intentional, Documented)
 
-1. Real audio decode/output path is still represented by a skeleton controller for some flows.
-2. Waveform rendering is still sourced from procedural placeholder data, not decoded track samples.
+1. Split/cue route behavior still needs full physical-device validation across speaker/wired/Bluetooth paths.
+2. Some unsupported media/decode-failure paths show no waveform (no synthetic fallback), pending broader decoder coverage.
 3. Full release-readiness QA matrix is incomplete without physical-device audio route testing.
 
 ## 6) Release Readiness Decision
@@ -96,10 +96,10 @@ Current status: **Not yet shippable for full parity scope**.
 
 Reason:
 
-- Visual and interaction parity is largely in place, but audio/data parity gaps remain in playback and waveform pipelines.
+- Visual and interaction parity is largely in place, but audio engine parity and full hardware QA coverage remain open.
 
 Recommended next execution scope:
 
 1. Replace skeleton playback path with real decode/output engine.
-2. Replace procedural waveform analyzer with decoded-sample analysis.
+2. Expand decode compatibility coverage for waveform extraction across device/codec variations.
 3. Run device QA matrix with performance metrics capture and route-change scenarios.
