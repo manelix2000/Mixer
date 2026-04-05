@@ -1156,11 +1156,14 @@ private fun VerticalPitchFader(
         else -> 1f
     }
     var isDragging by remember { mutableStateOf(false) }
+    var isThumbPressed by remember { mutableStateOf(false) }
     var dragValueProgress by remember { mutableFloatStateOf(normalized) }
+    var trackWidthPx by remember { mutableFloatStateOf(1f) }
     var trackHeightPx by remember { mutableFloatStateOf(1f) }
     val thumbHeight = 26.dp
     val thumbWidth = 34.dp
     val density = LocalDensity.current
+    val thumbWidthPx = with(density) { thumbWidth.toPx() }
     val thumbHeightPx = with(density) { thumbHeight.toPx() }
     val usableHeightPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(1f)
     val animatedValueProgress by animateFloatAsState(
@@ -1174,16 +1177,47 @@ private fun VerticalPitchFader(
     val selectedHeightFraction = abs(displayProgress - baselineDisplayProgress).coerceAtLeast(0.01f)
     val selectedCenter = (displayProgress + baselineDisplayProgress) * 0.5f
     val thumbCenterY = (1f - displayProgress) * usableHeightPx + (thumbHeightPx * 0.5f)
+    val isInteracting = isDragging || isThumbPressed
 
     LaunchedEffect(normalized, isDragging) {
         if (!isDragging) dragValueProgress = normalized
+    }
+    LaunchedEffect(isInteracting) {
+        onInteractionChanged?.invoke(isInteracting)
     }
 
     Box(
         modifier = modifier
             .width(52.dp)
             .graphicsLayer { alpha = if (enabled) 1f else disabledAlpha }
-            .onSizeChanged { trackHeightPx = it.height.toFloat() }
+            .onSizeChanged {
+                trackWidthPx = it.width.toFloat()
+                trackHeightPx = it.height.toFloat()
+            }
+            .pointerInput(enabled, trackWidthPx, thumbCenterY, thumbHeightPx, thumbWidthPx) {
+                if (!enabled) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val thumbLeft = ((trackWidthPx - thumbWidthPx) * 0.5f).coerceAtLeast(0f)
+                    val thumbRight = (thumbLeft + thumbWidthPx).coerceAtMost(trackWidthPx)
+                    val thumbTop = thumbCenterY - (thumbHeightPx * 0.5f)
+                    val thumbBottom = thumbCenterY + (thumbHeightPx * 0.5f)
+                    val pressedThumb = down.position.x in thumbLeft..thumbRight &&
+                        down.position.y in thumbTop..thumbBottom
+                    if (!pressedThumb) return@awaitEachGesture
+
+                    isThumbPressed = true
+                    try {
+                        var anyPressed = true
+                        while (anyPressed) {
+                            val event = awaitPointerEvent()
+                            anyPressed = event.changes.any { it.pressed }
+                        }
+                    } finally {
+                        isThumbPressed = false
+                    }
+                }
+            }
             .pointerInput(valueRange, isInverted, trackHeightPx, enabled) {
                 if (!enabled) return@pointerInput
                 detectDragGestures(
@@ -1195,15 +1229,12 @@ private fun VerticalPitchFader(
                         isDragging = true
                         dragValueProgress = startValueProgress
                         onValueChange(valueRange.start + (startValueProgress * rangeSpan))
-                        onInteractionChanged?.invoke(true)
                     },
                     onDragEnd = {
                         isDragging = false
-                        onInteractionChanged?.invoke(false)
                     },
                     onDragCancel = {
                         isDragging = false
-                        onInteractionChanged?.invoke(false)
                     },
                 ) { _, dragAmount ->
                     if (!isDragging) return@detectDragGestures
@@ -1262,7 +1293,7 @@ private fun VerticalPitchFader(
                 )
             }
         }
-        if (showPopoverOnLeft && isDragging) {
+        if (showPopoverOnLeft && isInteracting) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
