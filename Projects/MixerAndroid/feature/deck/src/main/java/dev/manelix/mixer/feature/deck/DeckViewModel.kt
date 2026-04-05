@@ -614,7 +614,7 @@ class DeckViewModel : ViewModel() {
                 commitScratchAudio(isLeft = isLeft, force = true)
             }
         }
-        stepTurntablePhysics(isLeft)
+        val platterRotationDegrees = stepTurntablePhysics(isLeft)
         val currentTime = engine.currentTimeSeconds
         val totalDuration = engine.totalDurationSeconds
         val resolvedCurrentTime = if (runtime.isScrubbing) runtime.scratchCurrentTime else currentTime
@@ -637,6 +637,7 @@ class DeckViewModel : ViewModel() {
                 panControlRange = panRange,
                 splitDeckRole = routingProvider?.splitDeckRole,
                 playbackStatusText = resolvePlaybackStatus(deck.playbackStatusText, playbackState),
+                platterRotationDegrees = platterRotationDegrees,
             )
         }
     }
@@ -645,6 +646,9 @@ class DeckViewModel : ViewModel() {
         currentStatus: String,
         playbackState: AudioPlaybackState,
     ): String {
+        if (currentStatus == "Scratching") {
+            return currentStatus
+        }
         if (playbackState == AudioPlaybackState.PLAYING) {
             return ""
         }
@@ -1154,11 +1158,10 @@ class DeckViewModel : ViewModel() {
         }
     }
 
-    private fun stepTurntablePhysics(isLeft: Boolean) {
+    private fun stepTurntablePhysics(isLeft: Boolean): Double {
         val runtime = runtimeForDeck(isLeft)
         if (runtime.isScrubbing) {
-            publishTurntableRotation(isLeft, runtime.physics.platterPosition)
-            return
+            return publishTurntableRotation(isLeft, runtime.physics.platterPosition)
         }
         val engine = engineForDeck(isLeft)
         val nowNanos = System.nanoTime()
@@ -1171,13 +1174,13 @@ class DeckViewModel : ViewModel() {
         val shouldDrive = engine.playbackState == AudioPlaybackState.PLAYING
         val driveAngularVelocity = if (shouldDrive) BASE_PLATTER_ANGULAR_VELOCITY * engine.playbackRate else null
         runtime.physics = runtime.physics.step(deltaTime = deltaSeconds, driveAngularVelocity = driveAngularVelocity)
-        publishTurntableRotation(isLeft, runtime.physics.platterPosition)
+        return publishTurntableRotation(isLeft, runtime.physics.platterPosition)
     }
 
     private fun publishTurntableRotation(
         isLeft: Boolean,
         wrappedPositionRadians: Double,
-    ) {
+    ): Double {
         val runtime = runtimeForDeck(isLeft)
         val wrappedDegrees = wrappedPositionRadians * 180.0 / Math.PI
         val lastWrapped = runtime.lastWrappedPlatterDegrees
@@ -1191,7 +1194,7 @@ class DeckViewModel : ViewModel() {
             runtime.lastWrappedPlatterDegrees = wrappedDegrees
             runtime.unwrappedPlatterDegrees += delta
         }
-        updateDeckState(isLeft) { it.copy(platterRotationDegrees = runtime.unwrappedPlatterDegrees) }
+        return runtime.unwrappedPlatterDegrees
     }
 
     private fun updateDeckState(
