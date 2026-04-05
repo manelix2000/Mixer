@@ -2,6 +2,8 @@ package dev.manelix.mixer.feature.deck
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.manelix.mixer.core.audio.AudioEngineController
@@ -44,6 +46,7 @@ import kotlin.math.pow
 
 class DeckViewModel : ViewModel() {
     companion object {
+        private const val TAG = "MixerDeckVM"
         private const val WAVEFORM_SAMPLE_COUNT = 4096 * 4
         private const val WAVEFORM_MIN_ZOOM = 0.2
         private const val WAVEFORM_MAX_ZOOM = 8.0
@@ -405,6 +408,7 @@ class DeckViewModel : ViewModel() {
         isLeft: Boolean,
         uri: String,
     ) {
+        val deckLabel = if (isLeft) "L" else "R"
         val engine = engineForDeck(isLeft)
         cancelScratchState(isLeft)
         runtimeForDeck(isLeft).userWantsPlayback = false
@@ -432,6 +436,7 @@ class DeckViewModel : ViewModel() {
         }
 
         val loadResult = engine.loadFile(uri)
+        Log.d(TAG, "selectTrack[$deckLabel] loadResult=${loadResult.isSuccess}")
         if (loadResult.isSuccess) {
             // Loading a track must never auto-start playback.
             engine.pause()
@@ -456,6 +461,7 @@ class DeckViewModel : ViewModel() {
     }
 
     private fun togglePlayPauseDeck(isLeft: Boolean) {
+        val deckLabel = if (isLeft) "L" else "R"
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
         val deckState = currentDeckState(isLeft)
@@ -479,6 +485,10 @@ class DeckViewModel : ViewModel() {
             runtime.forceStayPausedAfterManualPause = false
             engine.play()
         }
+        Log.d(
+            TAG,
+            "togglePlayPause[$deckLabel] wasPlaying=${deckState.isPlaybackActive} wants=${runtime.userWantsPlayback} result=${result.isSuccess}",
+        )
 
         if (result.isFailure) {
             if (!deckState.isPlaybackActive) {
@@ -495,6 +505,7 @@ class DeckViewModel : ViewModel() {
     }
 
     private fun stopDeck(isLeft: Boolean) {
+        val deckLabel = if (isLeft) "L" else "R"
         val engine = engineForDeck(isLeft)
         val runtime = runtimeForDeck(isLeft)
         val deckState = currentDeckState(isLeft)
@@ -520,6 +531,7 @@ class DeckViewModel : ViewModel() {
         runtime.blockAutoplayUntilManualStart = false
         runtime.userWantsPlayback = false
         runtime.forceStayPausedAfterManualPause = true
+        Log.d(TAG, "stopDeck[$deckLabel] paused+seek0 done")
 
         syncDeckFromEngine(isLeft)
         updateDeckState(isLeft) { deck -> deck.copy(playbackStatusText = "Stopped") }
@@ -550,7 +562,9 @@ class DeckViewModel : ViewModel() {
         val deckSnapshot = currentDeckState(isLeft)
         if (deckSnapshot.isWaveformLoading) {
             runtime.userWantsPlayback = false
-            engine.pause()
+            if (engine.playbackState == AudioPlaybackState.PLAYING) {
+                engine.pause()
+            }
             if (engine.currentTimeSeconds > 0.01) {
                 engine.seekTo(0.0)
             }
@@ -560,13 +574,26 @@ class DeckViewModel : ViewModel() {
             !runtime.isScrubbing
         ) {
             cancelScratchState(isLeft)
-            engine.pause()
+            if (engine.playbackState == AudioPlaybackState.PLAYING) {
+                engine.pause()
+            }
             if (engine.currentTimeSeconds > 0.01) {
                 engine.seekTo(0.0)
             }
         }
         if (!runtime.isScrubbing && !runtime.userWantsPlayback) {
-            engine.pause()
+            if (engine.playbackState == AudioPlaybackState.PLAYING) {
+                engine.pause()
+            }
+        }
+        if (runtime.isScrubbing) {
+            val nowNanos = System.nanoTime()
+            val idleNanos = if (runtime.lastScratchUpdateNanos > 0L) nowNanos - runtime.lastScratchUpdateNanos else 0L
+            if (idleNanos > 45_000_000L) {
+                runtime.latestScratchAngularVelocity = 0.0
+                runtime.smoothedScratchAngularVelocity = 0.0
+                commitScratchAudio(isLeft = isLeft, force = true)
+            }
         }
         stepTurntablePhysics(isLeft)
         val currentTime = engine.currentTimeSeconds
@@ -933,9 +960,23 @@ class DeckViewModel : ViewModel() {
         } else {
             16_666_666L
         }
-        runtime.lastScratchUpdateNanos = nowNanos
         val deltaSeconds = max(deltaNanos.toDouble() / 1_000_000_000.0, 0.001)
 
+        val isJitter = kotlin.math.abs(angleDelta) < SCRATCH_JITTER_ANGLE_THRESHOLD &&
+            kotlin.math.abs(runtime.smoothedScratchAngularVelocity) < SCRATCH_JITTER_VELOCITY_THRESHOLD
+        if (isJitter) {
+            // Keep held finger locked in place: do not treat micro-noise as movement updates.
+            runtime.latestScratchAngularVelocity = 0.0
+            runtime.smoothedScratchAngularVelocity = 0.0
+            val nanosSinceCommit = nowNanos - runtime.lastScratchCommitNanos
+            if (runtime.lastScratchCommitNanos <= 0L || nanosSinceCommit >= MIN_SCRUB_COMMIT_INTERVAL_NANOS) {
+                commitScratchAudio(isLeft = isLeft, force = true)
+            }
+            return
+        }
+
+        // Update movement timestamp only for meaningful deltas.
+        runtime.lastScratchUpdateNanos = nowNanos
         runtime.latestScratchAngularVelocity = angleDelta / deltaSeconds
         if (kotlin.math.abs(angleDelta) >= SCRATCH_DIRECTION_ANGLE_THRESHOLD) {
             runtime.latestScratchDirection = if (angleDelta >= 0.0) 1.0 else -1.0
@@ -945,9 +986,6 @@ class DeckViewModel : ViewModel() {
 
         val isScratchMode = kotlin.math.abs(runtime.smoothedScratchAngularVelocity) >= SCRATCH_ANGULAR_VELOCITY_THRESHOLD
         runtime.scratchMode = if (isScratchMode) ScratchMode.SCRATCH else ScratchMode.SCRUB
-        val isJitter = kotlin.math.abs(angleDelta) < SCRATCH_JITTER_ANGLE_THRESHOLD &&
-            kotlin.math.abs(runtime.smoothedScratchAngularVelocity) < SCRATCH_JITTER_VELOCITY_THRESHOLD
-        if (isJitter) return
 
         val secondsPerRadian = if (isScratchMode) SCRATCH_SECONDS_PER_RADIAN else SCRUB_SECONDS_PER_RADIAN
         val rawTimeDelta = angleDelta * secondsPerRadian
@@ -1079,7 +1117,12 @@ class DeckViewModel : ViewModel() {
         }
 
         val signedVelocity = if (runtime.wasPlayingBeforeScrub && !runtime.forceStayPausedAfterManualPause) {
-            max(kotlin.math.abs(runtime.latestScratchAngularVelocity), 0.001) * runtime.latestScratchDirection
+            val absoluteVelocity = kotlin.math.abs(runtime.latestScratchAngularVelocity)
+            if (absoluteVelocity < 0.0005) {
+                0.0
+            } else {
+                absoluteVelocity * runtime.latestScratchDirection
+            }
         } else {
             0.0
         }
@@ -1191,6 +1234,13 @@ class DeckViewModel : ViewModel() {
                             )
                         }
                     }
+                }
+                updateDeckState(isLeft) { deck ->
+                    deck.copy(
+                        waveformData = finalWaveform.copyOf(),
+                        isWaveformLoading = false,
+                        waveformText = if (finalWaveform.isNotEmpty()) "Waveform Ready" else "Waveform unavailable",
+                    )
                 }
                 detectOfflineBpmForDeck(isLeft = isLeft, waveform = finalWaveform)
             } catch (_: Throwable) {
@@ -1459,12 +1509,33 @@ class DeckViewModel : ViewModel() {
 
     private fun extractTrackName(uri: String): String {
         val parsed = Uri.parse(uri)
-        val rawName = parsed.lastPathSegment?.substringAfterLast('/')
-        return if (rawName.isNullOrBlank()) {
-            "Selected track"
-        } else {
-            rawName
+        if (parsed.scheme == "android.resource") {
+            return "Sample.mp3"
         }
+
+        val contentName = appContextForAnalysis
+            ?.contentResolver
+            ?.let { resolver ->
+                runCatching {
+                    resolver.query(parsed, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor ->
+                            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+                        }
+                }.getOrNull()
+            }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        if (!contentName.isNullOrBlank()) return contentName
+
+        val rawName = parsed.lastPathSegment
+            ?.substringAfterLast('/')
+            ?.substringAfterLast(':')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        return rawName ?: "Selected track"
     }
 
     private fun statusForError(

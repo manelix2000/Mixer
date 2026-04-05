@@ -211,7 +211,7 @@ fun DeckRoute(
             .fillMaxSize()
             .background(Color.Black)
             .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Top,
     ) {
         ControlRail(
@@ -242,7 +242,7 @@ fun DeckRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .animateContentSize(animationSpec = tween(durationMillis = 220)),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             AnimatedVisibility(
                 visible = isTablet || screenState.areControlsVisible,
@@ -276,7 +276,7 @@ fun DeckRoute(
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             StandardPanControlsCard(
                                 pan = screenState.leftDeck.pan,
@@ -321,7 +321,7 @@ fun DeckRoute(
                     exit = fadeOut(),
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         DeckSurface(
@@ -447,6 +447,9 @@ private fun hasRecordAudioPermission(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 }
 
+private val ControlRailButtonSize = 30.dp
+private val ControlRailIconSize = 15.dp
+
 @Composable
 private fun ControlRail(
     isTablet: Boolean,
@@ -464,7 +467,7 @@ private fun ControlRail(
     onTogglePitchLock: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.width(40.dp),
+        modifier = Modifier.width(ControlRailButtonSize),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.Black,
@@ -551,8 +554,8 @@ private fun RailButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = Modifier.size(40.dp),
-        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.size(ControlRailButtonSize),
+        shape = RoundedCornerShape(7.5.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor,
@@ -565,7 +568,7 @@ private fun RailButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ControlRailIconSize),
                 tint = contentColor,
             )
         } else if (!text.isNullOrBlank()) {
@@ -1414,7 +1417,7 @@ private fun DeckSurface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(
                 modifier = Modifier
@@ -1426,23 +1429,23 @@ private fun DeckSurface(
                         ),
                     )
                     .border(1.dp, Color.Black.copy(alpha = 0.14f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = trackName ?: "No song loaded",
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 17.sp,
+                            fontSize = 11.sp,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(playbackTimeText, fontSize = 17.sp)
+                        Text(playbackTimeText, fontSize = 11.sp)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1609,7 +1612,7 @@ private fun DeckSurface(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = bpmText.ifBlank { "-- BPM" },
-                            fontSize = 13.sp,
+                            fontSize = 11.sp,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1619,7 +1622,7 @@ private fun DeckSurface(
                         if (shouldShowRightStatus) {
                             Text(
                                 text = rightStatusText,
-                                fontSize = 13.sp,
+                                fontSize = 11.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )

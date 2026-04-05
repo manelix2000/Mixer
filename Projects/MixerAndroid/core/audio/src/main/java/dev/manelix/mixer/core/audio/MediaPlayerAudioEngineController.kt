@@ -10,6 +10,7 @@ import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.audiofx.Equalizer
 import android.net.Uri
+import android.util.Log
 import dev.manelix.mixer.core.audio.model.AudioEngineError
 import dev.manelix.mixer.core.audio.model.AudioPerformanceMetrics
 import dev.manelix.mixer.core.audio.model.MicrophoneCaptureFrame
@@ -32,6 +33,9 @@ class MediaPlayerAudioEngineController(
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val defaultDurationSeconds: Double = 180.0,
 ) : AudioEngineController, AudioEngineRoutingProvider, AudioEnginePerformanceProvider {
+    companion object {
+        private const val TAG = "MixerAudioEngine"
+    }
     private val stateLock = ReentrantLock()
 
     private var running = false
@@ -115,6 +119,7 @@ class MediaPlayerAudioEngineController(
     }
 
     override fun loadFile(sourceUri: String): Result<Unit> = stateLock.withLock {
+        Log.d(TAG, "loadFile(uri=$sourceUri)")
         if (sourceUri.isBlank()) {
             return failure(AudioEngineError.FileLoadFailed("Blank source URI"))
         }
@@ -129,11 +134,14 @@ class MediaPlayerAudioEngineController(
         }
 
         loadedSourceUri = sourceUri
-        playerResult.getOrNull()?.runCatching {
-            if (isPlaying) {
-                pause()
+        playerResult.getOrNull()?.let { player ->
+            val paused = runCatching {
+                if (player.isPlaying) player.pause()
+                player.seekTo(0)
             }
-            seekTo(0)
+            if (paused.isFailure) {
+                recoverMediaPlayerLocked(reason = "loadFile initial pause/seek failed")
+            }
         }
         val resolvedDuration = playerResult.getOrNull()
             ?.duration
@@ -146,10 +154,12 @@ class MediaPlayerAudioEngineController(
         isScratchModeActive = false
         scratchWasPlayingBeforeGesture = false
         internalPlaybackState = AudioPlaybackState.PAUSED
+        Log.d(TAG, "loadFile done state=$internalPlaybackState duration=${"%.3f".format(internalTotalDurationSeconds)}")
         Result.success(Unit)
     }
 
     override fun play(): Result<Unit> = stateLock.withLock {
+        Log.d(TAG, "play() requested state=$internalPlaybackState")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
         }
@@ -160,18 +170,15 @@ class MediaPlayerAudioEngineController(
             if (internalTotalDurationSeconds > 0.0 && resolvedCurrentTimeLocked() >= internalTotalDurationSeconds - 0.01) {
                 runCatching { player.seekTo(0) }
             }
-            val rateResult = runCatching {
-                val playbackParams = player.playbackParams
-                player.playbackParams = playbackParams.setSpeed(internalPlaybackRate)
-            }
-            if (rateResult.isFailure) {
-                return failure(AudioEngineError.StartFailed("Unable to set playback speed"))
-            }
+            // Some API 24 vendor builds may reject playbackParams even though start() works.
+            applyPlaybackRateToPlayerLocked(player)
             val startResult = runCatching { player.start() }
             if (startResult.isFailure) {
+                Log.w(TAG, "play() failed to start player", startResult.exceptionOrNull())
                 return failure(AudioEngineError.StartFailed("Unable to start playback"))
             }
             internalPlaybackState = AudioPlaybackState.PLAYING
+            Log.d(TAG, "play() success state=$internalPlaybackState")
             return Result.success(Unit)
         }
 
@@ -182,28 +189,35 @@ class MediaPlayerAudioEngineController(
         }
         startPlaybackClockLocked(lastKnownCurrentTimeSeconds)
         internalPlaybackState = AudioPlaybackState.PLAYING
+        Log.d(TAG, "play() success (clock-only) state=$internalPlaybackState")
         Result.success(Unit)
     }
 
     override fun pause() {
         stateLock.withLock {
+            Log.d(TAG, "pause() requested state=$internalPlaybackState")
             if (loadedSourceUri == null) {
                 internalPlaybackState = AudioPlaybackState.IDLE
                 return
             }
 
-            mediaPlayer?.runCatching {
-                if (isPlaying) {
-                    pause()
+            mediaPlayer?.let { player ->
+                val pauseResult = runCatching {
+                    if (player.isPlaying) player.pause()
+                }
+                if (pauseResult.isFailure) {
+                    recoverMediaPlayerLocked(reason = "pause() failed")
                 }
             }
             lastKnownCurrentTimeSeconds = resolvedCurrentTimeLocked()
             playbackStartOffsetSeconds = lastKnownCurrentTimeSeconds
             internalPlaybackState = AudioPlaybackState.PAUSED
+            Log.d(TAG, "pause() done state=$internalPlaybackState time=${"%.3f".format(lastKnownCurrentTimeSeconds)}")
         }
     }
 
     override fun seekTo(timeSeconds: Double): Result<Unit> = stateLock.withLock {
+        Log.d(TAG, "seekTo(${String.format("%.3f", timeSeconds)}) state=$internalPlaybackState")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
         }
@@ -321,10 +335,7 @@ class MediaPlayerAudioEngineController(
             val current = resolvedCurrentTimeLocked()
             internalPlaybackRate = clampPlaybackRate(value)
             mediaPlayer?.let { player ->
-                runCatching {
-                    val playbackParams = player.playbackParams
-                    player.playbackParams = playbackParams.setSpeed(internalPlaybackRate)
-                }
+                applyPlaybackRateToPlayerLocked(player)
             }
             if (internalPlaybackState == AudioPlaybackState.PLAYING) {
                 startPlaybackClockLocked(current)
@@ -555,6 +566,11 @@ class MediaPlayerAudioEngineController(
     private fun resolvedCurrentTimeLocked(): Double {
         val player = mediaPlayer
         if (player != null) {
+            val playerIsActuallyPlaying = runCatching { player.isPlaying }.getOrDefault(false)
+            if (playerIsActuallyPlaying && internalPlaybackState != AudioPlaybackState.PLAYING && !isScratchModeActive) {
+                Log.w(TAG, "Unexpected player.isPlaying=true while state=$internalPlaybackState; recovering player")
+                recoverMediaPlayerLocked(reason = "unexpected isPlaying while paused")
+            }
             val position = runCatching { player.currentPosition / 1000.0 }
                 .getOrDefault(lastKnownCurrentTimeSeconds)
             val duration = internalTotalDurationSeconds
@@ -648,6 +664,28 @@ class MediaPlayerAudioEngineController(
         attachEqualizerLocked()
         applyEqualizerBandLevelsLocked()
         return Result.success(mediaPlayer)
+    }
+
+    private fun applyPlaybackRateToPlayerLocked(player: MediaPlayer) {
+        runCatching {
+            val playbackParams = player.playbackParams
+            player.playbackParams = playbackParams.setSpeed(internalPlaybackRate)
+        }
+    }
+
+    private fun recoverMediaPlayerLocked(reason: String) {
+        val sourceUri = loadedSourceUri ?: return
+        Log.w(TAG, "recoverMediaPlayerLocked: $reason; rebuilding player for uri=$sourceUri")
+        val resumeTime = clampTime(lastKnownCurrentTimeSeconds)
+        val rebuilt = prepareMediaPlayerLocked(sourceUri).isSuccess
+        if (!rebuilt) return
+        mediaPlayer?.let { player ->
+            runCatching {
+                if (player.isPlaying) player.pause()
+                player.seekTo((resumeTime * 1000.0).toInt().coerceAtLeast(0))
+            }
+        }
+        internalPlaybackState = AudioPlaybackState.PAUSED
     }
 
     private fun applyVolumeAndPanLocked() {
