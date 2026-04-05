@@ -73,6 +73,7 @@ class DeckViewModel : ViewModel() {
         private const val MIN_BPM = 60.0
         private const val MAX_BPM = 200.0
         private const val OFFLINE_BPM_ANALYSIS_SECONDS = 12.0
+        private const val LIVE_MIC_BPM_SMOOTHING = 0.22
         private const val MAX_PRESSURE_SLOWDOWN_FRACTION = 0.9
         private const val MIN_PRESSURE_SLOWDOWN_MULTIPLIER = 0.08
         private const val MAX_PRESSURE_ACCELERATION_FRACTION = 0.9
@@ -1425,10 +1426,10 @@ class DeckViewModel : ViewModel() {
     private fun handleMicrophoneBpmResult(result: BpmResult) {
         when (result) {
             is BpmResult.Detected -> {
-                if (latestExternalBpm != null) {
-                    return
-                }
-                val bpm = result.bpm.coerceIn(MIN_BPM, MAX_BPM)
+                val detected = result.bpm.coerceIn(MIN_BPM, MAX_BPM)
+                val bpm = latestExternalBpm?.let { previous ->
+                    previous + ((detected - previous) * LIVE_MIC_BPM_SMOOTHING)
+                } ?: detected
                 latestExternalBpm = bpm
                 _screenState.update { state ->
                     state.copy(
