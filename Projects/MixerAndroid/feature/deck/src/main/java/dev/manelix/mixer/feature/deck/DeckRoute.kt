@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -21,6 +22,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
@@ -339,6 +341,8 @@ fun DeckRoute(
                             bpmText = screenState.leftDeck.bpmText,
                             bpmStatusText = screenState.leftDeck.bpmDetectionStatusText,
                             targetBpm = screenState.leftDeck.targetBpm,
+                            displayedTargetBpm = screenState.leftDeck.displayedTargetBpm,
+                            isPressureTouchActive = screenState.leftDeck.isPressureTouchActive,
                             showExternalBpmBadge = true,
                             externalBpmBadgeText = micBadgeText(rootState),
                             showEqualizerOverlay = screenState.isEqualizerVisible,
@@ -366,7 +370,14 @@ fun DeckRoute(
                                 !screenState.leftDeck.isWaveformLoading,
                             volume = screenState.leftDeck.volume,
                             onVolumeChange = viewModel::setLeftDeckVolume,
-                            pitchOffset = pitchOffset(screenState.leftDeck.targetBpm, screenState.leftDeck.originalBpm),
+                            pitchOffset = pitchOffset(
+                                if (screenState.leftDeck.displayedTargetBpm > 0.0) {
+                                    screenState.leftDeck.displayedTargetBpm
+                                } else {
+                                    screenState.leftDeck.targetBpm
+                                },
+                                screenState.leftDeck.originalBpm,
+                            ),
                             pitchSensitivityPercent = screenState.leftDeck.pitchSensitivityPercent,
                             onPitchOffsetChange = viewModel::setLeftDeckPitchOffset,
                             onIncreasePitchSensitivity = viewModel::increaseLeftDeckPitchSensitivity,
@@ -395,6 +406,8 @@ fun DeckRoute(
                                 bpmText = screenState.rightDeck.bpmText,
                                 bpmStatusText = screenState.rightDeck.bpmDetectionStatusText,
                                 targetBpm = screenState.rightDeck.targetBpm,
+                                displayedTargetBpm = screenState.rightDeck.displayedTargetBpm,
+                                isPressureTouchActive = screenState.rightDeck.isPressureTouchActive,
                                 showExternalBpmBadge = false,
                                 externalBpmBadgeText = null,
                                 showEqualizerOverlay = screenState.isEqualizerVisible,
@@ -422,7 +435,14 @@ fun DeckRoute(
                                     !screenState.rightDeck.isWaveformLoading,
                                 volume = screenState.rightDeck.volume,
                                 onVolumeChange = viewModel::setRightDeckVolume,
-                                pitchOffset = pitchOffset(screenState.rightDeck.targetBpm, screenState.rightDeck.originalBpm),
+                                pitchOffset = pitchOffset(
+                                    if (screenState.rightDeck.displayedTargetBpm > 0.0) {
+                                        screenState.rightDeck.displayedTargetBpm
+                                    } else {
+                                        screenState.rightDeck.targetBpm
+                                    },
+                                    screenState.rightDeck.originalBpm,
+                                ),
                                 pitchSensitivityPercent = screenState.rightDeck.pitchSensitivityPercent,
                                 onPitchOffsetChange = viewModel::setRightDeckPitchOffset,
                                 onIncreasePitchSensitivity = viewModel::increaseRightDeckPitchSensitivity,
@@ -1122,6 +1142,8 @@ private fun VerticalPitchFader(
     onValueChange: (Float) -> Unit,
     isInverted: Boolean = false,
     showPopoverOnLeft: Boolean = false,
+    enabled: Boolean = true,
+    disabledAlpha: Float = 1f,
     onInteractionChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -1141,7 +1163,12 @@ private fun VerticalPitchFader(
     val density = LocalDensity.current
     val thumbHeightPx = with(density) { thumbHeight.toPx() }
     val usableHeightPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(1f)
-    val valueProgress = if (isDragging) dragValueProgress else normalized
+    val animatedValueProgress by animateFloatAsState(
+        targetValue = if (isDragging) dragValueProgress else normalized,
+        animationSpec = tween(durationMillis = 110, easing = LinearEasing),
+        label = "verticalPitchFaderProgress",
+    )
+    val valueProgress = if (isDragging) dragValueProgress else animatedValueProgress
     val displayProgress = if (isInverted) 1f - valueProgress else valueProgress
     val baselineDisplayProgress = if (isInverted) 1f - baselineNormalized else baselineNormalized
     val selectedHeightFraction = abs(displayProgress - baselineDisplayProgress).coerceAtLeast(0.01f)
@@ -1155,8 +1182,10 @@ private fun VerticalPitchFader(
     Box(
         modifier = modifier
             .width(52.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else disabledAlpha }
             .onSizeChanged { trackHeightPx = it.height.toFloat() }
-            .pointerInput(valueRange, isInverted, trackHeightPx) {
+            .pointerInput(valueRange, isInverted, trackHeightPx, enabled) {
+                if (!enabled) return@pointerInput
                 detectDragGestures(
                     onDragStart = { offset ->
                         val safeHeight = trackHeightPx.coerceAtLeast(1f)
@@ -1363,6 +1392,8 @@ private fun DeckSurface(
     bpmText: String,
     bpmStatusText: String?,
     targetBpm: Double,
+    displayedTargetBpm: Double,
+    isPressureTouchActive: Boolean,
     showExternalBpmBadge: Boolean,
     externalBpmBadgeText: String?,
     showEqualizerOverlay: Boolean,
@@ -1551,7 +1582,12 @@ private fun DeckSurface(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
-                                        text = String.format("%.1f BPM", if (targetBpm > 0.0) targetBpm else 120.0),
+                                        text = String.format(
+                                            "%.1f BPM",
+                                            if (displayedTargetBpm > 0.0) displayedTargetBpm
+                                            else if (targetBpm > 0.0) targetBpm
+                                            else 120.0,
+                                        ),
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Black,
@@ -1668,7 +1704,7 @@ private fun DeckSurface(
                             .pointerInput(Unit) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
-                                    val pointerId = down.id
+                                    var activePointerId = down.id
                                     val touchWidth = size.width.toFloat()
                                     val touchHeight = size.height.toFloat()
                                     val touchSide = min(touchWidth, touchHeight)
@@ -1676,6 +1712,13 @@ private fun DeckSurface(
                                     val startNanos = System.nanoTime()
                                     var lastPosition = down.position
                                     var latestRawPressure = runCatching { down.pressure }.getOrDefault(0f)
+                                    var observedPressureMin = latestRawPressure.coerceIn(0f, 1f)
+                                    var observedPressureMax = observedPressureMin
+                                    var observedPressureSamples = 0
+                                    Log.i(
+                                        "MixerPressure",
+                                        "gesture start pointer=${down.id.value} pos=(${down.position.x},${down.position.y}) pressure=$latestRawPressure size=(${size.width},${size.height})",
+                                    )
 
                                     val initialNormalized = normalizedPlatterPoint(
                                         point = lastPosition,
@@ -1707,9 +1750,14 @@ private fun DeckSurface(
                                                 visualInsetPx = visualInsetPx,
                                             )
                                         }
-                                        if (normalized == null || angle == null) {
+                                        if (normalized == null) {
+                                            Log.i(
+                                                "MixerPressure",
+                                                "skip update: normalized point is null pos=(${currentPosition.x},${currentPosition.y})",
+                                            )
                                             platterLastAngle = null
                                             if (isPlatterPressureActive) {
+                                                Log.i("MixerPressure", "end pressure: pointer outside platter bounds")
                                                 onPlatterPressureEnd()
                                                 isPlatterPressureActive = false
                                             }
@@ -1718,10 +1766,34 @@ private fun DeckSurface(
 
                                         val elapsedSeconds = ((System.nanoTime() - startNanos).coerceAtLeast(0L)) / 1_000_000_000.0
                                         val fallbackPressure = (elapsedSeconds / PRESSURE_FALLBACK_RAMP_SECONDS).toFloat().coerceIn(0f, 1f)
+                                        val rawNormalized = rawPressure.coerceIn(0f, 1f)
+                                        observedPressureSamples += 1
+                                        observedPressureMin = min(observedPressureMin, rawNormalized)
+                                        observedPressureMax = kotlin.math.max(observedPressureMax, rawNormalized)
+                                        val observedPressureRange = observedPressureMax - observedPressureMin
+                                        val looksLikeStuckLowPressureSensor =
+                                            observedPressureSamples >= PRESSURE_STABLE_MIN_SAMPLES &&
+                                                observedPressureRange <= PRESSURE_STABLE_EPSILON &&
+                                                rawNormalized <= PRESSURE_STABLE_LOW_MAX
+                                        val isConstantPressureSensor =
+                                            isLikelyUnsupportedPressureSensorValue(rawNormalized) || looksLikeStuckLowPressureSensor
                                         val currentPressure = resolvePressureInput(
                                             rawPressure = rawPressure,
                                             fallbackPressure = fallbackPressure,
+                                            forceFallback = isConstantPressureSensor,
                                         )
+                                        val effectivePressureForStart =
+                                            if (isConstantPressureSensor) {
+                                                kotlin.math.max(currentPressure, PRESSURE_START_MIN_VALUE)
+                                            } else {
+                                                currentPressure
+                                            }
+                                        val pressureValueForUpdate =
+                                            if (isConstantPressureSensor) {
+                                                effectivePressureForStart
+                                            } else {
+                                                currentPressure
+                                            }
                                         val movement = platterTouchStartPoint?.let { start ->
                                             hypot(
                                                 (normalized.x - start.x).toDouble(),
@@ -1730,14 +1802,55 @@ private fun DeckSurface(
                                         } ?: 0f
                                         val movedEnoughForScratch =
                                             movement >= (touchSide * PLATTER_SCRATCH_START_MOVEMENT_THRESHOLD_RATIO)
+                                        Log.i(
+                                            "MixerPressure",
+                                            "update raw=$rawNormalized effective=$effectivePressureForStart fallback=$fallbackPressure pressureRange=$observedPressureRange samples=$observedPressureSamples stuckLow=$looksLikeStuckLowPressureSensor movement=$movement movedEnough=$movedEnoughForScratch angleNull=${angle == null} scratching=$isPlatterScratching pressureActive=$isPlatterPressureActive",
+                                        )
 
                                         if (isPlatterPressureActive) {
-                                            if (isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx)) {
+                                            val previousAngleWhilePressure = platterLastAngle
+                                            val pressureDelta =
+                                                if (previousAngleWhilePressure != null && angle != null) {
+                                                    normalizedAngleDelta(previousAngleWhilePressure, angle)
+                                                } else {
+                                                    0.0
+                                                }
+                                            val shouldPromoteToScratch =
+                                                angle != null && abs(pressureDelta) >=
+                                                    if (isConstantPressureSensor) {
+                                                        PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD * 2.0
+                                                    } else {
+                                                        PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD
+                                                    } ||
+                                                    movedEnoughForScratch
+                                            Log.i(
+                                                "MixerPressure",
+                                                "pressure active delta=$pressureDelta threshold=${if (isConstantPressureSensor) PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD * 2.0 else PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD} shouldPromote=$shouldPromoteToScratch",
+                                            )
+                                            if (shouldPromoteToScratch) {
+                                                Log.i(
+                                                    "MixerPressure",
+                                                    "promote pressure->scratch delta=$pressureDelta movement=$movement raw=$rawNormalized",
+                                                )
+                                                onPlatterPressureEnd()
+                                                isPlatterPressureActive = false
+                                                onBeginPlatterScratch()
+                                                isPlatterScratching = true
+                                                onPlatterScratchDelta(pressureDelta)
+                                            } else if (isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx)) {
+                                                Log.i(
+                                                    "MixerPressure",
+                                                    "pressure update dir=${pressureDirection(normalized, touchSide)} value=$currentPressure",
+                                                )
                                                 onPlatterPressureUpdate(
-                                                    currentPressure,
+                                                    pressureValueForUpdate,
                                                     pressureDirection(normalized, touchSide),
                                                 )
                                             } else {
+                                                Log.i(
+                                                    "MixerPressure",
+                                                    "end pressure: entered blocked bottom zone y=${normalized.y}",
+                                                )
                                                 onPlatterPressureEnd()
                                                 isPlatterPressureActive = false
                                             }
@@ -1747,11 +1860,14 @@ private fun DeckSurface(
 
                                         if (!isPlatterScratching &&
                                             isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx) &&
-                                            !movedEnoughForScratch &&
-                                            currentPressure >= PRESSURE_START_MIN_VALUE
+                                            effectivePressureForStart >= PRESSURE_START_MIN_VALUE
                                         ) {
+                                            Log.i(
+                                                "MixerPressure",
+                                                "start pressure raw=$rawNormalized effective=$effectivePressureForStart fallback=$fallbackPressure angle=${angle != null}",
+                                            )
                                             onPlatterPressureUpdate(
-                                                currentPressure,
+                                                pressureValueForUpdate,
                                                 pressureDirection(normalized, touchSide),
                                             )
                                             isPlatterPressureActive = true
@@ -1760,8 +1876,12 @@ private fun DeckSurface(
                                         }
 
                                         val previousAngle = platterLastAngle
-                                        if (previousAngle != null) {
+                                        if (previousAngle != null && angle != null) {
                                             val delta = normalizedAngleDelta(previousAngle, angle)
+                                            Log.i(
+                                                "MixerPressure",
+                                                "scratch candidate delta=$delta threshold=$PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD movedEnough=$movedEnoughForScratch",
+                                            )
                                             if (!isPlatterScratching &&
                                                 (abs(delta) >= PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD || movedEnoughForScratch)
                                             ) {
@@ -1782,16 +1902,45 @@ private fun DeckSurface(
                                     while (true) {
                                         val event = withTimeoutOrNull(16L) { awaitPointerEvent() }
                                         if (event == null) {
+                                            Log.i(
+                                                "MixerPressure",
+                                                "event timeout: replaying last point pos=(${lastPosition.x},${lastPosition.y}) pressure=$latestRawPressure",
+                                            )
                                             processTouchPoint(lastPosition, latestRawPressure)
                                             continue
                                         }
-                                        val change = event.changes.firstOrNull { it.id == pointerId }
-                                            ?: event.changes.firstOrNull()
-                                            ?: break
+                                        val anyPressed = event.changes.any { it.pressed }
+                                        Log.i(
+                                            "MixerPressure",
+                                            "event changes=${event.changes.size} anyPressed=$anyPressed activePointer=${activePointerId.value}",
+                                        )
+                                        if (!anyPressed) {
+                                            Log.i("MixerPressure", "loop break: no pressed pointers")
+                                            break
+                                        }
+                                        val changeForActive = event.changes.firstOrNull { it.id == activePointerId }
+                                        val replacementPressed = event.changes.firstOrNull { it.pressed }
+                                        val change = when {
+                                            changeForActive != null -> changeForActive
+                                            replacementPressed != null -> {
+                                                Log.i(
+                                                    "MixerPressure",
+                                                    "active pointer switched old=${activePointerId.value} new=${replacementPressed.id.value}",
+                                                )
+                                                activePointerId = replacementPressed.id
+                                                replacementPressed
+                                            }
+                                            else -> event.changes.firstOrNull() ?: break
+                                        }
                                         lastPosition = change.position
                                         latestRawPressure = runCatching { change.pressure }.getOrDefault(latestRawPressure)
+                                        Log.i(
+                                            "MixerPressure",
+                                            "processing pointer=${change.id.value} pressed=${change.pressed} up=${change.changedToUpIgnoreConsumed()} pos=(${change.position.x},${change.position.y}) pressure=$latestRawPressure",
+                                        )
                                         processTouchPoint(lastPosition, latestRawPressure)
-                                        if (change.changedToUpIgnoreConsumed()) {
+                                        if (change.changedToUpIgnoreConsumed() && !anyPressed) {
+                                            Log.i("MixerPressure", "end pressure: pointer up")
                                             break
                                         }
                                     }
@@ -1799,13 +1948,16 @@ private fun DeckSurface(
                                     platterLastAngle = null
                                     platterTouchStartPoint = null
                                     if (isPlatterPressureActive) {
+                                        Log.i("MixerPressure", "end pressure: gesture finished")
                                         onPlatterPressureEnd()
                                     }
                                     if (isPlatterScratching) {
+                                        Log.i("MixerPressure", "end scratch: gesture finished")
                                         onEndPlatterScratch()
                                     }
                                     isPlatterPressureActive = false
                                     isPlatterScratching = false
+                                    Log.i("MixerPressure", "gesture end")
                                 }
                             },
                         platterRotationDegrees = platterRotationDegrees,
@@ -1860,6 +2012,8 @@ private fun DeckSurface(
                                 onValueChange = { onPitchOffsetChange(it.toDouble()) },
                                 isInverted = true,
                                 showPopoverOnLeft = true,
+                                enabled = !isPressureTouchActive,
+                                disabledAlpha = 0.45f,
                                 onInteractionChanged = { isPitchAdjusting = it },
                                 modifier = Modifier
                                     .weight(1f, fill = true)
@@ -2310,11 +2464,15 @@ private fun isAbovePressureBottomThreshold(point: Offset, sidePx: Float, visualI
     return point.y <= threshold
 }
 
-private fun resolvePressureInput(rawPressure: Float, fallbackPressure: Float): Double {
+private fun resolvePressureInput(rawPressure: Float, fallbackPressure: Float, forceFallback: Boolean): Double {
     val normalizedRaw = rawPressure.coerceIn(0f, 1f)
-    val looksLikeUnsupportedConstantPressure = normalizedRaw >= 0.995f || normalizedRaw <= 0.005f
+    val looksLikeUnsupportedConstantPressure = forceFallback || isLikelyUnsupportedPressureSensorValue(normalizedRaw)
     val effective = if (looksLikeUnsupportedConstantPressure) fallbackPressure else normalizedRaw
     return effective.coerceIn(0f, 1f).toDouble()
+}
+
+private fun isLikelyUnsupportedPressureSensorValue(normalizedRaw: Float): Boolean {
+    return normalizedRaw >= PRESSURE_UNSUPPORTED_HIGH_MIN || normalizedRaw <= PRESSURE_UNSUPPORTED_LOW_MAX
 }
 
 private const val PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD = 0.002
@@ -2324,4 +2482,9 @@ private const val PLATTER_MIN_TOUCH_RADIUS_RATIO = 0.12f
 private const val PLATTER_MAX_TOUCH_RADIUS_RATIO = 0.5f
 private const val PRESSURE_BOTTOM_BLOCKED_ZONE_RATIO = 0.18f
 private const val PRESSURE_START_MIN_VALUE = 0.10
-private const val PRESSURE_FALLBACK_RAMP_SECONDS = 2.2
+private const val PRESSURE_FALLBACK_RAMP_SECONDS = 0.9
+private const val PRESSURE_UNSUPPORTED_LOW_MAX = 0.02f
+private const val PRESSURE_UNSUPPORTED_HIGH_MIN = 0.995f
+private const val PRESSURE_STABLE_EPSILON = 0.008f
+private const val PRESSURE_STABLE_MIN_SAMPLES = 6
+private const val PRESSURE_STABLE_LOW_MAX = 0.08f

@@ -1679,7 +1679,11 @@ class DeckViewModel : ViewModel() {
         val playbackRate = (effectiveTarget / original).coerceIn(0.5, 2.0)
         engineForDeck(isLeft).setPlaybackRate(playbackRate.toFloat())
         updateDeckState(isLeft) {
-            it.copy(bpmText = String.format("BPM %.1f | %.3fx", it.targetBpm, playbackRate))
+            it.copy(
+                bpmText = String.format("BPM %.1f | %.3fx", it.targetBpm, playbackRate),
+                displayedTargetBpm = effectiveTarget,
+                isPressureTouchActive = runtime.pressureStartTargetBpm != null,
+            )
         }
     }
 
