@@ -74,6 +74,7 @@ class DeckViewModel : ViewModel() {
         private const val MAX_BPM = 200.0
         private const val OFFLINE_BPM_ANALYSIS_SECONDS = 12.0
         private const val LIVE_MIC_BPM_SMOOTHING = 0.22
+        private const val MAX_TRACK_ANALYSIS_CACHE_ENTRIES = 24
         private const val MAX_PRESSURE_SLOWDOWN_FRACTION = 0.9
         private const val MIN_PRESSURE_SLOWDOWN_MULTIPLIER = 0.08
         private const val MAX_PRESSURE_ACCELERATION_FRACTION = 0.9
@@ -92,6 +93,13 @@ class DeckViewModel : ViewModel() {
     private var leftOfflineBpmJob: Job? = null
     private var rightOfflineBpmJob: Job? = null
     private var latestExternalBpm: Double? = null
+    private val analysisCacheLock = ReentrantLock()
+    private val trackAnalysisCache =
+        object : LinkedHashMap<String, TrackAnalysisCacheEntry>(MAX_TRACK_ANALYSIS_CACHE_ENTRIES, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TrackAnalysisCacheEntry>?): Boolean {
+                return size > MAX_TRACK_ANALYSIS_CACHE_ENTRIES
+            }
+        }
     private val leftRuntime = DeckRuntime()
     private val rightRuntime = DeckRuntime()
     private var hasBoundContextBackedEngines = false
@@ -411,6 +419,7 @@ class DeckViewModel : ViewModel() {
     ) {
         val deckLabel = if (isLeft) "L" else "R"
         val engine = engineForDeck(isLeft)
+        val cachedAnalysis = getTrackAnalysis(uri)
         cancelScratchState(isLeft)
         runtimeForDeck(isLeft).userWantsPlayback = false
         runtimeForDeck(isLeft).blockAutoplayUntilManualStart = true
@@ -436,6 +445,13 @@ class DeckViewModel : ViewModel() {
             )
         }
 
+        // Run analysis in parallel with engine load for lower perceived import latency.
+        if (cachedAnalysis?.waveform?.isNotEmpty() == true) {
+            applyCachedTrackAnalysis(isLeft = isLeft, uri = uri, cached = cachedAnalysis)
+        } else {
+            loadWaveformForDeck(isLeft = isLeft, uri = uri)
+        }
+
         val loadResult = engine.loadFile(uri)
         Log.d(TAG, "selectTrack[$deckLabel] loadResult=${loadResult.isSuccess}")
         if (loadResult.isSuccess) {
@@ -446,8 +462,9 @@ class DeckViewModel : ViewModel() {
             updateDeckState(isLeft) { deck ->
                 deck.copy(playbackStatusText = "")
             }
-            loadWaveformForDeck(isLeft = isLeft, uri = uri)
         } else {
+            waveformJobForDeck(isLeft)?.cancel()
+            if (isLeft) leftOfflineBpmJob?.cancel() else rightOfflineBpmJob?.cancel()
             val statusText = statusForError(loadResult.exceptionOrNull(), fallback = "Failed to load selected track")
             updateDeckState(isLeft) { deck ->
                 deck.copy(
@@ -456,6 +473,7 @@ class DeckViewModel : ViewModel() {
                     playbackTimeText = "00:00 / 00:00",
                     playbackProgress = 0.0,
                     isWaveformLoading = false,
+                    isBpmLoading = false,
                 )
             }
         }
@@ -1243,7 +1261,10 @@ class DeckViewModel : ViewModel() {
                         waveformText = if (finalWaveform.isNotEmpty()) "Waveform Ready" else "Waveform unavailable",
                     )
                 }
-                detectOfflineBpmForDeck(isLeft = isLeft, waveform = finalWaveform)
+                if (finalWaveform.isNotEmpty()) {
+                    updateTrackWaveformCache(uri = uri, waveform = finalWaveform)
+                }
+                detectOfflineBpmForDeck(isLeft = isLeft, uri = uri, waveform = finalWaveform)
             } catch (_: Throwable) {
                 updateDeckState(isLeft) { deck ->
                     deck.copy(
@@ -1254,6 +1275,12 @@ class DeckViewModel : ViewModel() {
                         bpmDetectionStatusText = "BPM detection unavailable (waveform unavailable).",
                     )
                 }
+                updateTrackBpmCache(
+                    uri = uri,
+                    bpm = null,
+                    confidence = null,
+                    statusText = "BPM detection unavailable (waveform unavailable).",
+                )
             }
         }
         setWaveformJobForDeck(isLeft, job)
@@ -1261,15 +1288,18 @@ class DeckViewModel : ViewModel() {
 
     private fun detectOfflineBpmForDeck(
         isLeft: Boolean,
+        uri: String,
         waveform: FloatArray,
     ) {
         if (waveform.isEmpty()) {
+            val status = "BPM detection unavailable (empty waveform)."
             updateDeckState(isLeft) { deck ->
                 deck.copy(
                     isBpmLoading = false,
-                    bpmDetectionStatusText = "BPM detection unavailable (empty waveform).",
+                    bpmDetectionStatusText = status,
                 )
             }
+            updateTrackBpmCache(uri = uri, bpm = null, confidence = null, statusText = status)
             return
         }
 
@@ -1290,6 +1320,7 @@ class DeckViewModel : ViewModel() {
                     val clampedBpm = result.bpm.coerceIn(MIN_BPM, MAX_BPM)
                     applyDetectedDeckBpm(
                         isLeft = isLeft,
+                        uri = uri,
                         bpm = clampedBpm,
                         confidence = result.confidence,
                     )
@@ -1299,28 +1330,26 @@ class DeckViewModel : ViewModel() {
                     if (estimated != null) {
                         applyDetectedDeckBpm(
                             isLeft = isLeft,
+                            uri = uri,
                             bpm = estimated,
                             confidence = 0.35,
                         )
-                        updateDeckState(isLeft) { deck ->
-                            deck.copy(
-                                bpmDetectionStatusText = String.format(
-                                    "Estimated %.1f BPM (fallback)",
-                                    estimated,
-                                ),
-                            )
-                        }
+                        val status = String.format("Estimated %.1f BPM (fallback)", estimated)
+                        updateDeckState(isLeft) { deck -> deck.copy(bpmDetectionStatusText = status) }
+                        updateTrackBpmCache(uri = uri, bpm = estimated, confidence = 0.35, statusText = status)
                     } else {
+                        val status = "BPM detection unavailable (${result.reason}). Manual control active."
                         updateDeckState(isLeft) { deck ->
                             val original = deck.originalBpm
                             val target = if (original > 0.0) original else 120.0
                             deck.copy(
                                 isBpmLoading = false,
-                                bpmDetectionStatusText = "BPM detection unavailable (${result.reason}). Manual control active.",
+                                bpmDetectionStatusText = status,
                                 targetBpm = target,
                                 bpmText = formatDeckBpmText(target = target, original = target),
                             )
                         }
+                        updateTrackBpmCache(uri = uri, bpm = null, confidence = null, statusText = status)
                     }
                 }
             }
@@ -1358,9 +1387,11 @@ class DeckViewModel : ViewModel() {
 
     private fun applyDetectedDeckBpm(
         isLeft: Boolean,
+        uri: String,
         bpm: Double,
         confidence: Double,
     ) {
+        val status = String.format("Detected %.1f BPM (acc. %.2f)", bpm, confidence)
         updateDeckState(isLeft) { deck ->
             val target = if (deck.isPitchLockedToExternalBpm) deck.targetBpm else bpm
             val original = bpm
@@ -1369,12 +1400,87 @@ class DeckViewModel : ViewModel() {
                 targetBpm = target,
                 bpmText = formatDeckBpmText(target = target, original = original),
                 isBpmLoading = false,
-                bpmDetectionStatusText = String.format("Detected %.1f BPM (acc. %.2f)", bpm, confidence),
+                bpmDetectionStatusText = status,
             )
         }
 
-        val deck = currentDeckState(isLeft)
+        updateTrackBpmCache(uri = uri, bpm = bpm, confidence = confidence, statusText = status)
         applyDeckPlaybackRateAndBpmText(isLeft = isLeft)
+    }
+
+    private fun applyCachedTrackAnalysis(
+        isLeft: Boolean,
+        uri: String,
+        cached: TrackAnalysisCacheEntry,
+    ) {
+        val waveform = cached.waveform
+        if (waveform.isEmpty()) {
+            loadWaveformForDeck(isLeft = isLeft, uri = uri)
+            return
+        }
+
+        updateDeckState(isLeft) { deck ->
+            deck.copy(
+                waveformData = waveform.copyOf(),
+                isWaveformLoading = false,
+                waveformText = "Waveform Ready",
+                isBpmLoading = cached.bpm == null,
+                bpmDetectionStatusText = cached.statusText ?: deck.bpmDetectionStatusText,
+            )
+        }
+
+        if (cached.bpm != null) {
+            applyDetectedDeckBpm(
+                isLeft = isLeft,
+                uri = uri,
+                bpm = cached.bpm,
+                confidence = cached.confidence ?: 0.35,
+            )
+            if (!cached.statusText.isNullOrBlank()) {
+                updateDeckState(isLeft) { deck -> deck.copy(bpmDetectionStatusText = cached.statusText) }
+            }
+        } else {
+            detectOfflineBpmForDeck(isLeft = isLeft, uri = uri, waveform = waveform)
+        }
+    }
+
+    private fun getTrackAnalysis(uri: String): TrackAnalysisCacheEntry? =
+        analysisCacheLock.withLock {
+            trackAnalysisCache[uri]?.copy(waveform = trackAnalysisCache[uri]?.waveform?.copyOf() ?: floatArrayOf())
+        }
+
+    private fun updateTrackWaveformCache(
+        uri: String,
+        waveform: FloatArray,
+    ) {
+        analysisCacheLock.withLock {
+            val existing = trackAnalysisCache[uri]
+            trackAnalysisCache[uri] =
+                TrackAnalysisCacheEntry(
+                    waveform = waveform.copyOf(),
+                    bpm = existing?.bpm,
+                    confidence = existing?.confidence,
+                    statusText = existing?.statusText,
+                )
+        }
+    }
+
+    private fun updateTrackBpmCache(
+        uri: String,
+        bpm: Double?,
+        confidence: Double?,
+        statusText: String?,
+    ) {
+        analysisCacheLock.withLock {
+            val existing = trackAnalysisCache[uri]
+            trackAnalysisCache[uri] =
+                TrackAnalysisCacheEntry(
+                    waveform = existing?.waveform?.copyOf() ?: floatArrayOf(),
+                    bpm = bpm,
+                    confidence = confidence,
+                    statusText = statusText,
+                )
+        }
     }
 
     private fun startMicrophoneBpmDetection() {
@@ -1652,6 +1758,13 @@ class DeckViewModel : ViewModel() {
         var lastPhysicsStepNanos: Long = 0L,
         var lastWrappedPlatterDegrees: Double? = null,
         var unwrappedPlatterDegrees: Double = 0.0,
+    )
+
+    private data class TrackAnalysisCacheEntry(
+        val waveform: FloatArray,
+        val bpm: Double?,
+        val confidence: Double?,
+        val statusText: String?,
     )
 
     private enum class ScratchMode {
