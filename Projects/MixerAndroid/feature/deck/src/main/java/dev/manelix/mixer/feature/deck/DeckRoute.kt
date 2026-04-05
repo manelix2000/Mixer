@@ -1786,6 +1786,7 @@ private fun DeckSurface(
                                     }
                                     isPlatterScratching = false
                                     isPlatterPressureActive = false
+                                    var hasDetectedPressureGesture = false
 
                                     fun processTouchPoint(currentPosition: Offset, rawPressure: Float) {
                                         if (touchSide <= 0f) return
@@ -1833,18 +1834,8 @@ private fun DeckSurface(
                                             fallbackPressure = fallbackPressure,
                                             forceFallback = isConstantPressureSensor,
                                         )
-                                        val effectivePressureForStart =
-                                            if (isConstantPressureSensor) {
-                                                kotlin.math.max(currentPressure, PRESSURE_START_MIN_VALUE)
-                                            } else {
-                                                currentPressure
-                                            }
-                                        val pressureValueForUpdate =
-                                            if (isConstantPressureSensor) {
-                                                effectivePressureForStart
-                                            } else {
-                                                currentPressure
-                                            }
+                                        val effectivePressureForStart = currentPressure
+                                        val pressureValueForUpdate = currentPressure
                                         val movement = platterTouchStartPoint?.let { start ->
                                             hypot(
                                                 (normalized.x - start.x).toDouble(),
@@ -1859,36 +1850,7 @@ private fun DeckSurface(
                                         )
 
                                         if (isPlatterPressureActive) {
-                                            val previousAngleWhilePressure = platterLastAngle
-                                            val pressureDelta =
-                                                if (previousAngleWhilePressure != null && angle != null) {
-                                                    normalizedAngleDelta(previousAngleWhilePressure, angle)
-                                                } else {
-                                                    0.0
-                                                }
-                                            val shouldPromoteToScratch =
-                                                angle != null && abs(pressureDelta) >=
-                                                    if (isConstantPressureSensor) {
-                                                        PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD * 2.0
-                                                    } else {
-                                                        PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD
-                                                    } ||
-                                                    movedEnoughForScratch
-                                            Log.i(
-                                                "MixerPressure",
-                                                "pressure active delta=$pressureDelta threshold=${if (isConstantPressureSensor) PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD * 2.0 else PLATTER_SCRATCH_ACTIVATION_ANGLE_THRESHOLD} shouldPromote=$shouldPromoteToScratch",
-                                            )
-                                            if (shouldPromoteToScratch) {
-                                                Log.i(
-                                                    "MixerPressure",
-                                                    "promote pressure->scratch delta=$pressureDelta movement=$movement raw=$rawNormalized",
-                                                )
-                                                onPlatterPressureEnd()
-                                                isPlatterPressureActive = false
-                                                onBeginPlatterScratch()
-                                                isPlatterScratching = true
-                                                onPlatterScratchDelta(pressureDelta)
-                                            } else if (isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx)) {
+                                            if (isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx)) {
                                                 Log.i(
                                                     "MixerPressure",
                                                     "pressure update dir=${pressureDirection(normalized, touchSide)} value=$currentPressure",
@@ -1911,6 +1873,7 @@ private fun DeckSurface(
 
                                         if (!isPlatterScratching &&
                                             isAbovePressureBottomThreshold(normalized, touchSide, visualInsetPx) &&
+                                            !movedEnoughForScratch &&
                                             effectivePressureForStart >= PRESSURE_START_MIN_VALUE
                                         ) {
                                             Log.i(
@@ -1922,6 +1885,12 @@ private fun DeckSurface(
                                                 pressureDirection(normalized, touchSide),
                                             )
                                             isPlatterPressureActive = true
+                                            hasDetectedPressureGesture = true
+                                            platterLastAngle = angle
+                                            return
+                                        }
+
+                                        if (hasDetectedPressureGesture) {
                                             platterLastAngle = angle
                                             return
                                         }
