@@ -7,6 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(mixer_aubio_jni SHARED aubio_tempo_jni.cpp)
 
+# Ensure the produced native library is compatible with devices using 16 KB memory pages.
+if(ANDROID)
+    target_link_options(
+        mixer_aubio_jni
+        PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+    )
+endif()
+
 find_library(android_log_lib log)
 target_link_libraries(mixer_aubio_jni PRIVATE ${android_log_lib})
 
