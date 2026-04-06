@@ -35,6 +35,8 @@ class MediaPlayerAudioEngineController(
 ) : AudioEngineController, AudioEngineRoutingProvider, AudioEnginePerformanceProvider {
     companion object {
         private const val TAG = "MixerAudioEngine"
+        private const val TRANSPORT_TRACE_LOGGING = true
+        private const val TRANSPORT_TRACE_LOG_WINDOW_MS = 250.0
     }
     private val stateLock = ReentrantLock()
 
@@ -66,6 +68,8 @@ class MediaPlayerAudioEngineController(
     private var equalizerLow = 0.5f
     private var equalizerMid = 0.5f
     private var equalizerHigh = 0.5f
+    private var transportTraceSequence: Long = 0L
+    private var transportTraceLastNanos: Long = 0L
 
     override val isRunning: Boolean
         get() = stateLock.withLock { running }
@@ -159,6 +163,7 @@ class MediaPlayerAudioEngineController(
     }
 
     override fun play(): Result<Unit> = stateLock.withLock {
+        traceTransportLocked("play.request")
         Log.d(TAG, "play() requested state=$internalPlaybackState")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
@@ -178,6 +183,7 @@ class MediaPlayerAudioEngineController(
                 return failure(AudioEngineError.StartFailed("Unable to start playback"))
             }
             internalPlaybackState = AudioPlaybackState.PLAYING
+            traceTransportLocked("play.started")
             Log.d(TAG, "play() success state=$internalPlaybackState")
             return Result.success(Unit)
         }
@@ -189,12 +195,14 @@ class MediaPlayerAudioEngineController(
         }
         startPlaybackClockLocked(lastKnownCurrentTimeSeconds)
         internalPlaybackState = AudioPlaybackState.PLAYING
+        traceTransportLocked("play.started.clock")
         Log.d(TAG, "play() success (clock-only) state=$internalPlaybackState")
         Result.success(Unit)
     }
 
     override fun pause() {
         stateLock.withLock {
+            traceTransportLocked("pause.request")
             Log.d(TAG, "pause() requested state=$internalPlaybackState")
             if (loadedSourceUri == null) {
                 internalPlaybackState = AudioPlaybackState.IDLE
@@ -212,11 +220,13 @@ class MediaPlayerAudioEngineController(
             lastKnownCurrentTimeSeconds = resolvedCurrentTimeLocked()
             playbackStartOffsetSeconds = lastKnownCurrentTimeSeconds
             internalPlaybackState = AudioPlaybackState.PAUSED
+            traceTransportLocked("pause.done")
             Log.d(TAG, "pause() done state=$internalPlaybackState time=${"%.3f".format(lastKnownCurrentTimeSeconds)}")
         }
     }
 
     override fun seekTo(timeSeconds: Double): Result<Unit> = stateLock.withLock {
+        traceTransportLocked("seekTo.request", "target=${"%.3f".format(timeSeconds)}")
         Log.d(TAG, "seekTo(${String.format("%.3f", timeSeconds)}) state=$internalPlaybackState")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
@@ -230,10 +240,12 @@ class MediaPlayerAudioEngineController(
         } else {
             playbackStartOffsetSeconds = clamped
         }
+        traceTransportLocked("seekTo.done", "clamped=${"%.3f".format(clamped)}")
         Result.success(Unit)
     }
 
     override fun beginScratch(): Result<Unit> = stateLock.withLock {
+        traceTransportLocked("scratch.begin.request")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
         }
@@ -248,6 +260,7 @@ class MediaPlayerAudioEngineController(
         playbackStartOffsetSeconds = lastKnownCurrentTimeSeconds
         isScratchModeActive = true
         internalPlaybackState = AudioPlaybackState.PAUSED
+        traceTransportLocked("scratch.begin.done")
         Result.success(Unit)
     }
 
@@ -255,6 +268,10 @@ class MediaPlayerAudioEngineController(
         timeSeconds: Double,
         angularVelocity: Double,
     ): Result<Unit> = stateLock.withLock {
+        traceTransportLocked(
+            "scratch.update.request",
+            "target=${"%.3f".format(timeSeconds)} vel=${"%.4f".format(angularVelocity)}",
+        )
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
         }
@@ -275,10 +292,15 @@ class MediaPlayerAudioEngineController(
             mediaPlayer?.runCatching { pause() }
             AudioPlaybackState.PAUSED
         }
+        traceTransportLocked(
+            "scratch.update.done",
+            "clamped=${"%.3f".format(clamped)} playing=${internalPlaybackState == AudioPlaybackState.PLAYING}",
+        )
         Result.success(Unit)
     }
 
     override fun endScratch(resumePlayback: Boolean): Result<Unit> = stateLock.withLock {
+        traceTransportLocked("scratch.end.request", "resume=$resumePlayback")
         if (loadedSourceUri == null) {
             return failure(AudioEngineError.NoFileLoaded)
         }
@@ -301,6 +323,10 @@ class MediaPlayerAudioEngineController(
             playbackStartOffsetSeconds = finalTime
             internalPlaybackState = AudioPlaybackState.PAUSED
         }
+        traceTransportLocked(
+            "scratch.end.done",
+            "final=${"%.3f".format(finalTime)} resumed=${internalPlaybackState == AudioPlaybackState.PLAYING}",
+        )
         Result.success(Unit)
     }
 
@@ -605,6 +631,25 @@ class MediaPlayerAudioEngineController(
         lastKnownCurrentTimeSeconds = clamped
         playbackStartOffsetSeconds = clamped
         playbackStartMonotonicNanos = clock.nowMonotonicNanos()
+    }
+
+    private fun traceTransportLocked(op: String, detail: String = "") {
+        if (!TRANSPORT_TRACE_LOGGING) return
+        val now = clock.nowMonotonicNanos()
+        val deltaMs = if (transportTraceLastNanos > 0L) {
+            (now - transportTraceLastNanos).coerceAtLeast(0L).toDouble() / 1_000_000.0
+        } else {
+            Double.POSITIVE_INFINITY
+        }
+        transportTraceLastNanos = now
+        transportTraceSequence += 1L
+        if (deltaMs <= TRANSPORT_TRACE_LOG_WINDOW_MS || isScratchModeActive) {
+            val suffix = if (detail.isBlank()) "" else " $detail"
+            Log.i(
+                TAG,
+                "transport#${transportTraceSequence} dtMs=${"%.1f".format(deltaMs)} op=$op state=$internalPlaybackState scratch=$isScratchModeActive$suffix",
+            )
+        }
     }
 
     private fun clampTime(value: Double): Double {

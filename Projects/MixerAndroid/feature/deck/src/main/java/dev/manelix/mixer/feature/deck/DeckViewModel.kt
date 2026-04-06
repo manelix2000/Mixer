@@ -1036,13 +1036,17 @@ class DeckViewModel : ViewModel() {
                 !runtime.forceStayPausedAfterManualPause &&
                 !isAtTrackEnd
         if (runtime.isEngineScratchActive) {
-            val endResult = engine.endScratch(resumePlayback = false)
+            val endResult = engine.endScratch(resumePlayback = shouldResumePlayback)
             if (endResult.isFailure) {
                 updateDeckState(isLeft) { it.copy(playbackStatusText = statusForError(endResult.exceptionOrNull(), "Scratch release failed")) }
             }
         } else {
             engine.seekTo(runtime.scratchCurrentTime)
-            engine.pause()
+            if (shouldResumePlayback) {
+                engine.play()
+            } else {
+                engine.pause()
+            }
         }
 
         runtime.isScrubbing = false
@@ -1054,17 +1058,7 @@ class DeckViewModel : ViewModel() {
         runtime.latestScratchDirection = 1.0
         runtime.scratchMode = ScratchMode.SCRUB
 
-        if (shouldResumePlayback) {
-            runtime.userWantsPlayback = true
-            engine.play()
-        } else if (!isAtTrackEnd) {
-            runtime.userWantsPlayback = false
-            engine.pause()
-            engine.seekTo(runtime.scratchCurrentTime)
-            engine.pause()
-        } else {
-            runtime.userWantsPlayback = false
-        }
+        runtime.userWantsPlayback = shouldResumePlayback
 
         updateDeckState(isLeft) {
             it.copy(
