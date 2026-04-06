@@ -1667,7 +1667,7 @@ private fun DeckSurface(
                                         .align(Alignment.CenterStart)
                                         .padding(start = 0.dp)
                                         .zIndex(2f)
-                                        .size(width = 46.dp, height = 40.dp),
+                                        .size(width = 30.dp, height = 40.dp),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color(0xCC191B20),
@@ -1675,7 +1675,7 @@ private fun DeckSurface(
                                     ),
                                     contentPadding = PaddingValues(0.dp),
                                 ) {
-                                    Icon(Icons.Filled.ZoomIn, contentDescription = null, modifier = Modifier.size(23.dp))
+                                    Icon(Icons.Filled.ZoomIn, contentDescription = null, modifier = Modifier.size(20.dp))
                                 }
                                 Button(
                                     onClick = { onSetWaveformZoom(waveformZoom - 0.25) },
@@ -1683,7 +1683,7 @@ private fun DeckSurface(
                                         .align(Alignment.CenterEnd)
                                         .padding(end = 0.dp)
                                         .zIndex(2f)
-                                        .size(width = 46.dp, height = 40.dp),
+                                        .size(width = 30.dp, height = 40.dp),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color(0xCC191B20),
@@ -1691,7 +1691,7 @@ private fun DeckSurface(
                                     ),
                                     contentPadding = PaddingValues(0.dp),
                                 ) {
-                                    Icon(Icons.Filled.ZoomOut, contentDescription = null, modifier = Modifier.size(23.dp))
+                                    Icon(Icons.Filled.ZoomOut, contentDescription = null, modifier = Modifier.size(20.dp))
                                 }
                             }
                         }
