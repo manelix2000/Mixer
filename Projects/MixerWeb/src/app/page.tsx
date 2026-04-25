@@ -131,8 +131,8 @@ export default function LandingPage() {
             <PlatformCard
               badge="Mobile"
               body="Android access is planned for the same learning-first workflow and feature parity trajectory."
-              ctaLabel="Android Status"
-              href="https://github.com/manelix2000/Mixer"
+              ctaLabel="Google Play"
+              href="https://play.google.com/store/apps/details?id=dev.manelix.mixer"
               title="Android"
             />
           </div>
