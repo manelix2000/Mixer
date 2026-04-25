@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MixerApp } from "@/components/mixer-app";
 
-const STORE_URL = "https://apps.apple.com/app/id6760940944";
+const IOS_STORE_URL = "https://apps.apple.com/app/id6760940944";
+const ANDROID_STORE_URL = "https://play.google.com/store/apps/details?id=dev.manelix.mixer";
 
 export default function BrowserMixerPage() {
   const [isPhone, setIsPhone] = useState(false);
+  const [storeUrl, setStoreUrl] = useState(IOS_STORE_URL);
 
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -20,6 +22,7 @@ export default function BrowserMixerPage() {
     const shouldRedirect = !isTablet && (isMobilePhone || isAndroidPhone) && isNarrowPhoneViewport;
 
     setIsPhone(shouldRedirect);
+    if (isAndroidPhone) setStoreUrl(ANDROID_STORE_URL);
   }, []);
 
   if (isPhone) {
@@ -41,7 +44,7 @@ export default function BrowserMixerPage() {
           </p>
           <a
             className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-[#3d75c7] bg-[linear-gradient(180deg,_#4d8ce8_0%,_#366fc5_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(16,45,90,0.45)]"
-            href={STORE_URL}
+            href={storeUrl}
           >
             Open Store Page
           </a>
